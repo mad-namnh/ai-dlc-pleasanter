@@ -1,13 +1,18 @@
 """Tiện ích dùng chung cho spike round-trip.
 
 Không cần thư viện ngoài (chỉ stdlib).
-QUY TẮC AN TOÀN: mọi lệnh ghi (create/update) chỉ được phép khi base_url là localhost.
-Không nới điều kiện này (xem CLAUDE.md).
+
+QUY TẮC AN TOÀN cho lệnh ghi (create/update) — xem CLAUDE.md, không nới:
+  - localhost: luôn được ghi.
+  - Host khác: chỉ khi môi trường khai báo  role = "dev"  VÀ  allow_write = true,
+    và người chạy xác nhận tên host (hoặc truyền --yes).
+  - role "stg" / "prod" (hoặc thiếu role): KHÔNG BAO GIỜ ghi, dù allow_write là gì.
 """
 from __future__ import annotations
 
 import json
 import os
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -19,6 +24,7 @@ SPIKE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = SPIKE_DIR / "data"
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+WRITABLE_ROLES = {"dev"}
 
 
 class UnsafeTargetError(RuntimeError):
@@ -38,29 +44,59 @@ def env_settings(cfg: dict, env: str) -> dict:
     key = os.environ.get(e["api_key_env"])
     if not key:
         sys.exit(f"Chưa đặt biến môi trường {e['api_key_env']} (API key)")
-    return {**e, "api_key": key}
+    return {**e, "name": env, "api_key": key}
 
 
-def assert_local(base_url: str) -> None:
-    host = (urlparse(base_url).hostname or "").lower()
-    if host not in LOCAL_HOSTS and not host.endswith(".localhost"):
+def host_of(base_url: str) -> str:
+    return (urlparse(base_url).hostname or "").lower()
+
+
+def is_local(base_url: str) -> bool:
+    h = host_of(base_url)
+    return h in LOCAL_HOSTS or h.endswith(".localhost")
+
+
+def assert_writable(env: dict) -> None:
+    """Chặn ghi nếu môi trường không phải localhost hoặc dev đã bật ghi."""
+    if is_local(env["base_url"]):
+        return
+    role = env.get("role")
+    if role not in WRITABLE_ROLES or env.get("allow_write") is not True:
         raise UnsafeTargetError(
-            f"Từ chối ghi: '{host}' không phải localhost. "
-            "Spike chỉ được ghi vào Pleasanter local."
+            f"Từ chối ghi vào '{host_of(env['base_url'])}' (môi trường '{env.get('name')}', "
+            f"role={role!r}, allow_write={env.get('allow_write')!r}). "
+            "Chỉ localhost hoặc môi trường role='dev' + allow_write=true mới được ghi."
         )
 
 
-def post(base_url: str, path: str, body: dict, *, write: bool) -> dict:
+def confirm_write(env: dict, assume_yes: bool) -> None:
+    """Gọi 1 lần trước khi ghi vào host không phải localhost."""
+    assert_writable(env)
+    if is_local(env["base_url"]) or assume_yes:
+        return
+    host = host_of(env["base_url"])
+    print(f"⚠ Sắp GHI cấu hình site vào: {env['base_url']} (môi trường '{env['name']}', role=dev)")
+    ans = input(f"Gõ lại tên host '{host}' để xác nhận: ").strip().lower()
+    if ans != host:
+        raise SystemExit("Đã hủy.")
+
+
+def _ssl_context(env: dict) -> ssl.SSLContext | None:
+    ca = env.get("ca_bundle")
+    return ssl.create_default_context(cafile=ca) if ca else None
+
+
+def post(env: dict, path: str, body: dict, *, write: bool) -> dict:
     if write:
-        assert_local(base_url)
-    url = base_url.rstrip("/") + path
+        assert_writable(env)
+    url = env["base_url"].rstrip("/") + path
     data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         url, data=data, method="POST",
         headers={"Content-Type": "application/json; charset=utf-8"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=60, context=_ssl_context(env)) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as ex:
         detail = ex.read().decode("utf-8", errors="replace")[:500]

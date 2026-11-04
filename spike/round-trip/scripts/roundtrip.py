@@ -6,8 +6,8 @@ Chế độ:
            (lần i so với gốc, và lần i so với lần i-1 để kiểm tra idempotence)
 
 Ví dụ:
-  python scripts/roundtrip.py --config scripts/config.json --mode create --label original
-  python scripts/roundtrip.py --config scripts/config.json --mode update --label original --repeat 2
+  python scripts/roundtrip.py --config scripts/config.json --env dev --mode create --label original
+  python scripts/roundtrip.py --config scripts/config.json --env dev --mode update --label original --repeat 2
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import argparse
 from collections import Counter
 from pathlib import Path
 
-from common import (DATA_DIR, api_body, assert_local, diff, env_settings, extract_site,
+from common import (DATA_DIR, api_body, confirm_write, diff, env_settings, extract_site,
                     load_config, normalize, post, read_json, top_area, volatile_sets, write_json)
 from export_sites import export_one
 
@@ -72,11 +72,12 @@ def main() -> None:
     ap.add_argument("--mode", choices=["create", "update"], required=True)
     ap.add_argument("--label", required=True, help="thư mục export gốc, vd original")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--yes", action="store_true", help="bỏ qua bước gõ lại tên host (chỉ cho môi trường dev)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     env = env_settings(cfg, args.env)
-    assert_local(env["base_url"])  # chặn sớm, trước khi làm gì
+    confirm_write(env, args.yes)  # chặn sớm, trước khi làm gì
     volatile, nested = volatile_sets(cfg)
 
     src_dir = DATA_DIR / args.env / args.label
@@ -95,7 +96,7 @@ def main() -> None:
             parent = cfg["roundtrip_parent_id"]
             body = api_body(cfg, env, TenantId=env.get("tenant_id", 1), ParentId=parent,
                             InheritPermission=parent, **site_payload(site))
-            resp = post(env["base_url"], cfg["endpoints"]["create_site"].format(id=parent), body, write=True)
+            resp = post(env, cfg["endpoints"]["create_site"].format(id=parent), body, write=True)
             new_id = find_new_id(resp)
             after = normalize(extract_site(export_one(cfg, env, new_id)), volatile, nested)
             write_json(out_dir / f"{sid}-as-{new_id}.normalized.json", after)
@@ -106,7 +107,7 @@ def main() -> None:
             prev = base_norm
             for i in range(1, args.repeat + 1):
                 body = api_body(cfg, env, **site_payload(site))
-                post(env["base_url"], cfg["endpoints"]["update_site"].format(id=sid), body, write=True)
+                post(env, cfg["endpoints"]["update_site"].format(id=sid), body, write=True)
                 cur = normalize(extract_site(export_one(cfg, env, sid)), volatile, nested)
                 write_json(out_dir / f"{sid}-iter{i}.normalized.json", cur)
                 results.append({"site": sid, "compare": f"lần {i} vs gốc", "diffs": diff(base_norm, cur)})

@@ -4,7 +4,7 @@ Giai đoạn hiện tại: **spike + chốt ADR**. Chưa xây skill/agent/hook c
 
 ## Bắt buộc
 
-1. **Không bao giờ gọi API tới môi trường ngoài local.** Script ghi (create/update) chỉ được chạy với `base_url` là `localhost` / `127.0.0.1`. Không sửa hay nới điều kiện này trong `scripts/common.py`.
+1. **Chỉ ghi vào môi trường dev.** Lệnh ghi (create/update) chỉ được chạy khi đích là localhost, hoặc môi trường khai báo `role: "dev"` **và** `allow_write: true` trong `config.json`. Không bao giờ đặt `role: "dev"` cho môi trường stg/production của khách. Không sửa hay nới `assert_writable` trong `scripts/common.py`. Agent không được tự thêm `--yes` khi người dùng chưa yêu cầu.
 2. **Không giữ API key production.** Export từ môi trường khách do người vận hành phía khách hoặc người được ủy quyền chạy. Agent chỉ làm việc trên file đã export.
 3. **Không commit dữ liệu khách.** Mọi thứ trong `spike/round-trip/data/` bị gitignore. Không copy cấu hình, tên site, tên người, URL nội bộ của khách vào file khác trong repo. Báo cáo spike phải được làm sạch.
 4. **Không commit secret.** `.env`, API key, webhook URL, token nằm ngoài git.

@@ -12,8 +12,8 @@
 
 | Câu hỏi | Kết quả | Bằng chứng |
 |---|---|---|
-| 1. Round-trip giống hệt (create) | | `data/local/roundtrip-create/report.md` |
-| 1. Round-trip giống hệt (update) | | `data/local/roundtrip-update/report.md` |
+| 1. Round-trip giống hệt (create) | | `data/dev/roundtrip-create/report.md` |
+| 1. Round-trip giống hệt (update) | | `data/dev/roundtrip-update/report.md` |
 | 2. Thành phần phải làm tay | | `inventory-checklist.md` |
 | 3. Idempotent | | report update, cặp "lần 2 vs lần 1" |
 | 4. Trường chứa secret | | output `scan_secrets.py` (chỉ path) |

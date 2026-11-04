@@ -1,4 +1,6 @@
-# Môi trường Pleasanter 1.5.x local (Docker + PostgreSQL)
+# Môi trường Pleasanter 1.5.x local (Docker + PostgreSQL) — TÙY CHỌN
+
+> Mặc định spike chạy trên **Pleasanter dev nội bộ của MADLAB** (môi trường `dev` trong config). Chỉ dùng thư mục này khi cần một môi trường sạch, reset được.
 
 Dựa trên cách dựng bằng image chính thức `implem/pleasanter`. **Đối chiếu manual Docker hiện hành trước khi chạy** — lệnh CodeDefiner đã thay đổi từ 1.4.6:
 

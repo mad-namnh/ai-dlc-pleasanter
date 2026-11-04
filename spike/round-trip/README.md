@@ -17,10 +17,26 @@
 
 ## Chuẩn bị
 
-1. Dựng Pleasanter 1.5.x local: xem `env/README.md`. Phải **cùng bản patch** với khách.
-2. Tạo API key trên local (user tenant admin, vì API site yêu cầu quyền này).
-3. `cp scripts/config.example.json scripts/config.json` và điền thông tin.
-4. Python 3.10+, không cần thư viện ngoài.
+1. Môi trường Pleasanter 1.5.x **cùng bản patch** với khách:
+   - **Mặc định: Pleasanter dev nội bộ của MADLAB** — khai báo ở môi trường `dev` trong config.
+   - Tùy chọn: dựng local bằng Docker (`env/README.md`) nếu cần môi trường sạch, reset được.
+2. Trên dev, tạo **một thư mục (フォルダ) riêng cho spike**, vd `zz_spike_roundtrip`, lấy SiteId của nó điền vào `roundtrip_parent_id`. Mọi site mẫu và site sinh ra khi round-trip nằm trong đó.
+3. Tạo API key cho user tenant admin trên dev (API site yêu cầu quyền này).
+4. `cp scripts/config.example.json scripts/config.json`, sửa `environments.dev.base_url`. Nếu dev dùng chứng chỉ nội bộ, điền đường dẫn CA vào `ca_bundle`.
+5. Đặt API key vào biến môi trường (không ghi vào file):
+   - PowerShell: `$env:PLEASANTER_DEV_API_KEY = "..."`
+   - bash: `export PLEASANTER_DEV_API_KEY=...`
+6. Python 3.10+, không cần thư viện ngoài.
+
+### Cơ chế bảo vệ khi ghi
+
+| Môi trường | Được ghi? |
+|---|---|
+| localhost | Có |
+| `role: "dev"` + `allow_write: true` | Có — phải **gõ lại tên host** để xác nhận (hoặc `--yes`) |
+| `role` khác (`stg`, `prod`…) hoặc thiếu | **Không bao giờ**, kể cả khi `allow_write: true` |
+
+Export (chỉ đọc) chạy được trên mọi môi trường đã khai báo.
 
 ## Các bước
 
@@ -30,28 +46,28 @@
 
 ### Bước 1 — Tạo site mẫu trên local (2–3 giờ)
 
-Tạo bằng tay trên UI local một bộ site **phủ checklist** (`inventory-checklist.md`): ít nhất 1 期限付きテーブル + 1 記録テーブル có liên kết với nhau, có プロセス, ステータス制御, thông báo, リマインダー, server script, client script, style, quyền site/cột, view, công thức, lựa chọn (選択肢).
+Tạo bằng tay trên UI dev (trong thư mục spike) một bộ site **phủ checklist** (`inventory-checklist.md`): ít nhất 1 期限付きテーブル + 1 記録テーブル có liên kết với nhau, có プロセス, ステータス制御, thông báo, リマインダー, server script, client script, style, quyền site/cột, view, công thức, lựa chọn (選択肢).
 
 > Không dùng dữ liệu khách ở bước này. Bước 5 mới dùng cấu hình thật, trong môi trường được phép.
 
 ### Bước 2 — Export
 
 ```bash
-python scripts/export_sites.py --config scripts/config.json --env local --label original
+python scripts/export_sites.py --config scripts/config.json --env dev --label original
 ```
-Kết quả: `data/local/original/<siteId>.json` (raw) và `.normalized.json`.
+Kết quả: `data/dev/original/<siteId>.json` (raw) và `.normalized.json`.
 
 ### Bước 3 — Round-trip "create" (tạo site mới từ cấu hình đã export)
 
 ```bash
-python scripts/roundtrip.py --config scripts/config.json --mode create --label original
+python scripts/roundtrip.py --config scripts/config.json --env dev --mode create --label original
 ```
-Script tạo site mới dưới `roundtrip_parent_id`, export lại, diff với bản gốc → `data/local/roundtrip-create/report.md`.
+Script tạo site mới dưới `roundtrip_parent_id`, export lại, diff với bản gốc → `data/dev/roundtrip-create/report.md`.
 
 ### Bước 4 — Round-trip "update" + idempotence
 
 ```bash
-python scripts/roundtrip.py --config scripts/config.json --mode update --label original --repeat 2
+python scripts/roundtrip.py --config scripts/config.json --env dev --mode update --label original --repeat 2
 ```
 Ghi lại cấu hình gốc lên chính site đó 2 lần, export sau mỗi lần, diff. Lần 1 và lần 2 phải không khác nhau.
 
@@ -63,12 +79,12 @@ Nếu được phép: lặp lại trên **bản sao cấu hình thật của kh�
 
 ### Bước 6 — Đánh giá MCP tích hợp (D1, tùy chọn)
 
-Bật `Parameters/McpServer.json` trên local, kết nối thử, ghi lại danh sách tool và việc nào dùng được cho framework (đọc cấu hình? chỉ record?).
+Bật `Parameters/McpServer.json` trên dev (nếu được phép sửa Parameters), kết nối thử, ghi lại danh sách tool và việc nào dùng được cho framework (đọc cấu hình? chỉ record?).
 
 ### Bước 7 — Quét secret
 
 ```bash
-python scripts/scan_secrets.py data/local/original
+python scripts/scan_secrets.py data/dev/original
 ```
 Ghi nhận trường nào chứa URL, token, mail, hostname.
 
@@ -78,7 +94,8 @@ Ghi nhận trường nào chứa URL, token, mail, hostname.
 
 ## An toàn
 
-- `scripts/common.py` **chặn mọi lệnh ghi** khi `base_url` không phải localhost. Không nới điều kiện này.
+- `scripts/common.py` chặn ghi vào mọi môi trường không phải localhost hoặc dev đã bật ghi (bảng ở trên). Không nới điều kiện này.
+- Dev nội bộ có thể dùng chung với dự án khác: chỉ làm việc trong thư mục spike, không sửa site ngoài thư mục đó.
 - `data/` bị gitignore. Không commit.
 - `report.md` sinh trong `data/` có in **giá trị thật** (trước/sau) để bạn đối chiếu — có thể chứa webhook URL, tên người. Chỉ báo cáo đã làm sạch theo `report-template.md` mới được đưa ra ngoài `data/`.
 - Chế độ `create` sẽ khác ở các tham chiếu chéo site (Link, lookup trỏ SiteId cũ) — đánh dấu 🔗 trong báo cáo. Đây là bằng chứng cho yêu cầu phân giải ID xuyên site (A3), không phải lỗi round-trip.

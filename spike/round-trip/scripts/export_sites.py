@@ -14,7 +14,7 @@ from common import (DATA_DIR, api_body, env_settings, extract_site, load_config,
 
 def export_one(cfg: dict, env: dict, site_id: int) -> dict:
     path = cfg["endpoints"]["get_site"].format(id=site_id)
-    resp = post(env["base_url"], path, api_body(cfg, env), write=False)
+    resp = post(env, path, api_body(cfg, env), write=False)
     return resp
 
 

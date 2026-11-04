@@ -11,13 +11,13 @@ Mục tiêu: đưa mô hình "đặt chính bản → AI làm việc qua hook �
 | Khung repo | ✅ Đã dựng |
 | Review thiết kế (A1–C5) | ✅ Ghi tại `docs/review-findings.md` |
 | ADR 0001–0005 | 🟡 Template + câu hỏi mở, **chưa chốt** |
-| Spike round-trip (B4) | 🟡 Kịch bản + script sẵn sàng, **chưa chạy** |
+| Spike round-trip (B4) | 🟡 Kịch bản + script sẵn sàng, chạy trên Pleasanter dev nội bộ — **chưa chạy** |
 | Lát cắt dọc đầu tiên | ⬜ Chờ kết quả spike + ADR |
 
 ## Điều kiện môi trường (đã chốt)
 
 - Khách dùng **on-prem**
-- Phiên bản **Pleasanter 1.5.x** (cần ghi chính xác bản patch vào `spike/round-trip/env/.env`)
+- Phiên bản **Pleasanter 1.5.x** (ghi chính xác bản patch của dev nội bộ và của khách vào báo cáo spike — hai bên phải trùng)
 - Khách **có thể tự sửa cấu hình** trên UI → đồng bộ hai chiều, xử lý drift là bắt buộc
 
 ## Phân tách repo
@@ -37,7 +37,7 @@ ai-dlc-pleasanter/
 │  └─ adr/                 # quyết định kiến trúc
 └─ spike/round-trip/       # spike B4: cấu hình có khôi phục nguyên vẹn không
    ├─ README.md            # kịch bản, tiêu chí go/no-go
-   ├─ env/                 # Docker Pleasanter 1.5.x local
+   ├─ env/                 # (tùy chọn) Docker Pleasanter 1.5.x local
    ├─ scripts/             # export / normalize / roundtrip
    ├─ inventory-checklist.md
    ├─ report-template.md
