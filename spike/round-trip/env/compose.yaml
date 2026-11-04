@@ -1,0 +1,43 @@
+# Pleasanter 1.5.x local cho spike round-trip.
+# Đối chiếu với manual Docker hiện hành của Pleasanter trước khi chạy (xem README.md).
+
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+      - POSTGRES_HOST_AUTH_METHOD
+      - POSTGRES_INITDB_ARGS
+    volumes:
+      - type: volume
+        source: pg_data
+        target: ${POSTGRES_VOLUMES_TARGET}
+
+  codedefiner:
+    image: implem/pleasanter:codedefiner
+    depends_on:
+      - db
+    environment:
+      Implem.Pleasanter_Rds_PostgreSQL_SaConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_SaConnectionString}
+      Implem.Pleasanter_Rds_PostgreSQL_OwnerConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_OwnerConnectionString}
+      Implem.Pleasanter_Rds_PostgreSQL_UserConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_UserConnectionString}
+    # TODO(verify): tham số CodeDefiner cho 1.5.x theo manual (ngôn ngữ ja, timezone Asia/Tokyo).
+    command: ["_rds", "/l", "ja", "/z", "Asia/Tokyo"]
+    profiles: ["setup"]
+
+  pleasanter:
+    image: implem/pleasanter:${PLEASANTER_VERSION}
+    depends_on:
+      - db
+    ports:
+      # Chỉ bind localhost — không mở ra mạng ngoài
+      - "127.0.0.1:50001:8080"
+    environment:
+      Implem.Pleasanter_Rds_PostgreSQL_SaConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_SaConnectionString}
+      Implem.Pleasanter_Rds_PostgreSQL_OwnerConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_OwnerConnectionString}
+      Implem.Pleasanter_Rds_PostgreSQL_UserConnectionString: ${Implem_Pleasanter_Rds_PostgreSQL_UserConnectionString}
+
+volumes:
+  pg_data:

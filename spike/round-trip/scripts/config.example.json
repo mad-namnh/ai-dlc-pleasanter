@@ -1,0 +1,39 @@
+{
+  "environments": {
+    "local": {
+      "base_url": "http://localhost:50001",
+      "api_key_env": "PLEASANTER_LOCAL_API_KEY",
+      "tenant_id": 1
+    }
+  },
+  "site_ids": [
+    0
+  ],
+  "roundtrip_parent_id": 0,
+  "api_version": 1.1,
+  "endpoints": {
+    "get_site": "/api/items/{id}/getsite",
+    "create_site": "/api/items/{id}/createsite",
+    "update_site": "/api/items/{id}/updatesite"
+  },
+  "volatile_keys": [
+    "ApiKey",
+    "SiteId",
+    "ParentId",
+    "InheritPermission",
+    "TenantId",
+    "Ver",
+    "Creator",
+    "Updator",
+    "CreatedTime",
+    "UpdatedTime",
+    "Timestamp",
+    "ApiCountDate",
+    "ApiCount"
+  ],
+  "_comment_volatile": "volatile_keys: chỉ bỏ ở cấp site. volatile_nested_keys: bỏ ở mọi cấp — để trống trừ khi chắc chắn (SiteId lồng là tham chiếu chéo site).",
+  "volatile_nested_keys": [
+    "UpdatedTime",
+    "CreatedTime"
+  ]
+}
