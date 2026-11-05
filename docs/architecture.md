@@ -300,10 +300,10 @@ Naming: `pls-<phase>-<role>` (`p1`…`p6`, `kb`, `x`) — see `CLAUDE.md`.
 |---|---|---|
 | `pls-p1-requirements-analyst` | skill | P1 |
 | `pls-p2-solution-designer` | skill | P2 |
-| `pls-p3-config-builder`, `pls-p3-script-builder` | skills | P3 |
-| `pls-p4-test-writer` | skill | P4 |
+| `pls-p3-config-builder` (built 0.1; scripts are part of it) | skill | P3 |
+| `pls-p4-test-writer` (built 0.1) | skill | P4 |
 | `pls-p4-permission-reviewer`, `pls-p4-script-reviewer`, `pls-p4-over-coding-reviewer`, `pls-p4-coverage-reviewer` | read-only agents | P4 |
-| `pls-p5-release-manager` | agent | P5 |
+| `pls-p5-release-manager` (built 0.1 as a skill) | skill | P5 |
 | `pls-p6-ops-watcher` | agent | P6 |
 | `pls-x-lifecycle` (+ project `CLAUDE.md` template) | skill (orchestration: phase order, gate stops, commands, token rules) | all |
 | `pls-kb-pleasanter` | knowledge base (Pleasanter behaviour: D7–D10, S7) | all |

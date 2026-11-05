@@ -10,7 +10,7 @@ You are the orchestrator. You move the project through the phases in order. You 
 - You do the work in each phase and explain it.
 - A person approves at the gates.
 
-`pls` below means `python <framework>/tools/pls/pls.py`, run from the project root. `<framework>` is the framework path in `.claude/framework.lock`.
+`pls` below means `python <framework>/tools/pls/pls.py` (`python3` where `python` is not Python 3), run from the project root. `<framework>` is the framework path in `.claude/framework.lock`.
 
 ## 1. Find where the project is
 
@@ -40,9 +40,10 @@ Tell the user in two or three lines where the project stands and what comes next
    - You cannot type it. Show the exact command and ask the person to run it.
    - Alternatively, they tell you to run it with `--yes`. Use `--yes` only after that explicit instruction, and only for the target they named.
 4. **Never read API keys, ask for them, or print them.** If a key is missing, `pls http-check` says which environment variable to set; pass that on to the person.
-5. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. Anything not in it is probed on dev (P2 rule) or raised as an open point.
-6. **Commit at the end of every phase and after every gate decision.** Use local commits with a prefix such as `feat(p1):`, `docs(g1):` or `release(p5):`. Never push unless asked.
-7. **Keep tokens low.**
+5. **No connection, no improvising.** If a `pls` command cannot reach the environment, stop. Tell the person what to check (`pls http-check`), and do not replace a fresh export with an old one: that skips the drift check.
+6. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. Anything not in it is probed on dev (P2 rule) or raised as an open point.
+7. **Commit at the end of every phase and after every gate decision.** Use local commits with a prefix such as `feat(p1):`, `docs(g1):` or `release(p5):`. Never push unless asked.
+8. **Keep tokens low.**
    - Read `pls` output, not the files it writes. Never open `releases/*/payload-*.json`, `rollback-*.json`, `.pls/exports/*` or `tests/results/*.json` whole. Use `pls diff`, `pls lint`, `pls coverage`, or a short `python -c` / `grep` for one field.
    - Read `config/<site>/site.json` by section (the part you change), not end to end, once it is large.
    - Use HTTP `pls` commands. The browser runner and base64 transfers are a fallback only when no network path exists, and only after telling the person why.
@@ -91,13 +92,15 @@ Skill: `pls-p3-config-builder`.
 5. **If the plan is refused, read the reason:**
    - **drift:** someone changed dev → explain it, ask the person, and record the decision before `--accept-drift`;
    - **slot finding:** go back to the design;
-   - **data-impacting without a migration:** P2 missed it → back to G2.
+   - **data-impacting without a migration:**
+     - First check that the sites created by bootstrap have their record `releases/B-*/bootstrap.json`. Without it `pls` does not know they are new, and treats e.g. a new summary as data-impacting. Recover the record; do not reopen G2 for this.
+     - Otherwise P2 missed it → back to G2.
 
 ### P4 Verify → G3
 Skill: `pls-p4-test-writer`.
 
 - Write `tests/api/*.json` from the acceptance criteria. Each restricted role gets tests run with that role's key (`as_key`).
-- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Test records are created on dev, so this needs `allow_write: true` for dev.
+- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so run them only on dev (and stg smoke tests after G4). `pls test` does not check `allow_write` yet (TD-14).
 - On failure, find the cause before changing anything:
   - **build defect** → back to P3, then redeploy;
   - **design defect** → back to P2/G2;
