@@ -351,6 +351,12 @@ class PlsTest(unittest.TestCase):
         got = [p["release"] for _, p in pls.releases_for(self.r, "stg", "a", "applied")]
         self.assertEqual(got, ["R-01", "R-02"])
 
+    def test_classify_summary_change_is_data_impacting(self):
+        d = [{"path": "settings.Summaries[1]", "kind": "added", "before": None, "after": {"Type": "Total"}}]
+        c = pls.classify(d)
+        self.assertEqual(c["classification"], "data-impacting")
+        self.assertIn("D16", c["data_impacting"][0])
+
     def test_classify(self):
         d = [{"path": "settings.Columns[ClassB]", "kind": "removed", "before": {}, "after": None}]
         self.assertEqual(pls.classify(d)["classification"], "data-impacting")

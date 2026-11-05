@@ -364,6 +364,9 @@ def classify(diffs: list[dict]) -> dict:
                 cfg.append(p)
         elif re.match(r"settings\.Columns\[\w+\]\.(Formula|DefaultInput)", p):
             data.append(f"{p}: formula/default changed")
+        elif p.startswith("settings.Summaries"):
+            data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
+                        "migration: touch one child record per parent after the release")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
         else:
