@@ -10,5 +10,9 @@
 | [0006](0006-site-permissions-in-git.md) | Site permissions in git (opt-in, logical principals) | Accepted (2026-11-05) |
 | [0007](0007-creating-new-sites.md) | Creating new sites: skeleton bootstrap, then the normal release | Proposed (2026-11-05) |
 | [0008](0008-http-transport.md) | HTTP transport with local connections (no browser in the loop) | Proposed (2026-11-05) |
+| [0009](0009-version-detection-and-kb-verification.md) | Pleasanter version detection and executable KB verification | Proposed (2026-11-05) |
+| [0010](0010-mail-and-job-safety-outside-production.md) | Mail and scheduled-job safety outside production | Proposed (2026-11-05) |
+| [0011](0011-parallel-development-sandboxes-harvest-merge.md) | Parallel development: sandboxes, harvest and semantic merge | Proposed (2026-11-05) |
+| [0012](0012-scheduled-server-scripts-scope.md) | Scope of scheduled (background) server scripts | Proposed (2026-11-05) — waiting for a probe |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

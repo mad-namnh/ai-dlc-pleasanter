@@ -77,7 +77,7 @@ Measure tokens and wall time per phase, and record them in `demo/results/`.
 | D3 ✅ | **Project scaffold** — done 2026-11-05: `pls init`, launcher `pls.py`, `pls skills check|sync`, template files; TD-14 (a)–(d) fixed; 46 + 6 tests (R3-1, R3-2) | `pls init <dir> --framework <path>` (or `templates/project/` + copy script) creates:<br>• `CLAUDE.md`, `.gitignore`, `environments.json` with `dev`/`stg` placeholders (`parent_id`, empty `sites`, `principals` per role);<br>• `connections.example.json`, empty ledger and traceability, the `requirements/`, `design/`, `config/`, `tests/`, `releases/` and `ops/` folders;<br>• skills copied and `framework.lock` written.<br>Framework path read from `framework.lock` (or env `PLS_HOME`) instead of a fixed `../`. `pls skills check` compares the project copy with the lock. | Unit tests; `pls init` then `pls lint` passes on the empty project. |
 | D3b ✅ | **Fixes from the architecture review** — done 2026-11-05 (B1–B3 in the skills, KB `skeletons.md`; S1–S5, S7 in `pls` 0.7 with tests; S6, S8–S10 remain for D6 / before D7) (`docs/reviews/architect-review-d3.md`), decided by Nam 2026-11-05 | **B1** P5 with target dev = record only: P3/P4 deploy while building; P5 checks drift 0 since the tests, writes the diff report, then G4 = accept as released. plan.md, the lifecycle and P5 skills and `gates.md` all say the same.<br>**B2** roles prepared before the demo: `demo/roles.json`; groups, users, keys and principals are created during setup. P2 reuses existing roles; a G2 check that every `${principal:x}` and every `as_key` exists. In `http-check`, 401 = bad key and 403/404 = valid key without access.<br>**B3** skeleton exports per ReferenceType (Results, Issues; 1.5.2) in the KB; P2 needs no write and bootstrap stays in P3.<br>**S1–S4** tool defects (duplicate bootstrap, fold-back after an applied release, overwrite of a release, permissions on restore). Also S5 and S7 if cheap. | B1–B3 before D4; S1–S4 before D5; unit tests for each tool fix |
 | D4 ✅ | **Setup guide + demo package** — done 2026-11-05: `docs/setup.md`, `demo/README.md` (script per gate), `demo/spec.md`, `demo/roles.json`; `pls init --roles`, lint L-ENV-01 (setup not finished); offline walk-through ok, real `http-check` is part of D5 (R1, R3-3, R3-4) | `docs/setup.md`:<br>• prerequisites (Python 3.10+, Claude Code on a machine that can reach Pleasanter, Pleasanter 1.5.x);<br>• one parent folder per environment;<br>• groups and users per role, API keys in environment variables;<br>• `connections.json`, `http-check`.<br>`demo/`: spec (equipment-loan request, Japanese), scenario script (what to say at each gate, expected stops, expected duration), the list of roles the spec needs, and a reset note (delete the demo folder in the UI). | A person follows `setup.md` to a green `http-check` without asking anyone. |
-| D5 | **Real HTTP rehearsal** (R2-4) | Nam's terminal on dev, in a new demo folder: `init` → `bootstrap` → `release-plan` → `apply` → `test` (both roles) → `mark-applied`. Fix whatever breaks. | Recorded in `demo/results/`; apply and bootstrap proven over HTTP. |
+| D5 ✅ | **Real HTTP rehearsal** — done 2026-11-05: project `demo-equipment`, P1→G4 on dev, 10/10 API tests, round trip and drift 0, release `R-20261105-01-dev`; findings in `HANDOFF.md` (KB D28, TD-14h, test encoding fix); presenter guide `demo/lifecycle-and-demo-guide.html` (R2-4) | Nam's terminal on dev, in a new demo folder: `init` → `bootstrap` → `release-plan` → `apply` → `test` (both roles) → `mark-applied`. Fix whatever breaks. | Recorded in `demo/results/`; apply and bootstrap proven over HTTP. |
 | D6 | **Clean-up** (R3-6) | README status and layout updated.<br>Framework `CLAUDE.md` rules updated for `pls` (no spike-era paths).<br>`spike/`, `patterns/` and `evals/results/` moved under `archive/`, or clearly marked non-core.<br>`HANDOFF.md` reduced to current state + next step. | A newcomer reading README → setup → demo finds no stale statement. |
 | D7 | **Demo dry run — fresh agent session** | Clean clone → setup → spec → P1…P6 on dev, with Nam answering the gates. Record tokens, time and human corrections per phase in `demo/results/`. | Pass; fixes folded back into D1–D6. |
 | D8 | **Team acceptance run** | A team member runs the demo alone from `docs/setup.md` + `demo/`, then gives feedback (where they got stuck, what was unclear). | They reach the dev release without help → demo ready. |
@@ -95,6 +95,39 @@ Measure tokens and wall time per phase, and record them in `demo/results/`.
 ### Deferred (not needed for the demo)
 
 Migrations over HTTP, reviewer agents, CI, Playwright smoke, prod / customer-side deploy package (ADR-0003), mail (TD-10), P6 on permission drift.
+
+## Step 4c — Brownfield readiness (complex project in 運用保守) — PROPOSED, after the ADR review
+
+**Why:** the first real candidate is an existing Pleasanter project in maintenance: standard master screens, one main screen with a custom layout, many server and client scripts, three environments (dev / stg / prod) that are hard to deploy between and to compare, dashboards, notifications, mail and scheduled jobs. The framework was proven on new apps and small changes only.
+
+**Facts from Nam (2026-11-05):**
+- The custom layout of the main screen lives **in the site** (`Htmls` / `Scripts` / `Styles`), so `unpack` already splits it into files — but these three components were never round-tripped (spike checklist rows 16–18).
+- Pleasanter versions of the three environments are not known; the tool must **detect** them.
+- Framework scope starts on **dev**; stg and prod are exported read-only at first.
+- The project uses dashboards, notifications, mail and **jobs implemented as server scripts**.
+- Whether dev can send real mail is **unknown**.
+- Up to **three developers** change configuration at the same time.
+- The aim is not to impose PR review but to find the most effective way of working.
+
+**Decisions to take first:** ADR-0009 (version detection, KB verification), ADR-0010 (mail and job safety), ADR-0011 (sandboxes, harvest, semantic merge), ADR-0012 (scheduled server scripts). Nothing below is built before Nam reviews them.
+
+### Work items (in order)
+
+| # | Item | Content | Done when |
+|---|---|---|---|
+| BR1 | **Mail and job safety** (ADR-0010) | `side_effects` flags per environment, guards in `test` / `apply` / `bootstrap`, lint L-MAIL-01; ask the server operator about SMTP on dev; request a mail sink | Guards unit-tested; dev state recorded by a person; no test can run on a site with notifications while `mail` is `unknown` |
+| BR2 | **Version detection** (ADR-0009, part 1) | Probe the version source on 1.5.2; `pls version`; label stored per environment; warning on change; version comparison in `release-plan` | Versions of all three candidate environments known; unit tests |
+| BR3 | **Round-trip spike for the brownfield components** (ADR-0001 round 2) | On copies in dev: `Htmls`, `Scripts`, `Styles` of the main screen, dashboards, notifications with real-world addresses replaced; read-only probe of scheduled server scripts (ADR-0012) | Checklist rows 16–18 and dashboards ticked or marked out of scope; `release-plan` refuses sites with unverified components; ADR-0012 option chosen |
+| BR4 | **Adopt** | `pls adopt --env <e>`: export every site of a folder, unpack, generate `environments.json`, slot ledger (zone `customer`), `permissions.json`, initial drift baseline; read-only on stg/prod (customer exports prod if MADLAB has no access) | One candidate site adopted from all three environments, 0 differences on re-export |
+| BR5 | **Environment comparison** | `pls env-compare dev stg prod`: diff after replacing ids by logical names; classify each difference (expected id, intended per-env value, unintended) | Report for the candidate reviewed with the team; per-env values moved to `${env:x}` |
+| BR6 | **Harvest, sandboxes, semantic merge** (ADR-0011) | `pls harvest`; `pls sandbox create/refresh/drop`; merge driver for `site.json`; ids in the ledger; text diff of scripts in reports | Three developers deliver tickets in parallel on one site, with merges and no lost change |
+| BR7 | **Script tooling** | `node --check` lint; `pls refs suggest/rewrite` (hard-coded ids → `${site:x}` / `${principal:x}`, report for review); `pls xref` (scripts ↔ columns ↔ statuses ↔ sites) | All scripts of the candidate pass syntax lint; id rewrite report reviewed for one site |
+| BR8 | **KB verification** (ADR-0009, part 2) | `verified_on` in the KB; probe specs for the entries the skills rely on (D8, D10, D19–D24, D27, D28); `pls kb-verify --env dev` | `kb-verify` green on MADLAB dev and on the candidate's dev |
+| BR9 | **Skills** | `pls-x-onboarding` (adopt, env comparison, decisions per difference); `pls-x-spec-recovery` (as-is 画面設計書 per site, Japanese); `pls-p3-script-engineer` (script conventions, refactor rules, ladder for new changes only); `pls-p4-e2e-tester` (Playwright per role for the custom screen, unit tests of server scripts with a mocked context); `pls-p6-maintenance-triage` (問い合わせ／障害 → config / script / data / requirement) | Each skill has one eval case from the candidate, graded by its rubric |
+
+**Definition of done:** on the candidate project, one real change request goes P1 → G4 on dev through sandboxes and harvest, with the as-is spec as P1 input, the version and side-effect checks green, and a stg release package that the team agrees to use.
+
+**Order rationale:** BR1 first (safety before any test); BR2–BR3 before any write to a candidate site (D4: `updatesite` replaces everything); BR4–BR5 give value read-only (diff and history) before the workflow changes; BR6 changes how the team works, so it comes after they have seen the diffs.
 
 ## Step 5 — Real pilot & metrics (after the demo)
 
@@ -132,3 +165,5 @@ Metrics:
 | 2026-11-05 | Demo: one API key (the operator's); role tests deferred (project profile `Role tests: deferred`), restrictions verified in the configuration; per-role test users and keys in a later phase (TD-11) |
 | 2026-11-05 | Setup simplified (Nam: too many steps): `pls setup` once per machine and environment saves a profile (URL, folder, ids by name, key file outside repos); `pls init` then creates a ready project and the first commit |
 | 2026-11-05 | Permissions are a separate step of the design (P2 step 1b: roles → groups → matrix, `design/roles.json`), not setup. Groups are created by the person after G2 and bound by `pls principals`. Replaces B2 "roles prepared before the demo"; `demo/roles.json` removed |
+| 2026-11-05 | D5 done: demo run `demo-equipment` released on dev (`R-20261105-01-dev`); KB 0.9 (D28), test-spec 0.2 (TD-14h) |
+| 2026-11-05 | Brownfield readiness proposed as Step 4c for a complex project in 運用保守; ADR-0009 to ADR-0012 written as Proposed, waiting for Nam's review |
