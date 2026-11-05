@@ -153,7 +153,7 @@ class HttpTest(unittest.TestCase):
         steps = [{"op": "updatesite", "site": s, "site_id": i, "payload_file": f"payload-{s}.json", "expect_updated_time": "t0"}
                  for s, i in (("equipment", EQ), ("loans", LO))]
         plan = {"release": rel, "env": "dev", "status": "planned", "sites": ["equipment", "loans"], "classification": "config-only",
-                "per_site": {"equipment": {"site_id": EQ}, "loans": {"site_id": LO}}, "steps": steps,
+                "per_site": {"equipment": {"site_id": EQ, "side_effects": []}, "loans": {"site_id": LO, "side_effects": []}}, "steps": steps,
                 "rollback": [{"op": "updatesite", "site": s, "site_id": i, "payload_file": f"rollback-{s}.json"} for s, i in (("loans", LO), ("equipment", EQ))]}
         (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
         for s in ("equipment", "loans"):

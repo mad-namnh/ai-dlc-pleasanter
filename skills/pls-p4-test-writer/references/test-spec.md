@@ -52,6 +52,10 @@ Every step has `op`. A step may set its own `as_key`, for example to create a fi
 
 Tests leave their records on dev. Titles start with `テスト` so a person can find and delete them. `list` reads one page only, so on a site with many test records, filter the view (`view`) so the records under test are on the first page.
 
+## Mail safety (ADR-0010)
+
+`pls test` refuses a spec that creates, updates, deletes or executes a process on a site with notifications or reminders while `envs.<env>.side_effects.mail` is not `sink` or `disabled`. Do not split or rewrite tests to avoid the check: report the refusal and ask the person to record the environment's mail state. Read-only specs (`get`, `list`, `siteConfig`) always run, so notification settings can still be checked by configuration.
+
 ## Typical HTTP codes (1.5.2, see KB)
 
 | Code | When |

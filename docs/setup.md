@@ -60,6 +60,17 @@ python pls.py http-check --env dev
 
 **Demo stage:** role tests are deferred. The agent works with your key only, and proves the restrictions of the other roles in the configuration. Testing as each role, with a test user and key for each, comes in a later phase (TD-11).
 
+**Mail and scheduled jobs (ADR-0010).** Notifications and reminders send mail when tests change records on dev. `environments.json` therefore says what each environment does with mail and jobs: `"side_effects": {"mail": "unknown", "jobs": "unknown"}`. While mail is `unknown`, `pls test` refuses tests that change records on a site with notifications or reminders, and `pls apply` refuses a release that adds or changes them. Ask whoever runs the Pleasanter server whether SMTP is configured, then set the value yourself:
+
+| `mail` | Meaning |
+|---|---|
+| `unknown` | not checked yet (default) |
+| `sink` | mail goes to a test mailbox (smtp4dev, MailHog, …), never to people |
+| `disabled` | the server sends no mail |
+| `live` | real mail is sent — tests on sites with notifications stay refused; releases show a warning |
+
+`jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts; its checks come with ADR-0012. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
+
 ## Commands that need you
 
 `python pls.py bootstrap B-…` (creates sites) and `python pls.py apply R-…` (applies a release) ask you to type the release id, and the agent cannot type it. You have two options:
@@ -77,6 +88,8 @@ python pls.py http-check --env dev
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |
+| `REFUSED (ADR-0010)` from `test` or `apply` | The site sends mail and `side_effects.mail` is not safe. Check SMTP with the server operator and set `mail` in `environments.json` (see above). |
+| `L-MAIL-01` from `lint` | A notification or reminder holds a literal mail address. Put it in `values` and use `${env:NAME}`, or use a principal. |
 | `pls skills check` differs | Change skills only in the framework, then run `python pls.py skills sync`. |
 
 **Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key.

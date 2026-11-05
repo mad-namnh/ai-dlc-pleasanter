@@ -1,6 +1,6 @@
 # ADR-0010: Mail and scheduled-job safety outside production
 
-- **Status:** Proposed (2026-11-05)
+- **Status:** Proposed (2026-11-05) — mail part implemented on branch `brownfield-adr` (plan BR1); jobs guard waits for ADR-0012
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** TD-10 (mail deferred), ADR-0012 (background server scripts), ADR-0003 (production), I3; plan Step 4c
@@ -50,6 +50,18 @@ TD-10 deferred mail for the demo stage. A real project cannot defer it: a test r
 3. **Lint `L-MAIL-01`:** a literal mail address in a notification or reminder is an error. Use `${env:x}` (per-environment address) or `${principal:x}`; Pleasanter placeholders such as `[Manager]` are allowed.
 4. **P4 with a sink:** test specs get an `op: "mail"` step that reads the sink and checks recipients and subject. Without a sink, mail stays a configuration check, and G3 says so.
 5. **P2 / impact checklist:** any change touching notifications, reminders or jobs states the side effects per environment.
+
+### Implementation notes (BR1, 2026-11-05)
+
+- `tools/pls/pls_side_effects.py`; wired into `lint`, `release-plan`, `apply`, `test` and `http-check`; 15 tests in `tests/test_side_effects.py`. An independent code review found nine gaps (wrong site for creates without `site`, `--var` records of other sites, plans made before the check, processes sharing a name, addresses glued to Japanese text, …); all fixed and covered by tests.
+- `bootstrap` needs no guard: it creates empty skeleton sites (`SiteSettings {}`, D26), which send nothing. The guard applies to the release that configures them.
+- `test` reads the **live** settings of every site a writing spec touches, so mail elements added outside git are also caught. A create goes to its `site` or the command's site (never `run_on`); an update, delete or process run on a record given by `--var` counts for **every** site of the environment, because its site is unknown. Specs that only read (`get`, `list`, `siteConfig`) are never blocked.
+- `apply` refuses a plan that records no mail changes at all (made before this check) unless mail is `sink` or `disabled`: re-run `release-plan`.
+- Every notification and reminder counts, also disabled ones and non-mail notification types (safe side).
+- `release-plan` records the changed mail elements per site (`per_site.<site>.side_effects`, `MAIL …` lines) and notes when `apply` will refuse; plans for prod are not affected (prod is never written by `pls`).
+- `jobs` is validated and shown, but nothing detects scheduled scripts yet (ADR-0012). Reminders count as mail elements.
+- The mail sink step for P4 (`op: "mail"`) is not built yet: it needs a sink on the candidate's dev.
+- **Known limit:** a server script or a summary that writes to **another** site can fire that site's notifications; the guard does not follow such chains. It is safe only when the other site is also in the spec or in the environment's site list (as with `--var` records). Covered fully once mail is `sink` or `disabled`.
 
 ## Consequences
 

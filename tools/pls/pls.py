@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
+import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -449,6 +450,10 @@ def lint(r: Path) -> list[dict]:
                 issues.append({"rule": "L-ENV-01", "site": "-", "msg": f"envs.{env_name}.principals.{n} = {v!r}: fill in the id (docs/setup.md)"})
         if ec.get("parent_id") == 0:                              # template value, never a real folder
             issues.append({"rule": "L-ENV-01", "site": "-", "msg": f"envs.{env_name}.parent_id: set the folder id for the app (docs/setup.md)"})
+        try:                                                      # L-ENV-02: side effects declared with a known value
+            SE.effects(ec)
+        except ValueError as ex:
+            issues.append({"rule": "L-ENV-02", "site": "-", "msg": f"envs.{env_name}.{ex} (ADR-0010)"})
     for site_dir in sorted((r / "config").iterdir()):
         if not site_dir.is_dir():
             continue
@@ -465,6 +470,8 @@ def lint(r: Path) -> list[dict]:
                 if name_ not in known:
                     issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
                                    f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
+        for path, addr in SE.literal_addresses(m["settings"]):     # L-MAIL-01: no literal addresses (ADR-0010)
+            issues.append({"rule": "L-MAIL-01", "site": site, "msg": f"{path}: literal mail address {addr}; use ${{env:…}} or ${{principal:…}}"})
         for name, rx in SECRET_RES.items():
             if rx.search(blob):
                 issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
@@ -757,6 +764,7 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
                      if k in live_site},
         "raw_diff": md_diff(diffs, labels(git) | labels(live), f"{env}/{site}: live (before) vs git (after)"),
         "deps": site_deps(git, site, set(e["sites"])),
+        "side_effects": SE.changed_mail_elements(live["settings"], git["settings"]),
     }
 
 
@@ -808,7 +816,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         wj(rel / f"payload-{s}.json", res["payload"])
         wj(rel / f"rollback-{s}.json", res["rollback"])
         (rel / f"raw-diff-{s}.md").write_text(res["raw_diff"], encoding="utf-8")
-        per_site[s] = {k: res[k] for k in ("site_id", "changes", "classification", "snapshot_sha256", "snapshot_updated_time", "checks")}
+        per_site[s] = {k: res[k] for k in ("site_id", "changes", "classification", "snapshot_sha256", "snapshot_updated_time", "checks",
+                                           "side_effects")}
+        for x in res["side_effects"]:
+            print(f"MAIL {s}: {x}")
         per_site[s].update(payload_file=f"payload-{s}.json", rollback_file=f"rollback-{s}.json", depends_on=sorted(res["deps"] & set(results)))
     plan = {
         "release": release, "env": env, "status": "planned", "sites": order,
@@ -822,6 +833,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         "migration": migration if worst == "data-impacting" else None,
     }
     wj(rel / "plan.json", plan)
+    if any(per_site[s]["side_effects"] for s in order) and e.get("role") != "prod":
+        eff = SE.effects(e)
+        if eff["mail"] == "unknown":
+            print(f"note: envs.{env}.side_effects.mail is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
           + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
     return 0
@@ -1208,6 +1223,11 @@ def http_cmd(r: Path, a) -> int:
                     print(f"{a.env} key '{k}': {ex}")
             print(f"writes: {'allowed' if e.get('role') in H.WRITABLE_ROLES and conn.get('allow_write') is True else 'refused'} "
                   f"(role {e.get('role')!r}, allow_write {conn.get('allow_write')!r})")
+            try:
+                print(SE.describe(a.env, SE.effects(e)))
+            except ValueError as ex:
+                bad += 1
+                print(f"{a.env}: {ex} (ADR-0010)")
             return 1 if bad else 0
 
         if a.cmd == "export":
@@ -1232,8 +1252,17 @@ def http_cmd(r: Path, a) -> int:
             if plan.get("status") != "planned":
                 raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
             files = {f.name: rj(f) for f in rel.glob("*.json") if f.name.startswith(("payload-", "rollback-"))}
+            try:
+                eff = SE.effects(e)
+            except ValueError as ex:
+                raise H.TransportError(f"envs.{plan['env']}.{ex}")
+            refusal, warning = SE.apply_refusal(plan["env"], eff, {s: plan["per_site"][s].get("side_effects") for s in plan["sites"]})
+            if refusal:
+                raise H.TransportError(refusal)
+            if warning:
+                print(warning)
             if not _confirm(a.release, a.yes, f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
-                                             f"{plan.get('classification')}"):
+                                             f"{plan.get('classification')}" + (f"\n{warning}" if warning else "")):
                 return 1
             res = H.apply_release(c, plan, files)
             for line in res["log"]:
@@ -1304,6 +1333,22 @@ def http_cmd(r: Path, a) -> int:
                     raise H.TransportError(f"keys '{vals[v]}' and '{role}' are the same key — use a key created by a user of each role")
                 vals[v] = role
             sid = e["sites"][a.site]["id"]
+            try:
+                eff = SE.effects(e)
+            except ValueError as ex:
+                raise H.TransportError(f"envs.{a.env}.{ex}")
+            if eff["mail"] not in SE.MAIL_SAFE:
+                all_sites = {v["id"] for v in e["sites"].values() if v.get("id")}
+                written = sorted({x for sp_ in specs if SE.test_writes(sp_) for x in SE.test_sites(sp_, sid, all_sites)})
+                mailing = {}
+                for x in written:
+                    live = clients(None).export_site(x)["Response"]["Data"]["SiteSettings"]
+                    els = sorted(SE.mail_elements(live))
+                    if els:
+                        mailing[x] = els
+                refusal = SE.test_refusal(a.env, eff, mailing)
+                if refusal:
+                    raise H.TransportError(refusal)
             res = H.run_tests(clients, sid, specs, a.env)
             res["executed_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
             res["specs"] = [str(Path(f)) for f in a.specs]

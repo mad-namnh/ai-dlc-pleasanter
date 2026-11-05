@@ -8,7 +8,11 @@
         "admin": "User,1"
       },
       "sites": {},
-      "values": {}
+      "values": {},
+      "side_effects": {
+        "mail": "unknown",
+        "jobs": "unknown"
+      }
     }
   }
 }

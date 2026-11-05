@@ -35,7 +35,7 @@ Tell the user in two or three lines where the project stands and what comes next
    - At a gate, present the evidence, ask, and wait.
    - Record the decision only after the person states it, with their name and the date.
    - "Looks good, continue" from the person counts as approval. Silence does not.
-2. **Writes go only to `role: dev` environments, or to `stg` after G4.** `pls` enforces this through `allow_write` in `.pls/connections.json`; never edit that file to get past a refusal.
+2. **Writes go only to `role: dev` environments, or to `stg` after G4.** `pls` enforces this through `allow_write` in `.pls/connections.json`; never edit that file to get past a refusal. The same holds for `side_effects` in `environments.json` (ADR-0010): only the person records whether an environment sends real mail; on a `REFUSED (ADR-0010)`, ask them.
 3. **`pls apply` and `pls bootstrap` ask the person to type the release id.**
    - You cannot type it. Show the exact command and ask the person to run it.
    - Alternatively, they tell you to run it with `--yes`. Use `--yes` only after that explicit instruction, and only for the target they named.
