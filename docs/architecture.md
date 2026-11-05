@@ -305,6 +305,7 @@ Naming: `pls-<phase>-<role>` (`p1`…`p6`, `kb`, `x`) — see `CLAUDE.md`.
 | `pls-p4-permission-reviewer`, `pls-p4-script-reviewer`, `pls-p4-over-coding-reviewer`, `pls-p4-coverage-reviewer` | read-only agents | P4 |
 | `pls-p5-release-manager` | agent | P5 |
 | `pls-p6-ops-watcher` | agent | P6 |
+| `pls-x-lifecycle` (+ project `CLAUDE.md` template) | skill (orchestration: phase order, gate stops, commands, token rules) | all |
 | `pls-kb-pleasanter` | knowledge base (Pleasanter behaviour: D7–D10, S7) | all |
 | Hooks: env write guard, secret guard, post-edit lint | hooks | P3–P5 |
 | Evals: sample requirements with expected designs/configs | evals | all |

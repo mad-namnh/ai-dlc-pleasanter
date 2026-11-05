@@ -61,7 +61,7 @@ Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6
 
 ## Current focus (2026-11-05, Nam)
 
-**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, starting with D1, the lifecycle runbook. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
+**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, D1 is done (lifecycle skill + project CLAUDE.md template). Next is D2: skills P3, P4 and P5. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
 
 ## Next steps (in order) — before the pause
 
