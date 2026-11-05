@@ -43,12 +43,10 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 
 ## Next steps (in order)
 
-1. **Skills v0.3** from the slice #2 findings:
-   - P1/P2 checklist: does an existing column or feature already cover the request? (S2-4)
-   - KB rule: a probe used as design evidence must include the feature it is evidence for (S2-1).
+1. ✅ Skills 0.3 / KB 0.6 from the slice #2 findings (commit c02bd12), and the project pin was upgraded. **Next:** run eval case 002 (P1, P2) with fresh agents, 3 runs each.
 2. **Customer round:** send Q8–Q24 and O7 (M2 changes 更新日時 and 更新者). Get the real groups for prod (O3), then add `prod` to `environments.json`.
 3. **First real migration volume** (plan Step 4 item 3): M1 and M2 touched 0 records on stg, so rehearse on a copy of real data.
-4. **Evals:** run each case at least 3 times and automate grading. Add a case from slice #2 (a role test that catches the D19-type error).
+4. **Evals:** automate grading; run case 001 again on 0.3 to check for regressions.
 5. Step 5 (real pilot and metrics) — choose the pilot project.
 
 Mail stays deferred (TD-10). The escaped defect below waits for it.
