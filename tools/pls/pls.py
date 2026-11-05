@@ -29,6 +29,8 @@ Commands:
                                                 multi-site plan (A3): every per-site check, then order by dependency
                                                 (${site:x} references, referenced sites first), snapshot + rollback per
                                                 site, reverse-order rollback; nothing is written if any site fails
+  bootstrap-plan --env E --release R            new sites (ADR-0007): createsite plan for managed sites without an id in E
+  bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
   mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
 """
@@ -107,7 +109,7 @@ def site_data(export: Any) -> dict:
 # ---------------------------------------------------------------- references
 
 def id_maps(e: dict) -> tuple[dict, dict]:
-    ids = {str(v["id"]): k for k, v in e["sites"].items()}
+    ids = {str(v["id"]): k for k, v in e["sites"].items() if v.get("id")}   # sites not created yet have no id (ADR-0007)
     vals = {v: k for k, v in (e.get("values") or {}).items() if v}
     return ids, vals
 
@@ -141,6 +143,8 @@ def from_refs(obj: Any, e: dict, key: str = "") -> Any:
             if kind == "site":
                 if name not in e["sites"]:
                     raise Fail(f"unresolved reference ${{site:{name}}}")
+                if not e["sites"][name].get("id"):
+                    raise Fail(f"site '{name}' is not created in this environment yet — pls bootstrap-plan, then pls bind (ADR-0007)")
                 return str(e["sites"][name]["id"])
             if kind == "principal":
                 val = (e.get("principals") or {}).get(name)
@@ -405,6 +409,11 @@ def classify(diffs: list[dict]) -> dict:
                         "migration: touch one child record per parent after the release")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
+        elif re.match(r"settings\.Processes\[[^\]]+\]\.(Groups|Users|Depts)\b", p) or (
+                re.fullmatch(r"settings\.Processes(\[[^\]]+\])?", p)
+                and any(isinstance(y, dict) and (y.get("Groups") or y.get("Users") or y.get("Depts"))
+                        for x in (d["before"], d["after"]) for y in (x if isinstance(x, list) else [x]))):
+            perm.append(f"{p}: process access control (D20)")
         else:
             cfg.append(p)
     cls = "data-impacting" if data else "permission-impacting" if perm else "config-only"
@@ -416,7 +425,7 @@ def classify(diffs: list[dict]) -> dict:
 def lint(r: Path) -> list[dict]:
     issues: list[dict] = []
     e_all = envs(r)
-    all_ids = {str(s["id"]) for e in e_all["envs"].values() for s in e["sites"].values()}
+    all_ids = {str(s["id"]) for e in e_all["envs"].values() for s in e["sites"].values() if s.get("id")}
     ledger = rj(r / "design/slot-ledger.json") if (r / "design/slot-ledger.json").exists() else None
     decisions = "\n".join(p.read_text(encoding="utf-8") for p in (r / "design").rglob("*.md")) if (r / "design").exists() else ""
     for site_dir in sorted((r / "config").iterdir()):
@@ -696,6 +705,15 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     if failed:
         print("release plan REFUSED: no files written")
         return 1
+    fresh = new_sites(r, env)
+    for s_, res in results.items():
+        c = res["classification"]
+        # First release of a site created by a bootstrap (ADR-0007): no records can predate it, and a summary
+        # whose destination is also new has no existing values to recalculate (D16). Kept as notes, not gates.
+        if s_ in fresh and c["data_impacting"] and all(d in fresh for d in res["deps"]):
+            c["new_site_notes"] = [f"{x} — not applicable: first release of a new site (ADR-0007)" for x in c["data_impacting"]]
+            c["data_impacting"] = []
+            c["classification"] = "permission-impacting" if c["permission_impacting"] else "config-only"
     order, cyc = order_sites({s: res["deps"] for s, res in results.items()})
     rel = r / "releases" / release
     worst = max((res["classification"]["classification"] for res in results.values()), key=SEVERITY.index)
@@ -734,6 +752,80 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     return 0
 
 
+# ---------------------------------------------------------------- new sites (ADR-0007)
+
+def bootstrap_plan(r: Path, env: str, release: str) -> int:
+    """Phase 1 of a first release: empty skeleton sites for every managed site that has no id in `env` yet.
+    Phase 2 is the normal release-plan (updatesite with the complete payload) once the ids are bound, so every
+    ${site:x} reference — also between new sites and inside scripts (D3) — resolves before anything is configured."""
+    e = env_conf(r, env)
+    if e.get("role") == "prod":
+        raise Fail("production sites are created by the customer-side runner (ADR-0003)")
+    parent = e.get("parent_id")
+    if not isinstance(parent, int) or parent <= 0:
+        raise Fail(f"environments.json envs.{env}.parent_id (folder for new sites) is missing")
+    steps = []
+    for site in envs(r).get("managed_sites", []):
+        conf = e["sites"].get(site) or {}
+        if conf.get("id"):
+            continue
+        if not conf.get("title"):
+            raise Fail(f"envs.{env}.sites.{site}.title is missing")
+        mp = r / "config" / site / "meta.json"
+        if not mp.exists():
+            raise Fail(f"config/{site}/meta.json is missing (ReferenceType comes from the design, ADR-0007)")
+        rt = rj(mp).get("ReferenceType")
+        if rt not in ("Sites", "Issues", "Results", "Wikis", "Dashboards"):
+            raise Fail(f"config/{site}/meta.json: ReferenceType '{rt}' is not a site type")
+        steps.append({"op": "createsite", "site": site, "parent_id": parent,
+                      "payload": {"Title": conf["title"], "ReferenceType": rt, "Body": "", "SiteSettings": {}}})
+    if not steps:
+        print(f"{env}: every managed site already has an id — nothing to bootstrap")
+        return 0
+    plan = {"release": release, "env": env, "status": "planned", "parent_id": parent, "steps": steps,
+            "next": f"runner bootstrapSites(plan) → pls bind --env {env} --release {release} --created SITE=ID …",
+            "undo": "a person deletes the created sites in Pleasanter (agents never delete); then remove their ids"}
+    wj(r / "releases" / release / "bootstrap.json", plan)
+    print(f"bootstrap plan written to releases/{release}/bootstrap.json — create {', '.join(s['site'] for s in steps)} under {parent}")
+    return 0
+
+
+def new_sites(r: Path, env: str) -> set:
+    """Sites created by a bootstrap in `env` that have no applied release yet."""
+    out = set()
+    for bp in sorted((r / "releases").glob("*/bootstrap.json")) if (r / "releases").exists() else []:
+        b = rj(bp)
+        if b.get("env") == env:
+            out |= set(b.get("created", {}))
+    return {s for s in out if not releases_for(r, env, s, "applied")}
+
+
+def bind(r: Path, env: str, release: str, created: dict) -> int:
+    bp = r / "releases" / release / "bootstrap.json"
+    plan = rj(bp)
+    if plan.get("env") != env:
+        raise Fail(f"{bp.name} is for env '{plan.get('env')}', not '{env}'")
+    want = {s["site"] for s in plan["steps"]}
+    if set(created) - want:
+        raise Fail(f"not in the bootstrap plan: {sorted(set(created) - want)}")
+    allenv = envs(r)
+    used = {str(s.get("id")) for x in allenv["envs"].values() for s in x["sites"].values() if s.get("id")}
+    for site, sid in created.items():
+        if not str(sid).isdigit():
+            raise Fail(f"{site}: id '{sid}' is not a number")
+        if str(sid) in used:
+            raise Fail(f"{site}: id {sid} is already used in environments.json")
+        allenv["envs"][env]["sites"][site]["id"] = int(sid)
+        used.add(str(sid))
+    wj(r / "environments.json", allenv)
+    plan["created"] = {**plan.get("created", {}), **{k: int(v) for k, v in created.items()}}
+    plan["status"] = "created" if set(plan["created"]) == want else "partial"
+    plan["created_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    wj(bp, plan)
+    print(f"bound {', '.join(f'{k}={v}' for k, v in created.items())} in environments.json ({env}); bootstrap {plan['status']}")
+    return 0
+
+
 # ---------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
@@ -762,6 +854,13 @@ def main(argv=None) -> int:
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
     s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+    s = sp.add_parser("bootstrap-plan")
+    s.add_argument("--env", required=True)
+    s.add_argument("--release", required=True)
+    s = sp.add_parser("bind")
+    s.add_argument("--env", required=True)
+    s.add_argument("--release", required=True)
+    s.add_argument("--created", action="append", required=True, metavar="SITE=ID", help="id returned by createsite")
     s = sp.add_parser("mark-applied")
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
@@ -778,6 +877,12 @@ def main(argv=None) -> int:
         wj(p, after)
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
+
+    if a.cmd == "bootstrap-plan":
+        return bootstrap_plan(r, a.env, a.release)
+
+    if a.cmd == "bind":
+        return bind(r, a.env, a.release, dict(x.split("=", 1) for x in a.created))
 
     if a.cmd == "release-plan":
         exports = dict(x.split("=", 1) for x in a.export)

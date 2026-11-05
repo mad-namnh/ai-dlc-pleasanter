@@ -18,6 +18,7 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 |---|---|
 | `ai-dlc-pleasanter` | Framework: architecture v0.2, ADRs, `tools/pls` v0.3, `skills/` (KB 0.5), `evals/`, `patterns/ai-gateway` (parked) |
 | `pls-demo-inquiry` | First project repository: slices #1, 1.5 and #2. All of them are merged to `main`; no other branches. |
+| `pls-demo-equipment` | Second project repository: slice #3, a new app (equipment loans) created by the framework (dev 44628/44629, stg 44671/44672) |
 
 `_to_delete/` folders are leftovers (the agent shell cannot delete files); safe to delete.
 
@@ -58,13 +59,14 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
    - P2 0.3: **FAIL** on one item: the probe for process buttons of a read-only role was composed correctly but scheduled after G2, and the design kept the expected (wrong) branch. Fixed in **P2 0.4** (design-changing probes are G2 prerequisites, otherwise take the safe branch).
    - Run 2 with 0.4: **PASS** (`evals/results/pls-p2-solution-designer/2026-11-05-case002.md`). `pls-demo-inquiry` pinned to P2 0.4.
    - Follow-ups: `pls classify` classifies process access control (`Processes[].Groups/Users/Depts`) as config-only — should be permission-impacting (tool gap); watch whether design-changing probes on verified behaviour (PRB-3 type) are treated as G2 prerequisites in the next case.
-3. **Architecture / process gaps worth a demo slice:**
+3. ✅ **Slice #3 — new app end to end (2026-11-05)**: equipment loans in `pls-demo-equipment`, P1→P6, G1–G4 approved, stg R-20261105-E03 applied (0-difference round trip, smoke pass, drift baseline 0). ADR-0007 (new sites), pls 0.4, KB 0.7 (D21–D27), skill P2 0.5. Report: `docs/slices/slice-03-report.md`.
+4. **Architecture / process gaps worth a demo slice:**
    - P6 operate on slice #2: a drift on permissions, and on the process ACL.
    - Transport ADR-0003: the manual base64 transfer is the most token-heavy step. Decide whether to automate it.
    - A migration on a larger data copy (plan Step 4 item 3).
    - Line-level script diff (S6).
-4. Update `docs/architecture.md` (v0.3) with what slices #1–#2 proved: multi-site release, migration gate, principals, and role tests.
-5. Prod-stage items (customer round, prod environment, real groups, mail) — later.
+5. Update `docs/architecture.md` (v0.3) with what slices #1–#2 proved: multi-site release, migration gate, principals, and role tests.
+6. Prod-stage items (customer round, prod environment, real groups, mail) — later.
 
 ## Escaped defect found by the eval (I9)
 

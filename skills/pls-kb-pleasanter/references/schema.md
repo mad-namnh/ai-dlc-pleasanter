@@ -44,3 +44,13 @@ Editor layout: `EditorColumnHash.General` (ordered list). Grid: `GridColumns`. F
 ## Server scripts (`SiteSettings.ServerScripts[]`)
 
 `{Id, Name, Title, Shared?, BeforeCreate?, BeforeUpdate?, …, Body}`. Shared scripts are prepended to the others — see D7 in `behaviours.md`.
+
+## Summaries, links, views for Issues (verified 2026-11-05, PRB-001)
+
+| Setting | Shape |
+|---|---|
+| Link (child → parent) | child `Columns[ClassX].ChoicesText = "[[parentSiteId]]"` + `Links: [{ColumnName: "ClassX", SiteId: parentSiteId}]`; record value = parent record Id as string |
+| Summary (on the child) | `{Id, SiteId: parent, DestinationReferenceType, DestinationColumn, LinkColumn, Type: Count/Total, SourceColumn?, SourceCondition?: childViewId, SetZeroWhenOutOfCondition?}` (D16, D23) |
+| Issues view | `Overdue: true` (D24); built-in `StartTime` / `CompletionTime`; editor key `IssueId` (Results: `ResultId`) |
+| Process data change | `{Type: "InputDate", ColumnName, BaseDateTime: "CurrentDate"}` — `CurrentDate` is the default and is dropped on save (D8) |
+| Issues defaults dropped on save (D8) | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` are defaults — do not keep them in git (equipment demo R-E01) |

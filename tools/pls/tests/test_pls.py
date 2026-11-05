@@ -393,6 +393,60 @@ class PlsTest(unittest.TestCase):
         d = [{"path": "settings.Columns[ClassE].ChoicesText", "kind": "changed", "before": "a\nb", "after": "a"}]
         self.assertEqual(pls.classify(d)["classification"], "data-impacting")
 
+    def test_bootstrap_plan_and_bind_new_site(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["managed_sites"] = ["a", "c"]
+        envs["envs"]["stg"]["parent_id"] = 900
+        envs["envs"]["stg"]["sites"]["c"] = {"title": "stg_C"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        (self.r / "config/c").mkdir(parents=True)
+        (self.r / "config/c/meta.json").write_text(json.dumps({"ReferenceType": "Issues"}), encoding="utf-8")
+        (self.r / "config/c/site.json").write_text(json.dumps({"Links": [{"SiteId": "${site:a}"}]}), encoding="utf-8")
+        e = pls.env_conf(self.r, "stg")
+        with self.assertRaises(pls.Fail):                      # a reference to an unbound site cannot resolve
+            pls.from_refs({"Links": [{"SiteId": "${site:c}"}]}, e)
+        self.assertEqual(pls.id_maps(e)[0], {"201": "a", "202": "b"})
+        self.assertEqual(pls.main(["bootstrap-plan", "--env", "stg", "--release", "R-1"]), 0)
+        bp = json.loads((self.r / "releases/R-1/bootstrap.json").read_text(encoding="utf-8"))
+        self.assertEqual([s["site"] for s in bp["steps"]], ["c"])
+        self.assertEqual(bp["steps"][0]["payload"], {"Title": "stg_C", "ReferenceType": "Issues", "Body": "", "SiteSettings": {}})
+        with self.assertRaises(pls.Fail):                      # id already used
+            pls.main(["bind", "--env", "stg", "--release", "R-1", "--created", "c=201"])
+        self.assertEqual(pls.main(["bind", "--env", "stg", "--release", "R-1", "--created", "c=203"]), 0)
+        e = pls.env_conf(self.r, "stg")
+        self.assertEqual(e["sites"]["c"]["id"], 203)
+        self.assertEqual(pls.payload(pls.read_tree(self.r / "config/c"), e, "c")["SiteSettings"]["Links"][0]["SiteId"], 201)
+        self.assertEqual(json.loads((self.r / "releases/R-1/bootstrap.json").read_text(encoding="utf-8"))["status"], "created")
+        self.assertEqual(pls.main(["bootstrap-plan", "--env", "stg", "--release", "R-2"]), 0)   # nothing left
+        self.assertFalse((self.r / "releases/R-2/bootstrap.json").exists())
+
+    def test_bootstrap_refused_for_prod(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["prod"] = {"role": "prod", "parent_id": 1, "sites": {}}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        with self.assertRaises(pls.Fail):
+            pls.main(["bootstrap-plan", "--env", "prod", "--release", "R-1"])
+
+    def test_classify_process_access_control_is_permission_impacting(self):
+        d = [{"path": "settings.Processes[escalate].Groups", "kind": "added", "before": None, "after": ["${principal:x}"]}]
+        self.assertEqual(pls.classify(d)["classification"], "permission-impacting")
+        d = [{"path": "settings.Processes[escalate]", "kind": "added", "before": None, "after": {"Name": "escalate", "Groups": [1]}}]
+        self.assertEqual(pls.classify(d)["classification"], "permission-impacting")
+        d = [{"path": "settings.Processes", "kind": "added", "before": None, "after": [{"Name": "r", "Groups": [1]}]}]
+        self.assertEqual(pls.classify(d)["classification"], "permission-impacting")
+        d = [{"path": "settings.Processes[escalate].DisplayName", "kind": "changed", "before": "a", "after": "b"}]
+        self.assertEqual(pls.classify(d)["classification"], "config-only")
+
+    def test_new_sites_only_after_bootstrap_and_before_first_applied_release(self):
+        d = self.r / "releases/B-1"; d.mkdir(parents=True)
+        (d / "bootstrap.json").write_text(json.dumps({"env": "dev", "created": {"a": 101}}), encoding="utf-8")
+        self.assertEqual(pls.new_sites(self.r, "dev"), {"a"})
+        self.assertEqual(pls.new_sites(self.r, "stg"), set())
+        d2 = self.r / "releases/R-1"; d2.mkdir(parents=True)
+        (d2 / "plan.json").write_text(json.dumps({"release": "R-1", "env": "dev", "sites": ["a"], "status": "applied",
+                                                  "applied_at": "2026-11-05T10:00:00+09:00"}), encoding="utf-8")
+        self.assertEqual(pls.new_sites(self.r, "dev"), set())
+
 
 if __name__ == "__main__":
     unittest.main()

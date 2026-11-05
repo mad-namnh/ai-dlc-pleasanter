@@ -5,10 +5,13 @@
 //   await plsRunner.exportSite(siteId)                 → getsite response (save as export JSON)
 //   await plsRunner.apply(siteId, payload)             → updatesite with a COMPLETE payload (I2)
 //   await plsRunner.runTests(siteId, specs, envName)   → results JSON for tests/results/
+//     ops: create (expectHttp for refusals), exec, update, delete, get, list (view contains/excludes), editPage, siteConfig
 //   await plsRunner.applyRelease(plan, files)          → multi-site release (pls release-plan): preflight, ordered apply,
 //                                                        automatic reverse-order restore on failure (A3)
 //   await plsRunner.rollbackRelease(plan, files, sites) → restore the given sites (default: all) in reverse order
 //   files = {"payload-<site>.json": {...}, "rollback-<site>.json": {...}} — content of the release folder
+//   await plsRunner.bootstrapSites(plan)           → new sites (ADR-0007): createsite skeletons from releases/R/bootstrap.json;
+//                                                        returns {site: newId} for `pls bind`; never deletes anything
 //   await plsRunner.backupRecords(siteId)              → every record of a site (paged), for migration/backup/ (ADR-0004)
 //   await plsRunner.bulkUpsert(siteId, keys, data)     → /bulkupsert; records matched by `keys` are updated, others created
 //     API updates do not create record versions (Ver stays 1 — D14), so the backup is the only way back.
@@ -40,7 +43,7 @@ var plsRunner = (() => {
     const procs = Object.fromEntries((site.SiteSettings.Processes || []).map(p => [p.Name, p]));
     const out = [];
     for (const spec of specs) {
-      const vars = {}, log = []; let status = 'pass';
+      const vars = {...(spec.vars || {})}, log = []; let status = 'pass';   // spec.vars: fixtures from an earlier run
       // "$name" anywhere in step data → id of the record saved as `name` earlier in this test
       const subst = v => typeof v === 'string' && /^\$\w+$/.test(v) && v.slice(1) in vars ? String(vars[v.slice(1)])
         : Array.isArray(v) ? v.map(subst) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
@@ -49,6 +52,12 @@ var plsRunner = (() => {
           const rid = st.record ? vars[st.record.replace('$', '')] : null;
           if (st.op === 'create') {
             const r = await call(`/api/items/${st.site || siteId}/create`, subst(st.data));
+            if (st.expectHttp) {                 // negative create: must be refused with this status
+              const ok = r.http === st.expectHttp;
+              log.push(`${ok ? 'ok ' : 'NG '} create refused → HTTP ${r.http} (expected ${st.expectHttp})${r.json && r.json.Message ? ' ' + r.json.Message : ''}`);
+              if (!ok) status = 'fail';
+              continue;
+            }
             if (!r.json || !r.json.Id) throw new Error(`create failed: HTTP ${r.http} ${r.text.slice(0, 200)}`);
             vars[st.save] = r.json.Id; log.push(`create → ${r.json.Id}`);
           } else if (st.op === 'exec') {
@@ -71,11 +80,27 @@ var plsRunner = (() => {
               continue;
             }
             const rec = r.json.Response.Data[0];
-            for (const [path, exp] of Object.entries(st.expect)) {
-              const act = getPath(rec, path);
+            for (const [path, exp0] of Object.entries(st.expect)) {
+              const act = getPath(rec, path), exp = subst(exp0);   // "$name" in expectations = saved record id
               const ok = check(act, exp);
               log.push(`${ok ? 'ok ' : 'NG '} ${path} = ${JSON.stringify(act)} (expected ${JSON.stringify(exp)})`);
               if (!ok) status = 'fail';
+            }
+          } else if (st.op === 'list') {         // records returned by a view: {site, view, contains:[$x], excludes:[$y]}
+            const r = await call(`/api/items/${st.site || siteId}/get`, {View: st.view || {}});
+            if (st.expectHttp) {
+              const ok = r.http === st.expectHttp;
+              log.push(`${ok ? 'ok ' : 'NG '} list → HTTP ${r.http} (expected ${st.expectHttp})`);
+              if (!ok) status = 'fail';
+              continue;
+            }
+            const ids = new Set(((r.json && r.json.Response && r.json.Response.Data) || []).map(x => String(x.IssueId || x.ResultId)));
+            for (const [want, list] of [[true, st.contains || []], [false, st.excludes || []]]) {
+              for (const v of list) {
+                const id = String(subst(v)); const ok = ids.has(id) === want;
+                log.push(`${ok ? 'ok ' : 'NG '} ${id} ${want ? 'in' : 'not in'} view`);
+                if (!ok) status = 'fail';
+              }
             }
           } else if (st.op === 'editPage') {
             const html = await fetch(`/items/${rid}/edit`).then(r => r.text());
@@ -138,6 +163,24 @@ var plsRunner = (() => {
     return {status: 'applied-unverified', log: [...log, 'next: export every site and run `pls mark-applied <release> --export site=file …`']};
   };
 
+  const bootstrapSites = async plan => {
+    const created = {}, log = [];
+    const parent = await call(`/api/items/${plan.parent_id}/getsite`);
+    if (parent.http !== 200 || !parent.json || parent.json.Response.Data.ReferenceType !== 'Sites') {
+      return {status: 'refused', created, log: [`parent ${plan.parent_id} is not a reachable folder (HTTP ${parent.http})`]};
+    }
+    for (const st of plan.steps) {
+      if (st.op !== 'createsite' || st.parent_id !== plan.parent_id) return {status: 'refused', created, log: [...log, `bad step ${st.site}`]};
+      const r = await call(`/api/items/${st.parent_id}/createsite`, st.payload);
+      const id = r.json && (r.json.Id || (r.json.Response && r.json.Response.Id));
+      log.push(`createsite ${st.site} under ${st.parent_id} → HTTP ${r.http}${id ? ` id ${id}` : ''}`);
+      if (r.http !== 200 || !id) return {status: 'partial', created, log: [...log, r.text.slice(0, 200), 'stop: bind what was created, then decide']};
+      created[st.site] = id;
+    }
+    return {status: 'created', created, log: [...log, `next: pls bind --env ${plan.env} --release ${plan.release} ` +
+      Object.entries(created).map(([k, v]) => `--created ${k}=${v}`).join(' ')]};
+  };
+
   const backupRecords = async (siteId, pageSize = 200) => {
     const all = [];
     for (let offset = 0; ; offset += pageSize) {
@@ -156,5 +199,5 @@ var plsRunner = (() => {
     return {http: r.http, message: r.json && r.json.Message};
   };
 
-  return {exportSite, apply, runTests, applyRelease, rollbackRelease, backupRecords, bulkUpsert};
+  return {exportSite, apply, runTests, applyRelease, rollbackRelease, bootstrapSites, backupRecords, bulkUpsert};
 })();
