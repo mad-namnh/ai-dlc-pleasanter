@@ -33,10 +33,12 @@ class PlsTest(unittest.TestCase):
         self.r = Path(self.tmp.name)
         (self.r / "environments.json").write_text(json.dumps(ENVS), encoding="utf-8")
         self.cwd = os.getcwd()
+        os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")     # never the person's real profile
         os.chdir(self.r)
 
     def tearDown(self):
         os.chdir(self.cwd)
+        os.environ.pop("PLS_PROFILE_DIR", None)
         self.tmp.cleanup()
 
     def unpack_dev(self, **kw):

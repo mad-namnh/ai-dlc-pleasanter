@@ -1,6 +1,6 @@
 # Setup — run the AI-DLC framework against your Pleasanter
 
-This takes you from a clone of this repository to a project where Claude Code can build a Pleasanter app from a specification. Allow about 15 minutes the first time. Nothing secret goes into git or into the chat.
+This takes you from a clone of this repository to a project where Claude Code can build a Pleasanter app from a specification. Allow about 30 minutes the first time, mostly for the Pleasanter preparation in step 2. Nothing secret goes into git or into the chat.
 
 ## 0. What you need
 
@@ -8,7 +8,7 @@ This takes you from a clone of this repository to a project where Claude Code ca
 |---|---|
 | Pleasanter **1.5.x**, a **dev** environment | The framework is verified on 1.5.2. Never use production; the tool refuses to write to `role: prod`. |
 | A Pleasanter user that can create sites in one folder | Usually your own admin user. |
-| Rights to create groups | Or ask your Pleasanter administrator to do step 2b for you. |
+| Rights to create groups and users | Or ask your Pleasanter administrator to do step 2b for you. |
 | **Python 3.10+** and **git** | Check with `python --version`. On macOS/Linux use `python3` wherever this guide says `python`. |
 | **Claude Code**, on a machine that can reach Pleasanter over HTTPS | The agent calls Pleasanter through `pls`. A cloud agent without a network path to your Pleasanter cannot run the demo. |
 
@@ -28,27 +28,33 @@ The demo app uses three roles, defined in [`demo/roles.json`](../demo/roles.json
 
 Create a folder, for example `zz_demo_備品貸出`. Its id is the number in the URL (`…/items/<id>/index`): this is the **parent id**. All sites of the app are created inside it, and nothing outside it is touched.
 
-### 2b. Groups for the app's roles
+### 2b. Groups and test users, one per restricted role
 
-The app gives 総務 and 社員 different rights, so their groups must exist before the permissions can be deployed. Create two groups; they need no members for the demo:
+| Role | Create | Member |
+|---|---|---|
+| `somu` | group `zz_demo_総務` | a new user `zz_demo_somu` |
+| `staff` | group `zz_demo_社員` | a new user `zz_demo_staff` |
+| `admin` | nothing | your own user |
 
-| Role | Group |
-|---|---|
-| `somu` | `zz_demo_総務` |
-| `staff` | `zz_demo_社員` |
-| `admin` | none: this is your own user |
+Note the **group ids** and **your user id**; Pleasanter's group and user management lists show them. Optionally, give both groups read access to the folder from 2a, so their users can open it in the UI.
 
-Note the two **group ids** and **your user id**. Pleasanter's group and user management lists show them.
+### 2c. API keys, one per role
 
-**Demo stage:** role tests are deferred (project profile `Role tests: deferred`). The agent proves the 社員 restrictions in the configuration, not by logging in as a 社員 user. Testing per role, with a test user and key for each, comes in a later phase (TD-11).
+Log in as each of the three users (yourself, `zz_demo_somu`, `zz_demo_staff`). For each one, create an API key in the user menu → API settings. Each role must have its **own** key: role tests prove what that user can and cannot do, and `pls test` refuses to run if two roles share a key.
 
-### 2c. One API key — yours
+Store the keys **outside git and outside the chat**. Use one of these two ways.
 
-In Pleasanter's user menu → API settings, create an API key for **your** user. Store it outside git and outside the chat, in one of two ways.
+**Environment variables** (names from `demo/roles.json`). Windows:
 
-**Environment variable.** Windows: `setx PLS_DEV_ADMIN_KEY "<your key>"`, then open a **new** terminal and restart Claude Code. A program that is already running does not see variables set with `setx`. On macOS/Linux, add `export PLS_DEV_ADMIN_KEY=…` to your shell profile.
+```
+setx PLS_DEV_ADMIN_KEY "<your key>"
+setx PLS_DEV_SOMU_KEY  "<key of zz_demo_somu>"
+setx PLS_DEV_STAFF_KEY "<key of zz_demo_staff>"
+```
 
-**Key file.** In `.pls/connections.json` (step 4), write `"file:admin.key"` instead of `"env:PLS_DEV_ADMIN_KEY"`, and put the key alone in `.pls/admin.key`. The `.pls/` folder is gitignored.
+Then open a **new** terminal and restart Claude Code. A program that is already running does not see variables set with `setx`. On macOS/Linux, `export …` in your shell profile.
+
+**Key files.** In `.pls/connections.json` (step 4), write `"file:admin.key"` instead of `"env:…"`, and put each key alone in that file inside `.pls/`. The `.pls/` folder is gitignored.
 
 ## 3. Create the project
 
@@ -67,7 +73,7 @@ git commit -m "project created by pls init"
 - the folder layout;
 - the launcher `pls.py`;
 - the skills, with their versions locked in `.claude/framework.lock`;
-- `environments.json` (a principal placeholder per role) and `connections.example.json` (your key).
+- `environments.json` and `connections.example.json`, prepared for the three roles.
 
 From now on, run the tool as **`python pls.py <command>`** inside the project.
 
@@ -86,7 +92,10 @@ From now on, run the tool as **`python pls.py <command>`** inside the project.
    python pls.py lint
    ```
 
-   `http-check` must report HTTP 200 for `admin` (it reads the folder) and `writes: allowed`.
+   `http-check` must report:
+   - HTTP 200 for `admin` (it reads the folder);
+   - 200, 403 or 404 for `somu` and `staff` ("key valid, no access" is fine);
+   - `writes: allowed`.
 
    `lint` must report `0 issue(s)`.
 
@@ -113,10 +122,11 @@ For the demo, the second option keeps the flow moving.
 | `pls not found at …` | The launcher cannot find the framework. Set `path` in `.claude/framework.lock`, or the `PLS_HOME` environment variable, to the `ai-dlc-pleasanter` folder. |
 | `http-check`: key REJECTED (401) | Wrong or expired key, or the variable is not set in this terminal. Restart the terminal and Claude Code after `setx`. |
 | `http-check`: `writes: refused` | `allow_write` is not `true` in `.pls/connections.json`, or `environments.json` role is not `dev`. |
+| `keys 'x' and 'y' are the same key` | Two roles use one user's key. Create a key per user (2c). |
 | `L-ENV-01` from lint | `parent_id` or a principal id is still a placeholder (step 4). |
 | `L-REF-02` from lint | The design uses a role or site that is not in `environments.json`. Add the role (and its group, user and key), or change the design. |
 | `pls skills check` reports differences | The project copy of a skill was edited, or the framework is newer. Change skills only in the framework, then run `python pls.py skills sync`. |
 
 ## Clean up after a demo
 
-In Pleasanter, delete the demo folder: the sites and test records are inside it. Delete the groups from 2b if you do not want them any more. Agents never delete anything in Pleasanter.
+In Pleasanter, delete the demo folder: the sites and test records are inside it. Delete the groups and users from 2b if you do not want them any more. Agents never delete anything in Pleasanter.

@@ -40,3 +40,12 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 ## UI endpoints useful for discovery (read-only)
 
 - `POST /items/{siteId}/SetSiteSettings` with `ControlId=NewProcess` (or `NewProcessDataChange`, …) returns the **dialog HTML** with every field and option for that setting, without saving anything. Use it to learn the schema of a setting on the exact installed version.
+
+## Users and groups (1.5.2, verified 2026-11-05 with an admin session, read-only)
+
+| Call | Result |
+|---|---|
+| `POST /api/groups/get` `{View: {ColumnFilterHash: {GroupName: "<name>"}}}` | `Response.Data[]` with `GroupId`, `GroupName`, …; page size 200 (`Offset` for more). The filter matched the one group with that name. `pls setup` still compares the name exactly |
+| `POST /api/users/get` `{View: {ColumnFilterHash: {LoginId: "<login>"}}}` | `Response.Data[]` with `UserId`, `LoginId`, … (also sensitive fields: never print or store the whole record) |
+| Either call with a non-admin user's API key | not verified: `pls setup` asks for the id when the lookup fails |
+

@@ -35,6 +35,12 @@ class Fake:
         self.calls.append((path, who))
         if not who:
             return 401, {"Message": "unauthorized"}
+        if path in ("/api/groups/get", "/api/users/get"):
+            col = (body.get("View") or {}).get("ColumnFilterHash") or {}
+            rows = [{"GroupId": 374, "GroupName": "zz_demo_総務"}, {"GroupId": 3740, "GroupName": "zz_demo_総務2"},
+                    {"GroupId": 375, "GroupName": "zz_demo_社員"}] if "groups" in path else [{"UserId": 7, "LoginId": "nam"}]
+            rows = [r_ for r_ in rows if all(str(v) in str(r_.get(k)) for k, v in col.items())]   # like-match, as Pleasanter
+            return 200, {"Response": {"Data": rows, "TotalCount": len(rows)}}
         parts = path.strip("/").split("/")          # api items {id} {action}
         iid, act = int(parts[2]), parts[3]
         if act == "getsite":
@@ -369,6 +375,30 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)                     # staff → 404 = valid key
         (self.r / ".pls/staff.key").write_text("K-WRONG", encoding="utf-8")
         self.assertEqual(pls.main(["http-check", "--env", "dev"]), 1)                     # 401 = bad key
+
+
+    def test_setup_once_then_init_needs_no_editing(self):                                  # D4 simplification
+        os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")
+        try:
+            roles = self.r / "roles.json"
+            roles.write_text(json.dumps({"roles": {"admin": {"principal": "User", "default_key": True},
+                                                   "somu": {"principal": "Group", "group_name": "zz_demo_総務"},
+                                                   "staff": {"principal": "Group", "group_name": "zz_demo_社員"}}}, ensure_ascii=False), encoding="utf-8")
+            answers = iter([self.url, f"{self.url}/items/{FOLDER}/index", "nam"])
+            prof = pls.setup_profile("dev", roles, ask=lambda *_: next(answers), ask_secret=lambda *_: "K-ADMIN")
+            self.assertEqual(prof["parent_id"], FOLDER)
+            self.assertEqual(prof["principals"], {"admin": "User,7", "somu": "Group,374", "staff": "Group,375"})  # exact name, not 総務2
+            pf = (self.r / "_profiles/dev.json").read_text(encoding="utf-8")
+            self.assertNotIn("K-ADMIN", pf)                                               # the key is never in the profile
+            proj = self.r / "app"
+            self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam", "--no-git"]), 0)
+            os.chdir(proj)
+            self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)
+            self.assertEqual(pls.lint(proj), [])
+            ev = json.loads((proj / "environments.json").read_text(encoding="utf-8"))
+            self.assertEqual(ev["envs"]["dev"]["principals"]["somu"], "Group,374")
+        finally:
+            os.environ.pop("PLS_PROFILE_DIR", None)
 
 
 if __name__ == "__main__":

@@ -11,12 +11,12 @@ Target: **dev only**. P5 records the tested dev state as the release (decision B
 | Input | [`spec.md`](spec.md): a mail from a fictional 総務部, in Japanese |
 | Roles | [`roles.json`](roles.json): `admin` (you), `somu` (総務), `staff` (社員) |
 | Result | Two sites (equipment register, loans) with a 返却 button, an overdue list, a 貸出中 count and role permissions. API tests on dev; 社員 restrictions checked in the configuration (role tests deferred). Release records are in git. |
-| Setup | [`docs/setup.md`](../docs/setup.md), steps 0–4, done **before** the demo |
+| Setup | Once per machine: [`docs/setup.md`](../docs/setup.md) → `pls setup`. Per demo: one `pls init` |
 | Time and tokens | Measured in the dry run (`demo/results/`). Plan for about an hour with discussion at each gate. |
 
 ## Before the audience arrives
 
-1. Do setup steps 0–4. `python pls.py http-check --env dev` must be green and `python pls.py lint` must show 0 issues.
+1. `python ai-dlc-pleasanter/tools/pls/pls.py init demo-equipment --approver "<your name>"`, then `cd demo-equipment` and `python pls.py http-check --env dev` (it must be green). The one-time `pls setup` must have been run on this machine.
 2. Open Claude Code in the project folder.
 3. Open the Pleasanter demo folder in a browser tab; it is still empty.
 
@@ -44,4 +44,4 @@ At each step, say the line in the **You say** column to Claude Code (in any lang
 
 ## Reset for the next run
 
-Delete the Pleasanter demo folder's contents (or the folder, and create a new one with a new `parent_id`). Delete the project folder and run `pls init` again (setup step 3).
+Delete the Pleasanter demo folder's contents (or the folder, and create a new one with a new `parent_id`). Delete the project folder and run `pls init` again.

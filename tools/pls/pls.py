@@ -1056,6 +1056,106 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     sync_skills(target, fw)
 
 
+# ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification)
+
+def profile_dir() -> Path:
+    import os
+    return Path(os.environ.get("PLS_PROFILE_DIR") or Path.home() / ".pls" / "profiles")
+
+
+def _lookup(client, path: str, column: str, value: str, id_field: str) -> int | None:
+    """Exact match by name through /api/groups/get or /api/users/get (1.5.2, verified with an admin user)."""
+    try:
+        st, js, _ = client.call(path, {"View": {"ColumnFilterHash": {column: value}}})
+    except Exception:          # noqa: BLE001 — lookup is a convenience; the person is asked instead
+        return None
+    hits = [x for x in ((js or {}).get("Response") or {}).get("Data") or [] if x.get(column) == value]
+    return int(hits[0][id_field]) if st == 200 and len(hits) == 1 else None
+
+
+def setup_profile(name: str, roles_file: Path | None, ask=input, ask_secret=None) -> dict:
+    """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers."""
+    import getpass
+    import pls_http as H
+    ask_secret = ask_secret or getpass.getpass
+    d = profile_dir()
+    pf = d / f"{name}.json"
+    old = rj(pf) if pf.exists() else {}
+    roles = rj(roles_file)["roles"] if roles_file else (old.get("roles") or
+                                                        {"admin": {"principal": "User", "key_env": "PLS_DEV_ADMIN_KEY", "default_key": True}})
+
+    def q(prompt, default=None):
+        v = ask(f"{prompt}" + (f" [{default}]" if default else "") + ": ").strip()
+        return v or (default or "")
+    url = q("Pleasanter URL (e.g. https://pleasanter.example.com)", old.get("url")).rstrip("/")
+    folder = q("Folder for the apps - its URL or id", str(old.get("parent_id") or "") or None)
+    m = re.search(r"/items/(\d+)", folder) or re.fullmatch(r"\s*(\d+)\s*", folder)
+    if not m:
+        raise Fail(f"cannot read a folder id from {folder!r}")
+    parent = int(m.group(1))
+    d.mkdir(parents=True, exist_ok=True)
+    keyfile = d / f"{name}.admin.key"
+    secret = ask_secret("Your API key (hidden; Enter keeps the stored one): ").strip()
+    if secret:
+        keyfile.write_text(secret + "\n", encoding="utf-8")
+        try:
+            keyfile.chmod(0o600)
+        except OSError:
+            pass
+    if not keyfile.exists():
+        raise Fail("no API key stored yet - create one in Pleasanter (user menu > API settings) and run pls setup again")
+    client = H.Client(url, keyfile.read_text(encoding="utf-8").strip())
+    st, js, _ = client.call(f"/api/items/{parent}/getsite")
+    if st != 200 or not js or js["Response"]["Data"].get("ReferenceType") != "Sites":
+        raise Fail(f"folder {parent}: HTTP {st} - check the URL, the key and that the id is a folder")
+    print(f"ok: folder {parent} '{js['Response']['Data'].get('Title')}' readable with your key")
+    principals = dict(old.get("principals") or {})
+    for role, spec in roles.items():
+        if spec.get("principal") == "User":
+            login = q(f"Your login id (role '{role}')", old.get("login"))
+            uid = _lookup(client, "/api/users/get", "LoginId", login, "UserId") if login else None
+            old["login"] = login
+            if uid is None:
+                uid = int(q(f"User id of '{login}' (not found automatically)", principals.get(role, "User,").split(",")[1] or None))
+            principals[role] = f"User,{uid}"
+        else:
+            gname = spec.get("group_name") or role
+            gid = _lookup(client, "/api/groups/get", "GroupName", gname, "GroupId")
+            if gid is None:
+                gid = int(q(f"Group id of '{gname}' (not found automatically - create the group first)",
+                            principals.get(role, "Group,").split(",")[1] or None))
+            principals[role] = f"Group,{gid}"
+        print(f"ok: {role} = {principals[role]}")
+    prof = {"url": url, "parent_id": parent, "login": old.get("login"), "principals": principals, "roles": roles,
+            "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": True,
+            "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
+    wj(pf, prof)
+    print(f"profile '{name}' saved in {pf} (no key inside; the key file is next to it, outside every repository)")
+    return prof
+
+
+def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
+    ev = rj(target / "environments.json")
+    e = ev["envs"].setdefault(env, {"role": "dev", "sites": {}, "values": {}})
+    e["parent_id"] = prof["parent_id"]
+    e["principals"] = dict(prof["principals"])
+    wj(target / "environments.json", ev)
+    wj(target / "design" / "roles.json", {"roles": prof["roles"]})
+    wj(target / ".pls" / "connections.json", {env: {"url": prof["url"], "keys": prof["keys"], "default_key": prof["default_key"],
+                                                    "allow_write": prof.get("allow_write", True)}})
+
+
+def _git_first_commit(target: Path) -> str:
+    import subprocess
+    try:
+        subprocess.run(["git", "init", "-q"], cwd=target, check=True, capture_output=True, timeout=30)
+        subprocess.run(["git", "add", "-A"], cwd=target, check=True, capture_output=True, timeout=30)
+        c = subprocess.run(["git", "commit", "-qm", "project created by pls init"], cwd=target, capture_output=True, text=True, timeout=30)
+        return "git: first commit done" if c.returncode == 0 else "git: initialised; commit it yourself (" + (c.stderr.strip().splitlines() or ["?"])[-1] + ")"
+    except (OSError, subprocess.SubprocessError):
+        return "git: not found - run git init yourself"
+
+
 # ---------------------------------------------------------------- HTTP transport commands (ADR-0008)
 
 def _client(r: Path, env: str, key: str | None = None):
@@ -1310,16 +1410,34 @@ def main(argv=None) -> int:
     s.add_argument("--target", choices=["dev", "stg", "prod"], default="dev", help="release target of the project")
     s.add_argument("--approver", help="name of the person who approves the gates (demo stage)")
     s.add_argument("--roles", help="roles.json (e.g. demo/roles.json): principals placeholders + one key per role")
+    s.add_argument("--profile", help="machine profile from `pls setup` (default: 'dev' if it exists)")
+    s.add_argument("--no-git", action="store_true", help="do not run git init / first commit")
+    s = sp.add_parser("setup", help="one-time: connect this machine to a Pleasanter environment (profile for every pls init)")
+    s.add_argument("--profile", default="dev")
+    s.add_argument("--roles", help="roles.json of the apps you will build (e.g. demo/roles.json)")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     a = ap.parse_args(argv)
+    if a.cmd == "setup":
+        setup_profile(a.profile, Path(a.roles).resolve() if a.roles else None)
+        print("next: python <framework>/tools/pls/pls.py init <new project folder>")
+        return 0
     if a.cmd == "init":
         target = Path(a.dir).resolve()
+        pname = a.profile or ("dev" if (profile_dir() / "dev.json").exists() else None)
+        prof = rj(profile_dir() / f"{pname}.json") if pname else None
+        if a.profile and not prof:
+            raise Fail(f"profile '{a.profile}' not found - run pls setup --profile {a.profile}")
         init_project(target, a.stage, a.target, a.approver, roles=Path(a.roles).resolve() if a.roles else None)
-        print(f"created {target}\nnext:\n  cd {target}\n  git init\n"
-              "  copy connections.example.json to .pls/connections.json, set url; put API keys in environment variables\n"
-              "  environments.json: envs.dev.parent_id (folder for the app) and principals per role\n"
-              "  python pls.py http-check --env dev\n  then open Claude Code here and give it the spec")
+        if prof:
+            apply_profile(target, prof)
+        msg = _git_first_commit(target) if not a.no_git else "git: skipped"
+        if prof:
+            print(f"created {target} with profile '{pname}' ({prof['url']}, folder {prof['parent_id']}); {msg}\n"
+                  f"next: cd {target}  ->  python pls.py http-check --env dev  ->  open Claude Code here and give it the spec")
+        else:
+            print(f"created {target}; {msg}\nno machine profile yet: run `pls setup` once (docs/setup.md), "
+                  "or fill environments.json and .pls/connections.json by hand")
         return 0
     r = root()
     if a.cmd == "skills":
