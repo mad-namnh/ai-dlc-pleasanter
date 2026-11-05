@@ -16,17 +16,18 @@ Commands here only read Pleasanter (`getsite`, the login page) or local files. W
 
 ## Procedure
 
-1. **Version per environment** (ADR-0009). `pls version --env <e>`; for a package `pls version --env <e> --from-package <file>`. If the label is unknown, ask the person to read `<url>/versions`. Note every environment whose version differs from dev.
-2. **Mail and scheduled jobs** (ADR-0010). Ask the person how each environment sends mail (SMTP, sink, disabled) and whether scheduled jobs run there. They record `side_effects` in `environments.json`; you never set it.
-3. **Adopt** each site on the environment MADLAB can read (usually dev): `pls adopt --env <e> --site <id> --name <logical>`. Logical names are lower case and stable. Read the report in `ops/adopt/`.
-   - **Unmanaged references** in the report: adopt those sites too, or ask whether they stay outside the project.
+0. **Environments.** Each environment needs an entry in `environments.json`. Propose the exact entry (name, `role`: dev/stg/prod, `parent_id` if known) and let the person add it or approve it — a role is the person's decision; `role: prod` is never writable. An environment with neither a connection nor a site package stays an open point (ask for a package).
+1. **Version per environment** (ADR-0009). `pls version --env <e>`; for a package `pls version --env <e> --from-package <file>`. If the label is unknown, ask the person to read `<url>/versions`. Every environment whose version differs from dev is a **finding**: the KB is verified on the dev version only, so releases there carry a version note at G4.
+2. **Mail and scheduled jobs** (ADR-0010). Ask the person how each environment sends mail (SMTP, sink, disabled) and whether scheduled jobs run there. They record `side_effects` in `environments.json` by hand (there is no command); you never set it. While dev's mail is `unknown`, P4 cannot test sites with notifications — say so.
+3. **Adopt** each site on the environment MADLAB can read (usually dev): `pls adopt --env <e> --site <id> --name <logical>`. Logical names are lower case and stable and cannot be changed later: propose them, the person confirms. Adopt referenced (parent) sites first when you know them. Read the report in `ops/adopt/`; the export used is `.pls/exports/<env>-<name>-adopt-<stamp>.json`.
+   - **Unmanaged references** in the report: adopt those sites too, or ask whether they stay outside the project. After adopting a referenced site later, re-map the first one: `pls unpack .pls/exports/<env>-<first>-adopt-<stamp>.json --env <env> --site <first>`, then `pls canon --site <first>` and check `pls drift` is still 0.
    - Adopt the same site on a second reachable environment with the same name: only its id is registered and the report shows how it differs from git.
 4. **Compare environments** (BR5): `pls env-compare --site <s> --source git --source dev=<export> --source prod=<package>`. For every difference, ask the person and record the answer:
    - `content` → intended per-environment value (move it to `values` and `${env:x}`) **or** drift (decide: adopt as the truth, or revert later in P6);
    - `id-like` → adopt or map that id;
    - `not-in-package` → ask for a package exported with that part.
-5. **Components without round-trip evidence** (ADR-0001, `pls_scope`): list them per site. For each, the person decides: probe it on a copy in dev before the first release, or accept it with a decision record (`--accept-unverified`). You never write that record.
-6. **Principals.** From the group names (site package `PermissionIdList`, `/api/groups/get`), propose `design/roles.json`; after the person agrees, `pls principals --env <e>`.
+5. **Components without round-trip evidence** (ADR-0001, `pls_scope`): list them per site. For each, the person decides: probe it on a copy in dev before the first release, or accept it with a decision record (`--accept-unverified`). You never write that record. A probe is not part of onboarding (no writes here): record it as a task before the first release; it is run later with the person's go, like the BR3 spike (`spike/round-trip/scripts/br3_probe.py`).
+6. **Principals.** Record which groups the site uses (names from the site package `PermissionIdList`, or ask the person). The role design itself belongs to P2 step 1b; after it, `pls principals --env <e>` binds the groups by name.
 7. **Scripts** (BR7): `pls lint` (L-SCR-02 syntax), `pls refs --site <s>` — show every SUSPICIOUS line; only the person keeps a number literal (`--keep … --by <name>`). `pls xref --site <s>` for the index.
 8. **Scheduled server scripts** (ADR-0012, tenant settings, no API): ask the person for the list; they are kept as files under `config/_tenant/scheduled-scripts/` and deployed by hand.
 9. **As-is specification:** hand over to `pls-x-spec-recovery` for every adopted site.

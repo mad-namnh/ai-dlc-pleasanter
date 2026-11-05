@@ -10,7 +10,7 @@ description: Writes the as-is specification (画面設計書, Japanese) of an ad
 
 ## Inputs
 
-- `config/<site>/` (site.json, scripts, permissions.json), `ops/adopt/<…>-<site>.md`, `ops/xref/<site>.json` (`pls xref --site <site>`).
+- `config/<site>/` (site.json, scripts, permissions.json), the adoption report `ops/adopt/<date>-<env>-<site>.md` if there is one (not required), `ops/xref/<site>.json` (`pls xref --site <site>`).
 - `pls-kb-pleasanter` for what each setting means (schema.md, D-entries).
 
 ## Output
@@ -32,9 +32,12 @@ description: Writes the as-is specification (画面設計書, Japanese) of an ad
 
 - **Only from configuration.** Every statement traces to a setting or a script line. A conclusion you drew is marked **（推定）** with the line it rests on.
 - **Scripts:** use `ops/xref/<site>.json` and the script's own comments first; read a large body by searching (function names, `context.Error`, `items.`), not end to end. One short paragraph per script. A script with no clear purpose is listed under 未確認事項, not guessed.
+- **What the configuration does not say** is written as （設定未確認） in place — never filled in. A column that only has default settings still gets its own row (slot, type, 「既定」).
+- **Notification conditions** that are views (`BeforeCondition`/`AfterCondition` = view Id) are written as the view's name.
+- **未確認事項** has two parts: questions for the customer (Japanese) and points you can settle later from the configuration.
 - **No business data:** never read records; examples use placeholders.
 - **Ids:** write logical names (`${site:kokyaku}` → 顧客サイト), never numeric ids.
-- **Server scripts without a design decision** (lint L-LAD-01): the 9. section is that decision's source. After the person has reviewed the document, add `design/decisions/DES-000-as-is-<site>.md` (English) listing each server script by `Name` with its purpose and rung 3 reason "existing behaviour, adopted"; this clears L-LAD-01 for adopted code only.
+- **Server scripts without a design decision** (lint L-LAD-01): the 9. section is that decision's source. After the person has reviewed the document — record it in its header (「レビュー: <name>, <date>」) and commit (`docs(as-is): …`) — add `design/decisions/DES-000-as-is-<site>.md` (English) listing each server script by `Name` with its purpose and rung 3 reason "existing behaviour, adopted"; this clears L-LAD-01 for adopted code only. Client scripts need no DES-000 entry.
 
 ## Checklist
 

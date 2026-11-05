@@ -25,6 +25,12 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 | Client scripts | They run as written in the browser: no top-level `return` | L-SCR-02 |
 | Syntax | `pls lint` compiles every script with node (nothing runs) | L-SCR-02 |
 
+## Values and old ids
+
+- A new `${env:x}` needs a value in `values` of **every** environment, sandboxes included (a sandbox copies dev's values when it is created; add it there too). The person supplies the values; lint L-REF-02 and `pack` fail without them.
+- `${env:x}` is replaced as raw text: write `'${env:x}'` where the code needs a string, bare `${env:x}` only for a number the person confirmed.
+- An old hard-coded id the design does not cover: do not mix its fix into this change. Ask the person — a separate reviewed change to `${site:x}`, a literal decision (`pls refs --keep`, theirs), or a ticket for later. L-REF-01 then stays listed in the hand-over, and a release to another environment is blocked until it is settled.
+
 ## Editing legacy scripts
 
 - Edit the files in `config/<site>/server-scripts/`, `scripts/`, `htmls/`, `styles/` — never the Pleasanter text box. Keep the file's line endings (CRLF stays CRLF).
@@ -34,7 +40,9 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 
 ## Deploy and try
 
-- With sandboxes (ADR-0011): `pls sandbox refresh --name <you>` then `pls apply R-…` (the person or `--yes` for that sandbox). Without: the normal dev release of `pls-p3-config-builder`.
+- First the steps of `pls-p3-config-builder`: `pls canon`, `pls lint`, `pls coverage`, review `git diff`, commit on the ticket branch.
+- With sandboxes (ADR-0011): `pls sandbox refresh --name <you>` then `pls apply R-…` (the person or `--yes` for that sandbox), and check the round trip (0 differences, otherwise fold back). Without: the normal dev release of `pls-p3-config-builder`.
+- A trigger that runs only on update (`BeforeUpdate`) does not run on create: if the requirement needs both, it is a design point — say so, do not add triggers silently.
 - Settings changed in the sandbox UI along the way: `pls harvest --env dev-<you> --site <s>`, review `git diff`, commit.
 - Behaviour is proven in P4 by API tests (`pls test`): a server script's effect on a record, a `context.Error` refusal (expect HTTP 500 with the message), never by reading the code alone.
 
