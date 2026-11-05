@@ -9,7 +9,6 @@ Target: **dev only**. P5 records the tested dev state as the release (decision B
 | Item | |
 |---|---|
 | Input | [`spec.md`](spec.md): a mail from a fictional 総務部, in Japanese |
-| Roles | [`roles.json`](roles.json): `admin` (you), `somu` (総務), `staff` (社員) |
 | Result | Two sites (equipment register, loans) with a 返却 button, an overdue list, a 貸出中 count and role permissions. API tests on dev; 社員 restrictions checked in the configuration (role tests deferred). Release records are in git. |
 | Setup | Once per machine: [`docs/setup.md`](../docs/setup.md) → `pls setup`. Per demo: one `pls init` |
 | Time and tokens | Measured in the dry run (`demo/results/`). Plan for about an hour with discussion at each gate. |
@@ -27,8 +26,8 @@ At each step, say the line in the **You say** column to Claude Code (in any lang
 | # | Phase | You say | The agent does | Stops at | Show |
 |---|---|---|---|---|---|
 | 1 | start | *"Build the app for this customer request. You may use --yes for dev in this session."* + paste the mail from `spec.md` | loads the lifecycle; P1: saves the mail and writes REQ-… with acceptance criteria and questions (Japanese) with `[assumed]` defaults | **G1** | `requirements/index.md`: the REQ table and the questions. Point out the derived requirements and the assumptions. |
-| 2 | G1 | *"Approve G1 with the assumed defaults."* | records G1. P2: sites, columns, statuses, the 返却 process, permissions per role, ladder rungs, classification | **G2** | `design/decisions/DES-001-….md`: the design table, rejected alternatives, roles used. |
-| 3 | G2 | *"Approve G2."* | P3: `bootstrap` creates the two sites → export → unpack → build `config/` → `canon` / `lint` → `release-plan` → `apply` to dev → round trip. If Pleasanter stored something differently, it folds that back and applies once more. | (no gate) | Refresh the Pleasanter folder: the two sites appear and are configured. `git log`: one commit per step. |
+| 2 | G1 | *"Approve G1 with the assumed defaults."* | records G1. P2: sites, columns, statuses, the 返却 process; **permission design** (roles → groups → matrix, `design/roles.json`); ladder rungs; classification | **G2** | `design/decisions/DES-001-….md`: the design table, the permission matrix, rejected alternatives. |
+| 3 | G2 | *"Approve G2."* Then create the groups it lists in Pleasanter (no members needed) and say *"Groups created."* | P3: `pls principals` binds the groups; `bootstrap` creates the two sites → export → unpack → build `config/` → `canon` / `lint` → `release-plan` → `apply` to dev → round trip. If Pleasanter stored something differently, it folds that back and applies once more. | (no gate) | Refresh the Pleasanter folder: the two sites appear and are configured. `git log`: one commit per step. |
 | 4 | P4 | (continues) | writes the test specs from the acceptance criteria, runs them with your key, checks the 社員 restrictions in the configuration (role tests are deferred in the demo), checks coverage, writes `g3-verification.md` | **G3** | The test summary and coverage. Open a loan in the browser and press 返却; the register shows the item as available again. |
 | 5 | G3 | *"Approve G3."* | P5: drift 0 since the tests → diff report (Japanese summary for the customer) → approvals | **G4** | `releases/<release>/diff-report.md`, top part. |
 | 6 | G4 | *"Approve G4."* | records the release, marks the REQs released, writes the drift baseline (P6), commits | done | `requirements/index.md` (released), `ops/drift/…-dev-baseline.md`, `git log --oneline`. |

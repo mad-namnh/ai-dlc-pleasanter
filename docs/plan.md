@@ -131,3 +131,4 @@ Metrics:
 | 2026-11-05 | Architecture review after D3: GO with conditions. Decisions: B1 P5 on dev = record only; B2 roles prepared before the demo; B3 skeletons in the KB (D3b) |
 | 2026-11-05 | Demo: one API key (the operator's); role tests deferred (project profile `Role tests: deferred`), restrictions verified in the configuration; per-role test users and keys in a later phase (TD-11) |
 | 2026-11-05 | Setup simplified (Nam: too many steps): `pls setup` once per machine and environment saves a profile (URL, folder, ids by name, key file outside repos); `pls init` then creates a ready project and the first commit |
+| 2026-11-05 | Permissions are a separate step of the design (P2 step 1b: roles → groups → matrix, `design/roles.json`), not setup. Groups are created by the person after G2 and bound by `pls principals`. Replaces B2 "roles prepared before the demo"; `demo/roles.json` removed |

@@ -55,7 +55,7 @@ Also confirmed: the write guards hold, the release order is right, and a summary
 | ID | Resolution |
 |---|---|
 | B1 | Decided by Nam: P5 on dev = record only. plan.md, lifecycle, P5 and gates now agree |
-| B2 | Decided by Nam: roles prepared before the demo (`demo/roles.json` in D4). P2 uses only roles in `principals`; G2 shows the roles; lint L-REF-02; `http-check` treats 403/404 as a valid key without access and 401 as a bad key |
+| B2 | **Revised by Nam (2026-11-05):** permissions are a design step, not setup. P2 step 1b writes `design/roles.json` and the matrix; after G2 the person creates the groups and `pls principals` binds them. Originally decided: roles prepared before the demo (`demo/roles.json` in D4). P2 uses only roles in `principals`; G2 shows the roles; lint L-REF-02; `http-check` treats 403/404 as a valid key without access and 401 as a bad key |
 | B3 | Decided by Nam: KB `references/skeletons.md` (createsite result, verified built-in columns); `new-sites.md` and lifecycle no longer ask for a probe write before G2 |
 | S1 | `bootstrap` refuses a release that is already `created`; a `partial` one creates only the missing sites |
 | S2 | `mark-applied` with differences → status `applied-differs` + `live-<site>.json`, used as the drift baseline |
