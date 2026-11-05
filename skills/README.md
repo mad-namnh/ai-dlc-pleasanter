@@ -4,9 +4,9 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
 
 | Skill | Phase | Version | Status |
 |---|---|---|---|
-| `pls-kb-pleasanter` | all (knowledge base) | 0.5 | + D12–D15 (data behind removed definitions, bulkupsert, no record versions via API, permissions in updatesite), bulk/paging/principal API |
-| `pls-p1-requirements-analyst` | P1 | 0.2 | eval case 001 **passed** with a fresh agent (run 2, 2026-11-05) — `evals/results/` |
-| `pls-p2-solution-designer` | P2 | 0.2 | eval case 001 **passed** with a fresh agent (2026-11-05) — `evals/results/` |
+| `pls-kb-pleasanter` | all (knowledge base) | 0.6 | D12–D20 from dev probes; facts 11–13 (process buttons for read-only users, summaries, removed definitions); rule: a probe is evidence only for the configuration it reproduces (slice #2, S2-1) |
+| `pls-p1-requirements-analyst` | P1 | 0.3 | 0.2 passed eval case 001 (2026-11-05). 0.3: existing-element overlap check (slice #2, S2-4); eval case 002 added, not yet run |
+| `pls-p2-solution-designer` | P2 | 0.3 | 0.2 passed eval case 001 (2026-11-05). 0.3: probe-combination rule, role/button check, principals, summary migration (slice #2, S2-1/S2-3); eval case 002 added, not yet run |
 
 ## Installing into a project repository
 

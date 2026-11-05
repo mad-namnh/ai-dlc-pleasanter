@@ -11,6 +11,7 @@ Every entry here was **observed on a real environment** (version and evidence gi
 
 1. Before proposing a design or writing configuration, check the relevant topic below and in `references/`.
 2. If you need behaviour that is **not** listed, do not assume it. Probe it on **dev** (never stg/prod), record the result, and add an entry here (with version + evidence) as part of your work.
+   **A probe is evidence only for the configuration it reproduces.** Build the probe with every feature the design combines (e.g. a permission probe must include a process whose display condition matches the test record, if the design relies on what a role can or cannot do with that process). State in the entry what the probe contained, so a reader can see where it does not apply. *(D19 was first written from a probe site without such a process and was wrong — slice #2.)*
 3. When an entry and the official manual disagree, trust the entry for the stated version and flag the conflict.
 
 ## Topics
@@ -21,7 +22,7 @@ Every entry here was **observed on a real environment** (version and evidence gi
 | SiteSettings schema facts (columns, processes, data changes, notifications, views) | `references/schema.md` |
 | Behaviours that change designs (limits, pitfalls, defaults) | `references/behaviours.md` |
 
-## The ten facts to remember
+## Facts to remember
 
 1. `updatesite` **replaces SiteSettings entirely**. Anything missing from the payload is deleted. Always send the complete configuration. *(1.5.2, D4)*
 2. Pleasanter **canonicalises configuration on save**: it adds default fields and drops default-valued ones. Git must hold the canonical form (`pls canon`, or deploy to dev → export → unpack). *(1.5.2, D8)*
@@ -33,3 +34,6 @@ Every entry here was **observed on a real environment** (version and evidence gi
 8. Server scripts are cut off at about 10 seconds. External calls need a timeout shorter than that. *(Script.json `ServerScriptTimeOut`)*
 9. Secrets in server scripts are returned verbatim by `getsite` to anyone who can read site settings. Never put secret values in configuration; call external services through a gateway. *(D5, ADR-0005, `patterns/ai-gateway/`)*
 10. API calls from a logged-in browser session work without an API key (same permissions as the user). *(1.5.2)*
+11. Permission value 1 (read) blocks writes and process execution (403), but **read-only users still see process buttons** whose display condition matches. To hide a button, set process access control (`Groups`/`Users`/`Depts` ID lists — environment-specific, map them with `${principal:x}`). *(1.5.2, D19, D20)*
+12. Adding or changing a **Summary** does not recalculate existing parents and there is no sync API; only touching a child recalculates its parent. A new summary is therefore data-impacting and needs a migration. *(1.5.2, D16)*
+13. Removing a column, choice or status **keeps the stored values** (hidden or orphaned). *(1.5.2, D12)*

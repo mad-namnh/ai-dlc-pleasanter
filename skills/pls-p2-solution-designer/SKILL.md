@@ -18,7 +18,7 @@ description: Phase P2 of AI-DLC for Pleasanter. Designs how G1-approved requirem
 
 1. **Map each requirement to Pleasanter elements** (columns, choices/statuses, editor layout, views, プロセス, notifications, reminders, permissions, scripts).
 2. **Climb the ladder only when forced** (invariant I5, `references/ladder.md`). Record the rung for every element; anything at rung 3 or higher needs a written reason why lower rungs cannot work.
-3. **Check feasibility against the knowledge base.** If a mechanism depends on behaviour not listed in `pls-kb-pleasanter`, **probe it on dev** (read-only discovery first, e.g. the `SetSiteSettings` dialog endpoint; a temporary setting on dev only if needed, restored afterwards) and add the result to the knowledge base. Record rejected alternatives and why, citing the knowledge-base entry (e.g. a checkbox-based display condition is rejected because of D9).
+3. **Check feasibility against the knowledge base.** If a mechanism depends on behaviour not listed in `pls-kb-pleasanter`, **probe it on dev** (read-only discovery first, e.g. the `SetSiteSettings` dialog endpoint; a temporary setting on dev only if needed, restored afterwards) and add the result to the knowledge base. A probe counts as evidence only if it reproduces the combination the design relies on (permission + process + display condition, summary + existing children, …); say what the probe contained. Record rejected alternatives and why, citing the knowledge-base entry (e.g. a checkbox-based display condition is rejected because of D9).
 4. **Allocate column slots** in `design/slot-ledger.json` using the existing entry shape: `"<slot>": {"label", "status": "allocated", "zone", "req"}` (add `"design": "DES-NNN"` when useful). Pick the first slot of the needed type that the ledger has never allocated, and record in the design that it must be confirmed empty in every environment's export. Never reuse a slot that held data (A2, ADR-0002).
 5. **Impact analysis** with `references/impact-checklist.md`: every existing view, notification, reminder, aggregation, script and permission that the change touches. New impacts become derived requirements → back to P1/G1 (do not silently absorb them).
 6. **Classify the change** (ADR-0004): config-only / data-impacting / permission-impacting, with reasons. Data-impacting changes need a migration plan in the design.
@@ -43,6 +43,8 @@ traceability.json
 - [ ] Impact checklist completed; derived requirements raised, not absorbed.
 - [ ] Slots allocated; no slot reuse with existing data.
 - [ ] Classification stated; data-impacting → migration + rollback described.
+- [ ] Permission-impacting → for each role, what it can see **and press** (process buttons, D19/D20) is stated, and a test with a user of that role is planned for P4 (TD-11).
+- [ ] Principal IDs (permissions, process access control, notification recipients) are `${principal:x}` references, never raw IDs.
 - [ ] Configuration paths in `traceability.json` use stable keys (`Name`, `ColumnName`, view `Id`).
 
 ## Example (illustrative — not a template to copy)
