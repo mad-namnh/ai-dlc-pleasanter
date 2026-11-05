@@ -39,7 +39,7 @@ Done when: the whole chain runs from a project-repo skeleton, each gate has a re
 
 Spike round 2 (remaining 7 core components) runs in parallel with P3 of the slice.
 
-## Step 4 — Thicken each stage ← NEXT
+## Step 4 — Thicken each stage — items 1–4 done; proven in slice #2 (`docs/slices/slice-02-report.md`)
 
 Priority after slice #1:
 
@@ -54,9 +54,10 @@ Then:
 2. ✅ Deploy plan: dependency ordering, snapshot, configuration rollback (A3) — `pls release-plan` + runner `applyRelease` (v0.3); open: automatic smoke-then-restore, creating new sites
 3. ✅ Data migration (A1) — ADR-0004 accepted after probes D12–D14; migration gate in `pls plan` / `release-plan`; runner `backupRecords` / `bulkUpsert`. Open: first real migration (volume, dry run on a data copy)
 4. ✅ Permission matrix (C3) — site permissions in git, opt-in (ADR-0006, D15), drift + permission-impacting classification, L-PERM-01. Open: effective-access tests per role (TD-11)
-5. First skills/agents, only for what the pilot needs
+5. First skills/agents, only for what the pilot needs — next: skills v0.3 from slice #2 findings (S2-1, S2-4)
+6. Slice #2 ✅ (2026-11-05): multi-site release, migrations M1/M2, permissions + process ACL across environments; R-20261105-05 on stg
 
-## Step 5 — Real pilot & metrics
+## Step 5 — Real pilot & metrics ← NEXT after skills v0.3 and the customer round
 
 Metrics:
 - Rate of AI changes correct on the first attempt
@@ -85,3 +86,4 @@ Metrics:
 | 2026-11-05 | Mail deferred (TD-10): no mail sink, no mail tests, duplicate-mail defect left unfixed until mail is needed |
 | 2026-11-05 | Slice 1.5: accepted stg drift 「緊急」 carried P6→P1→P5 with skills v0.2; R-20261105-02 record-only release; `pls` fix: last applied release ordered by instant (I9, regression test added) |
 | 2026-11-05 | Step 4 items 1–4 done in `pls` v0.3: slot-collision check, multi-site release plan + automatic restore, migration gate (ADR-0004 accepted), site permissions in git (ADR-0006) |
+| 2026-11-05 | Slice #2 (カテゴリ split, 経理 read, 合計対応時間) released to stg as R-20261105-05; B4 redesigned after T-015 (process access control, D20); test groups 372/373 kept until prod groups exist |
