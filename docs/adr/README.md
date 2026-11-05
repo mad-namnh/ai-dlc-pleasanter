@@ -13,6 +13,6 @@
 | [0009](0009-version-detection-and-kb-verification.md) | Pleasanter version detection and executable KB verification | Proposed (2026-11-05) |
 | [0010](0010-mail-and-job-safety-outside-production.md) | Mail and scheduled-job safety outside production | Proposed (2026-11-05) |
 | [0011](0011-parallel-development-sandboxes-harvest-merge.md) | Parallel development: sandboxes, harvest and semantic merge | Proposed (2026-11-05) |
-| [0012](0012-scheduled-server-scripts-scope.md) | Scope of scheduled (background) server scripts | Proposed (2026-11-05) — waiting for a probe |
+| [0012](0012-scheduled-server-scripts-scope.md) | Scope of scheduled (background) server scripts | Accepted (2026-11-05) — option B: files in git, manual deploy, person verifies (no API) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

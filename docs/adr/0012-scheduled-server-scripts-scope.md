@@ -1,6 +1,6 @@
 # ADR-0012: Scope of scheduled (background) server scripts
 
-- **Status:** Proposed (2026-11-05) — probe done (BR3): no API → option B recommended
+- **Status:** Accepted (2026-11-05, Nam) — option **B**: no API (BR3 probe), so files in git, manual deploy, verification by a person
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** ADR-0001 (configuration scope, option B), ADR-0010 (job safety), D3, D7; plan Step 4c
@@ -38,7 +38,7 @@ The KB has no entry about scheduled scripts. Where they are stored, how they are
 
 ## Decision
 
-**Decide by the probe (proposed):** read + write API that round-trips → **C**; read only → **B** with automatic drift; neither → **B** with a person's verification step, recorded in the release.
+**Accepted: option B** (Nam, 2026-11-05), because the probe found no API (D31). The rule stays: **decide by the probe** — read + write API that round-trips → **C**; read only → **B** with automatic drift; neither → **B** with a person's verification step, recorded in the release.
 
 In every case:
 1. **Layout:** `config/_tenant/scheduled-scripts/<name>.js` (body) + `_index.json` (name, schedule, enabled flag, per-environment values by `${env:x}`). Bodies use `${site:x}` / `${principal:x}`, never raw ids (D3).

@@ -37,7 +37,7 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 | API responses (`getsite`) | No application version. `ApiVersion` (1.1) is the request protocol echoed back; `Ver` is the record version of the site |
 | `/api/versions` | HTTP 404 |
 | `/versions` (page) | Exists; redirects to `/users/login?ReturnUrl=%2Fversions` without a logged-in session, so an API key cannot read it |
-| `/users/login` (no login) | Links `assets/css/style.min.css?v=<token>` (`201520` on 1.5.2). The token follows the installed build; its mapping to a version number is **not verified** — use it only to detect a change |
+| `/users/login` (no login) | Links `assets/css/style.min.css?v=<token>`: `201520` on MADLAB dev, whose `/versions` page shows **1.5.2** (read by Nam, 2026-11-05). One data point only — the token is used to detect a change, not to derive the version |
 | `SiteSettings.Version` in an export | Settings schema version (`1.017` on 1.5.2), not the application version |
 
 `pls version` uses this: build token and schema detected, the application version recorded by a person from `/versions` (ADR-0009).
