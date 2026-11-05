@@ -9,7 +9,7 @@ Only non-default attributes are stored, keyed by `ColumnName` (`ClassA`…, `Num
 | Attribute | Example |
 |---|---|
 | `LabelText` | `"督促日時"` |
-| `ChoicesText` | lines; status lines are `value,label,short,css-class` e.g. `150,督促済,督,status-inprogress`; `[[siteId]]` links choices to another site |
+| `ChoicesText` | lines; status lines are `value,label,short,css-class` e.g. `150,督促済,督,status-inprogress`; `[[siteId]]` links choices to another site; `[[Users*]]` = choose a Pleasanter user, stored as the user id string (D28) |
 | `ValidateRequired` | `true` |
 | `EditorReadOnly` | `true` |
 | `EditorFormat` | `"Ymdhm"` (date-time) |

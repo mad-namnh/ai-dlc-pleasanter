@@ -36,13 +36,14 @@ Every step has `op`. A step may set its own `as_key`, for example to create a fi
 | `update` / `delete` | `record`, `data` (update) | HTTP 200, or `expectHttp` |
 | `exec` | `record`, `process` (process `Name`), `data`? | runs the process through the API (D10: display condition enforced → 400 outside it); `expectHttp`. The process id is read from the site configuration with the default key, so a role that cannot see the site gets its real refusal (404/403) |
 | `list` | `site`, `view` (e.g. `{"ColumnFilterHash": {...}}`, `{"Overdue": true}`), `contains` / `excludes` (lists of `$var`) | record ids in or out of the filtered list; or `expectHttp` |
-| `siteConfig` | `expect` {path in SiteSettings: value} | configuration check for screen-only behaviour; a value `{"contains": "text"}` checks a substring. Columns are addressed by position (`Columns.3.…`), so also assert `Columns.3.ColumnName` (TD-14) |
+| `siteConfig` | `expect` {path in SiteSettings: value} | configuration check for screen-only behaviour; a value `{"contains": "text"}` checks a substring. Columns are addressed by position (`Columns.3.…`), so also assert `Columns.3.ColumnName` (TD-14). `$vars` are **not** substituted here (TD-14h): `"$x"` is compared as the literal string |
 | `editPage` | `record`, `button`, `present` | button shown or not on the edit screen — **browser runner only**; over HTTP it is skipped and the test becomes `pass-api-only` |
 
 ### Values
 
 - Paths use dots and list indexes: `ClassHash.ClassA`, `Columns.0.ValidateRequired`.
-- A whole-string `"$name"` is replaced by the variable, in `data` and in expectations. It is not replaced inside a longer string, or in `exec` data.
+- A whole-string `"$name"` is replaced by the variable, in `data` and in `get` expectations. It is not replaced inside a longer string, in `exec` data, or in `siteConfig` expectations (TD-14h).
+- Environment-specific ids in the configuration (process `Groups`/`Users`, links, summaries) are not asserted with `siteConfig`: `${principal:x}` resolves to `"Group,374"` while the setting stores `374`. Assert `"!empty"` and rely on the 0-difference round trip / `pls drift` for the exact id (equipment-loan demo T-007).
 - `"!empty"` = any value that is not empty and not Pleasanter's empty date (`1899-12-30…`).
 - Numbers compare by value (`1` = `1.0`). Dates come back as `"YYYY-MM-DDT00:00:00"`.
 - Record data uses the API shape: `Title`, `Body`, `Status`, `StartTime`, `CompletionTime`, `ClassHash`, `NumHash`, `DateHash`, `DescriptionHash`, `CheckHash`.

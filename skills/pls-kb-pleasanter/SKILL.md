@@ -41,3 +41,4 @@ Every entry here was **observed on a real environment** (version and evidence gi
 14. A process needs a **display condition** to be executable through the API (none → HTTP 500). *(1.5.2, D21)*
 15. A column must be in `EditorColumnHash` to work at all (API, summaries, data changes). *(1.5.2, D22)*
 16. "No open child" via a conditional Count summary: filter `["\t","0"]` (never-linked parents are empty). Overdue lists: Issues view `Overdue`. *(1.5.2, D23, D24)*
+17. A user picker is `ChoicesText "[[Users*]]"`; records hold the user id as a string, which differs per environment. *(1.5.2, D28)*
