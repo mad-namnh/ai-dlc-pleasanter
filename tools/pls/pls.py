@@ -15,7 +15,7 @@ Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -56,6 +56,7 @@ import pls_scope as SC                                      # noqa: E402 — com
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
+import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -339,6 +340,8 @@ def payload(model: dict, e: dict, site: str) -> dict:
     raw = [x for x in ((model.get("permissions") or {}).get("entries") or []) if not str(x).startswith("${principal:")]
     if raw:
         raise Fail(f"{site}: permissions use environment-specific principal ids {raw} (L-PERM-01) — map them in environments.json principals")
+    if "_pls_conflicts" in model["settings"]:
+        raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
     m = from_refs(m0, e)
@@ -517,6 +520,8 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-SCR-02", "site": site, "msg": f"{err['label']} line {err['line']}: {err['message']}"})
             except RuntimeError as ex:
                 issues.append({"rule": "L-SCR-02", "site": site, "msg": f"syntax check not run: {ex}"})
+        if "_pls_conflicts" in m["settings"]:
+            issues.append({"rule": "L-MRG-01", "site": site, "msg": f"unresolved merge conflicts: {m['settings']['_pls_conflicts']}"})
         if canonicalize(m["settings"]) != m["settings"]:
             issues.append({"rule": "L-CAN-01", "site": site, "msg": "configuration is not in canonical form; run `pls canon` (D8)"})
         if ledger is not None:
@@ -812,6 +817,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     for site, path in sorted(exports.items()):
         if site not in e["sites"]:
             raise Fail(f"site '{site}' is not in environments.json for {env}")
+        conf = e["sites"][site]
+        if conf.get("shared_from") or (e.get("sandbox_of") and not conf.get("sandbox")):
+            raise Fail(f"{env}/{site} points to the {conf.get('shared_from') or e.get('sandbox_of')} site (shared, read only) — "
+                       "a sandbox deploys only its own copies (ADR-0011)")
         ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift, accept_unverified)
         for m in msgs:
             print(m)
@@ -1128,6 +1137,176 @@ def refs_cmd(r: Path, a) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- sandboxes, harvest, merge (ADR-0011)
+
+def _git(r: Path, *args: str) -> str:
+    import subprocess
+    try:
+        res = subprocess.run(["git", *args], cwd=r, capture_output=True, text=True, encoding="utf-8")
+    except OSError as ex:
+        raise Fail(f"git not available: {ex}")
+    if res.returncode != 0:
+        raise Fail(f"git {' '.join(args)}: {res.stderr.strip()[:200]}")
+    return res.stdout
+
+
+def _writes_to(model: dict, dep: str) -> list[str]:
+    """Places where a site's configuration may WRITE to site `dep` when records are saved: summaries aggregate into
+    the parent, scripts may call items.Update/Create on it (a reference in a script counts, read or write)."""
+    ref = "${site:%s}" % dep
+    out = [f"Summaries[{x.get('Id')}]" for x in model["settings"].get("Summaries") or [] if str(x.get("SiteId")) == ref]
+    out += [f"{k}/{it.get('Name') or it.get('Title') or it.get('Id')}" for k in ("ServerScripts",)
+            for it in model["scripts"].get(k) or [] if ref in (it.get("Body") or "")]
+    return out
+
+
+def sandbox_create(r: Path, name: str, sites: list[str], parent: int, base: str = "dev", allow_shared_writes: bool = False) -> int:
+    """Register env dev-<name> with copies of `sites` (to be created by the normal bootstrap) and plan their
+    bootstrap. Sites they reference but that are not copied point to the base environment's sites (read only).
+    Nothing is written to Pleasanter here."""
+    if not AD.SAFE_NAME.fullmatch(name):
+        raise Fail(f"--name {name!r}: lower-case letters, digits, - and _")
+    ev = rj(r / "environments.json")
+    env = f"dev-{name}"
+    if env in ev["envs"]:
+        raise Fail(f"environment {env} exists — use pls sandbox refresh, or drop it first")
+    b = ev["envs"].get(base)
+    if not b or b.get("role") != "dev":
+        raise Fail(f"base environment {base!r} must exist with role dev")
+    managed = ev.get("managed_sites") or []
+    unknown = [s for s in sites if s not in managed or not (r / "config" / s / "site.json").exists()]
+    if unknown:
+        raise Fail(f"not managed sites with config: {unknown}")
+    e = {"role": "dev", "connection": base, "sandbox_of": base, "parent_id": parent,
+         "principals": dict(b.get("principals") or {}), "values": dict(b.get("values") or {}),
+         "side_effects": dict(b.get("side_effects") or {}), "sites": {}}
+    for s in sites:
+        e["sites"][s] = {"title": f"{name}_{(b['sites'].get(s) or {}).get('title') or s}", "sandbox": True}
+    for s in sites:                                        # references to sites that are not copied
+        model = read_tree(r / "config" / s)
+        for dep in sorted(site_deps(model, s, set(managed))):
+            if dep not in e["sites"]:
+                writes = _writes_to(model, dep)
+                if writes and not allow_shared_writes:
+                    raise Fail(f"{s} may write to {dep} ({', '.join(writes)}); in a sandbox that would change {base} data. "
+                               f"Copy {dep} too (--sites {s},{dep}), or pass --allow-shared-writes after checking")
+                bid = (b["sites"].get(dep) or {}).get("id")
+                if not bid:
+                    raise Fail(f"{s} references {dep}, which has no id in {base}: add it to --sites")
+                e["sites"][dep] = {"id": bid, "title": b["sites"][dep].get("title"), "shared_from": base}
+    ev["envs"][env] = e
+    wj(r / "environments.json", ev)
+    release = f"B-{_stamp()}-{env}"
+    bootstrap_plan(r, env, release)
+    shared = [k for k, v in e["sites"].items() if v.get("shared_from")]
+    print(f"sandbox {env}: copies of {', '.join(sites)} under folder {parent}"
+          + (f"; references to {', '.join(shared)} point to {base} (read only)" if shared else ""))
+    print(f"next: pls bootstrap {release}   (creates the sites; asks for confirmation)\n"
+          f"      pls sandbox refresh --name {name}   (deploys the git configuration to them)")
+    return 0
+
+
+def sandbox_sites(e: dict) -> dict:
+    return {k: v for k, v in e["sites"].items() if v.get("sandbox")}
+
+
+def sandbox_refresh(r: Path, name: str) -> int:
+    """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written)."""
+    import pls_http as H
+    env = f"dev-{name}"
+    e = env_conf(r, env)
+    if not e.get("sandbox_of"):
+        raise Fail(f"{env} is not a sandbox")
+    own = sandbox_sites(e)
+    missing = [s for s, v in own.items() if not v.get("id")]
+    if missing:
+        raise Fail(f"{env}: {missing} not created yet — run the bootstrap first")
+    _, _, c = _client(r, env)
+    exports = {}
+    for s, v in own.items():
+        out = r / ".pls" / "exports" / f"{env}-{s}-{_stamp()}.json"
+        wj(out, c.export_site(v["id"]))
+        exports[s] = str(out)
+    release = f"R-{_stamp()}-{env}"
+    code = release_plan(r, env, release, exports, None)
+    if code == 0:
+        print(f"next: pls apply {release}   (asks for confirmation)")
+    else:
+        print(f"{env}: if the sandbox drifted, harvest it first: pls harvest --env {env} --site <site>")
+    return code
+
+
+def sandbox_drop(r: Path, name: str) -> int:
+    """Forget a sandbox environment. Its sites stay in Pleasanter: a person deletes them (agents never delete)."""
+    env = f"dev-{name}"
+    ev = rj(r / "environments.json")
+    e = ev["envs"].get(env)
+    if not e or not e.get("sandbox_of"):
+        raise Fail(f"{env} is not a sandbox")
+    own = {s: v.get("id") for s, v in sandbox_sites(e).items()}
+    del ev["envs"][env]
+    wj(r / "environments.json", ev)
+    print(f"{env} removed from environments.json. Delete its sites in Pleasanter by hand: "
+          + ", ".join(f"{s} ({i})" for s, i in own.items() if i))
+    return 0
+
+
+def harvest(r: Path, env: str, site: str) -> int:
+    """Bring the configuration of a site as it is on `env` into config/<site> (read only towards Pleasanter).
+    Refuses when config/<site> has uncommitted changes, so a harvest never mixes with unsaved work."""
+    e = env_conf(r, env)
+    if e.get("role") == "prod":
+        raise Fail("harvest reads development environments (dev, sandboxes, stg); prod changes come through drift (P6)")
+    if not (e["sites"].get(site) or {}).get("id"):
+        raise Fail(f"{site} has no id in {env}")
+    if _git(r, "status", "--porcelain", "--", f"config/{site}").strip():
+        raise Fail(f"config/{site} has uncommitted changes — commit or stash them before harvesting")
+    _, _, c = _client(r, env)
+    exp = c.export_site(e["sites"][site]["id"])
+    out = r / ".pls" / "exports" / f"{env}-{site}-harvest-{_stamp()}.json"
+    wj(out, exp)
+    model = logical(exp, e)
+    model["settings"] = canonicalize(model["settings"])
+    pf = r / "config" / site / "permissions.json"
+    perms_before = pf.read_bytes() if pf.exists() else None
+    model["permissions"] = None             # permissions are designed (P2) and opt-in (ADR-0006): never harvested
+    write_tree(model, r / "config" / site)
+    if perms_before is not None:
+        pf.write_bytes(perms_before)
+    stat = _git(r, "status", "--porcelain", "--", f"config/{site}").strip()
+    print(f"harvested {site} from {env} (read only) → config/{site}")
+    print(stat and f"changes:\n{stat}\nreview with `git diff config/{site}`, commit on the ticket branch" or "no changes")
+    return 0
+
+
+def merge_site_files(base: str, ours: str, theirs: str) -> int:
+    """git merge driver: merged result written to `ours` (%A); exit 1 with the conflicts listed when any."""
+    conflicts: list[str] = []
+    merged = MG.merge(rj(Path(base)) if Path(base).stat().st_size else {}, rj(Path(ours)), rj(Path(theirs)),
+                      conflicts=conflicts)
+    if conflicts:                   # visible in the file: lint and pack refuse it until a person resolves them
+        merged["_pls_conflicts"] = conflicts
+    wj(Path(ours), merged)
+    for c in conflicts:
+        print(f"pls merge-site: CONFLICT {c}", file=sys.stderr)
+    return 1 if conflicts else 0
+
+
+def merge_install(r: Path) -> int:
+    """Register the semantic merge for config/*/site.json in this repository (local git config + .gitattributes)."""
+    if not (r / "pls.py").exists():
+        raise Fail("merge-install runs in a project repository (pls.py launcher at its root)")
+    ga = r / ".gitattributes"
+    line = "config/*/site.json merge=pls-site"
+    text = ga.read_text(encoding="utf-8") if ga.exists() else ""
+    if line not in text:
+        ga.write_text(text + ("" if text.endswith("\n") or not text else "\n") + line + "\n", encoding="utf-8")
+    _git(r, "config", "merge.pls-site.name", "pls semantic merge of site.json (ADR-0011)")
+    _git(r, "config", "merge.pls-site.driver", f'"{Path(sys.executable).as_posix()}" "{(r / "pls.py").as_posix()}" merge-site %O %A %B')
+    print("merge driver installed: .gitattributes (commit it) + .git/config (every clone runs pls merge-install once)")
+    return 0
+
+
 # ---------------------------------------------------------------- new sites (ADR-0007)
 
 def bootstrap_plan(r: Path, env: str, release: str) -> int:
@@ -1145,6 +1324,8 @@ def bootstrap_plan(r: Path, env: str, release: str) -> int:
         conf = e["sites"].get(site) or {}
         if conf.get("id"):
             continue
+        if e.get("sandbox_of") and not conf.get("sandbox"):
+            continue                                       # a sandbox holds copies of the chosen sites only (ADR-0011)
         if _adopted(r, site):
             print(f"{site}: adopted from another environment — not created here; adopt its copy in {env} "
                   f"(pls adopt --env {env} --site <id> --name {site})")
@@ -1558,6 +1739,12 @@ def http_cmd(r: Path, a) -> int:
             H.assert_writable(e, conn, plan["env"])
             if plan.get("status") != "planned":
                 raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+            for s_ in plan["sites"]:                         # the plan's ids must be this env's own sites (ADR-0011)
+                conf = e["sites"].get(s_) or {}
+                if conf.get("id") != plan["per_site"][s_].get("site_id") or conf.get("shared_from") or \
+                        (e.get("sandbox_of") and not conf.get("sandbox")):
+                    raise H.TransportError(f"{a.release}: {s_} → site {plan['per_site'][s_].get('site_id')} is not a site this "
+                                           f"release may write in {plan['env']} (stale plan, or a shared site)")
             files = {f.name: rj(f) for f in rel.glob("*.json") if f.name.startswith(("payload-", "rollback-"))}
             try:
                 eff = SE.effects(e)
@@ -1640,6 +1827,13 @@ def http_cmd(r: Path, a) -> int:
                     raise H.TransportError(f"keys '{vals[v]}' and '{role}' are the same key — use a key created by a user of each role")
                 vals[v] = role
             sid = e["sites"][a.site]["id"]
+            if e.get("sandbox_of"):
+                shared = {str(v["id"]) for v in e["sites"].values() if v.get("shared_from") and v.get("id")}
+                all_ids = {v["id"] for v in e["sites"].values() if v.get("id")}
+                hit = sorted({x for sp_ in specs if SE.test_writes(sp_) for x in SE.test_sites(sp_, sid, all_ids)} & shared)
+                if hit:
+                    raise H.TransportError(f"{a.env}: these tests may write to shared {e['sandbox_of']} sites {hit} "
+                                           "(a --var record counts for every site) — refused (ADR-0011)")
             try:
                 eff = SE.effects(e)
             except ValueError as ex:
@@ -1817,6 +2011,21 @@ def main(argv=None) -> int:
     s.add_argument("--keep", metavar="CONTEXT", help="text around the number, as printed by `pls refs` (number included)")
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
+    s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")
+    s.add_argument("action", choices=["create", "refresh", "drop"])
+    s.add_argument("--name", required=True, help="developer name; the environment is dev-<name>")
+    s.add_argument("--sites", help="create: logical sites to copy, comma separated")
+    s.add_argument("--parent", type=int, help="create: id of the developer's folder")
+    s.add_argument("--allow-shared-writes", action="store_true",
+                   help="create: a copied site may write to a shared dev site (summary, script) — checked by a person")
+    s = sp.add_parser("harvest", help="read only: bring a site's configuration from an environment into config/ (ADR-0011)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--site", required=True)
+    s = sp.add_parser("merge-site", help="git merge driver for config/*/site.json (%%O %%A %%B)")
+    s.add_argument("base")
+    s.add_argument("ours")
+    s.add_argument("theirs")
+    sp.add_parser("merge-install", help="register the semantic merge driver in this repository")
     s = sp.add_parser("xref", help="which script uses which column and site (ops/xref/<site>.json)")
     s.add_argument("--site", required=True)
     s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
@@ -1904,6 +2113,23 @@ def main(argv=None) -> int:
 
     if a.cmd == "refs":
         return refs_cmd(r, a)
+
+    if a.cmd == "sandbox":
+        if a.action == "create":
+            if not (a.sites and a.parent):
+                raise Fail("sandbox create needs --sites and --parent (the developer's folder id)")
+            return sandbox_create(r, a.name, [x.strip() for x in a.sites.split(",") if x.strip()], a.parent,
+                                  allow_shared_writes=a.allow_shared_writes)
+        return sandbox_refresh(r, a.name) if a.action == "refresh" else sandbox_drop(r, a.name)
+
+    if a.cmd == "harvest":
+        return harvest(r, a.env, a.site)
+
+    if a.cmd == "merge-site":
+        return merge_site_files(a.base, a.ours, a.theirs)
+
+    if a.cmd == "merge-install":
+        return merge_install(r)
 
     if a.cmd == "xref":
         model = read_tree(r / "config" / a.site)

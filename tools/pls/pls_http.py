@@ -52,6 +52,18 @@ def load_connection(root: Path, env: str) -> dict:
     except json.JSONDecodeError as ex:
         raise TransportError(f"{f} is not JSON: {ex}")
     c = allc.get(env)
+    if not c:                                  # a sandbox env shares the connection of its base (ADR-0011)
+        try:
+            all_envs = json.loads((root / "environments.json").read_text(encoding="utf-8-sig"))["envs"]
+        except (OSError, ValueError, KeyError):
+            all_envs = {}
+        me = all_envs.get(env) or {}
+        alias = me.get("connection")
+        if alias:
+            if not (me.get("sandbox_of") == alias and me.get("role") == "dev" and (all_envs.get(alias) or {}).get("role") == "dev"):
+                raise TransportError(f"environment '{env}': a connection alias is allowed only for a dev sandbox of a dev "
+                                     f"environment (sandbox_of = connection, both role dev) — got connection {alias!r}")
+            c = allc.get(alias)
     if not c or not c.get("url"):
         raise TransportError(f"{f}: no url for environment '{env}'")
     c = dict(c)

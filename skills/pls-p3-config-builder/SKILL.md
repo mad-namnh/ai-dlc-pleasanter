@@ -39,6 +39,10 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
 7. **Update `traceability.json`** with the config paths that now exist: `config/<site>/site.json#Columns[<ColumnName>]`, `#Processes[<Name>]`, `#Views[<Id>]`, `server-scripts/<file>`, `permissions.json`.
 8. Leave slot-ledger entries `allocated` (they stay allocated for good: ADR-0002). Commit (`feat(p3): …`); you may also commit before the deploy. Hand over to P4.
 
+## Several developers (ADR-0011)
+
+When the project uses sandboxes (`dev-<name>` in `environments.json`): build and try changes in your sandbox, not in shared dev. Scripts are edited as files and deployed with `pls sandbox refresh` + `pls apply`; settings may be edited in the sandbox UI and brought back with `pls harvest --env dev-<name> --site <s>`. Commit on the ticket branch; shared dev only receives merged git. Run `pls merge-install` once per clone so `config/*/site.json` merges by element.
+
 ## Checklist before P4
 
 - [ ] Every design element is in config; nothing in config lacks a design element.

@@ -73,6 +73,8 @@ python pls.py http-check --env dev
 
 `jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts; its checks come with ADR-0012. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
 
+**Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, `python pls.py sandbox refresh --name <you>`, `python pls.py apply <R-…>`.
+
 ## Commands that need you
 
 `python pls.py bootstrap B-…` (creates sites) and `python pls.py apply R-…` (applies a release) ask you to type the release id, and the agent cannot type it. You have two options:

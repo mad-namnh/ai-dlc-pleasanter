@@ -1,6 +1,6 @@
 # ADR-0011: Parallel development — sandboxes, harvest and semantic merge
 
-- **Status:** Proposed (2026-11-05)
+- **Status:** Proposed (2026-11-05) — implemented on branch `brownfield-adr` (plan BR6), waiting for Nam's review and a first team run
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** I1, I2; ADR-0002 (slot ledger), ADR-0007 (creating sites); review-findings A2; plan Step 4c
@@ -50,6 +50,16 @@ How the team works today, and what that means here:
 5. **Semantic merge driver** (`pls merge-site`, registered through `.gitattributes` for `config/*/site.json`): merges lists by stable keys (`ColumnName`, process `Name`, view and notification `Id`, script `Name`), as `pls diff` already compares them. A conflict remains only when both sides changed the **same** element; it is shown with both versions.
 6. **Allocation:** column slots stay in the slot ledger (ADR-0002), allocated in P2 and committed **before** building, so the first commit wins. Element ids follow the same rule (an `ids` section per site in the ledger), unless the open-question probe shows that renumbering is safe.
 7. **Daily drift check** on each sandbox and on integration dev: unharvested edits are reported early, not at release time.
+
+### Implementation notes (BR6, 2026-11-05)
+
+- **Sandbox environment** `dev-<name>`: `role: dev`, `"connection": "dev"` (shares the dev connection; `.pls/connections.json` is not touched), `sandbox_of: dev`, its own `parent_id`, principals/values/side effects copied from dev. Copied sites carry `"sandbox": true`; sites they reference but that are not copied point to dev's ids (`shared_from: dev`) and are never deployed to.
+- `pls sandbox create` only registers the environment and writes a bootstrap plan; the sites are created by `pls bootstrap` and configured by `pls sandbox refresh` (export → `release-plan`) + `pls apply` — the existing guarded write paths with their confirmation. `pls sandbox drop` forgets the environment; a person deletes its sites.
+- `pls harvest --env <e> --site <s>`: read only towards Pleasanter; refuses when `config/<s>` has uncommitted changes; writes the canonical unpacked configuration; the person reviews `git diff` and commits on the ticket branch.
+- `pls merge-site` / `pls merge-install`: git merge driver for `config/*/site.json`. Lists of objects merge by stable key (`Columns`/`ColumnName`, `Processes`/`Name`, `Views`/`Id`, …), lists of names take both sides' additions and removals, a value changed differently on both sides is a conflict (ours kept, git marks the file). Proven with a real `git merge` of two branches adding different columns.
+- Safety after code review: `release-plan`, `apply` and `pls test` never touch a `shared_from` site; `apply` checks that the plan's site ids are the environment's own (stale plans refused); the connection alias works only for a dev sandbox of a dev environment; `sandbox create` refuses copies that write to a shared site (summaries, server scripts referencing it) unless `--allow-shared-writes`; harvest never reads prod and never changes `permissions.json`; a merge conflict is written into `site.json` as `_pls_conflicts` (lint L-MRG-01, pack refuses) besides the non-zero exit; both sides adding the same element differently, or duplicate `Id`s in processes/views/…, are conflicts; reordering by one side is kept.
+- Only `site.json` merges semantically; `_index.json`, `meta.json`, `permissions.json` and script files merge as text (two developers adding scripts get a text conflict in `_index.json`).
+- Not built yet: the `ids` section of the slot ledger (point 6) and the daily drift check (point 7, use `pls drift` per sandbox meanwhile).
 
 ## Consequences
 
