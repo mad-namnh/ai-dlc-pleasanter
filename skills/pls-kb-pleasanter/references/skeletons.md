@@ -20,7 +20,7 @@ Use this in P2 for a new app instead of creating a probe site (decision B3, 2026
 | Results (記録テーブル) | `ResultId` | key column, first in `EditorColumnHash.General` |
 | Issues (期限付きテーブル) | `IssueId` | key column, first in the editor and grid |
 | Issues | `StartTime`, `CompletionTime` | date columns (relabelled 貸出日 / 返却予定日). `CompletionTime` drives the `Overdue` view (D24). API returns them as `YYYY-MM-DDT00:00:00` |
-| Issues | `Status` | default status list; new records start at 100 (D23: `DefaultInput` is not applied to API creates for custom columns, but `Status` 100 was observed on API creates). `CurrentStatus`/`ChangedStatus` in processes |
+| Issues | `Status` | default status list; records created through the API had `Status` 100 (equipment demo T-103). `CurrentStatus`/`ChangedStatus` in processes |
 | Issues | defaults dropped on save | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` — do not keep them in git (D8) |
 
 ## Rules for P2
