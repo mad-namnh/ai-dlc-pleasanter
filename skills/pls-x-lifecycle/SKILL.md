@@ -22,7 +22,7 @@ Before doing anything, establish the state from the repository. Do not rely on m
 | `design/decisions/DES-*.md` `Status` line | P2 done? G2 approved? |
 | `environments.json` `sites` (ids present?), `config/<site>/` | sites created on the target? config built? |
 | `tests/results/` (latest per env), `releases/*/g3-verification.md` | P4 done? G3 approved? |
-| `releases/*/plan.json` `status`, `releases/*/approvals.md` | release planned / applied? G4 approved? |
+| `releases/*/plan.json` `status`, `releases/*/approvals.md` | release planned / applied? G4 approved? A record with `kind: adopt` (`releases/A-…`) is a drift baseline from `pls adopt`, not a release: it has no gate |
 | `git status`, `git log -5 --oneline` | uncommitted work from an interrupted session |
 
 Also read the **Project profile** in `CLAUDE.md`: stage, release target and approvers. If it is missing, ask for it once.
@@ -139,6 +139,8 @@ For prod, the release is run by the customer side (ADR-0003); you prepare the pa
 - Later drift is explained and classified (`pls classify`), and accept or revert is asked. An accepted change goes back to P1 as a change request.
 
 ## 4. Change requests to an existing app
+
+A site that exists in Pleasanter but not yet in the project is first adopted, read only: `pls adopt --env <e> --site <id> --name <logical>`. It writes `config/<name>/`, customer-zone slot-ledger entries, an adoption record (the drift baseline) and `ops/adopt/<date>-<env>-<name>.md`. Go through that report with the person before P1: components without round-trip evidence, unmanaged site references, unmapped principals, server scripts without a design decision.
 
 A change request follows the same order. The differences:
 - P1 starts from the current `config/` (impact analysis).

@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
+import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -296,9 +297,15 @@ def write_tree(model: dict, out: Path) -> None:
         items = model["scripts"].get(kind) or []
         if not items:
             continue
-        index = []
+        index, used = [], set()
         for it in items:
-            name = it.get("Name") or f"script-{it.get('Id')}"
+            base = it.get("Name") or f"script-{it.get('Id')}"
+            name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", base).replace("..", "_").strip(" .") or "script"
+            if name != base or name.lower() in used:       # unsafe on disk or duplicate: make it unique with the Id
+                name = f"{name}-{it.get('Id')}"
+                while name.lower() in used:
+                    name += "_"
+            used.add(name.lower())
             (out / folder).mkdir(parents=True, exist_ok=True)
             (out / folder / f"{name}{ext}").write_text(it.get("Body", ""), encoding="utf-8", newline="")   # keep CRLF (S7)
             index.append({k: v for k, v in it.items() if k != "Body"} | {"File": f"{name}{ext}"})
@@ -503,7 +510,7 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-CAN-01", "site": site, "msg": "configuration is not in canonical form; run `pls canon` (D8)"})
         if ledger is not None:
             slots = ledger.get(site, {})
-            used = {c["ColumnName"] for c in m["settings"].get("Columns", []) if re.match(r"^(Class|Num|Date|Description|Check|Attachments)\w+$", c["ColumnName"])}
+            used = set(slots_in_use(m["settings"]))       # defined or placed — as the collision check sees it (A2)
             for col in sorted(used - set(slots)):
                 issues.append({"rule": "L-SLOT-01", "site": site, "msg": f"column slot {col} is not in design/slot-ledger.json"})
             for col, info in slots.items():
@@ -874,6 +881,139 @@ def version_check(r: Path, env: str, tested_env: str = "dev") -> dict:
     return {"target": target, "tested_on": {tested_env: tested}, "differences": diffs}
 
 
+def _adopted(r: Path, site: str) -> bool:
+    """True when the site came into the project through `pls adopt` (an adoption record exists in any env)."""
+    for p in (r / "releases").glob("A-*/plan.json") if (r / "releases").exists() else []:
+        plan = rj(p)
+        if plan.get("kind") == "adopt" and site in (plan.get("sites") or []):
+            return True
+    return False
+
+
+def adopt_check_name(name: str) -> None:
+    if not AD.SAFE_NAME.fullmatch(name):
+        raise Fail(f"--name {name!r}: use a stable lower-case logical name (letters, digits, - and _)")
+
+
+def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) -> int:
+    """Local side of `pls adopt` (the export was read by one getsite). Never overwrites anything.
+    First adoption of a name: config, ledger, adoption record, report, then environments.json (last, so a failure
+    leaves nothing registered; files this run created are removed). Same name on another environment that has no id
+    for it yet: only the id, that environment's adoption record and a report of how it differs from config/."""
+    adopt_check_name(name)
+    ev = rj(r / "environments.json")
+    if env not in ev["envs"]:
+        raise Fail(f"environment '{env}' is not in environments.json")
+    d = site_data(export)
+    sid = int(d["SiteId"])
+    e = ev["envs"][env]
+    known = e.setdefault("sites", {})
+    for env_name, ec in ev["envs"].items():
+        for other, conf in (ec.get("sites") or {}).items():
+            if conf.get("id") == sid and (other != name or env_name == env):
+                raise Fail(f"site {sid} is already registered as '{other}' in {env_name}")
+    managed = name in (ev.get("managed_sites") or [])
+    has_config = (r / "config" / name / "site.json").exists()
+    second_env = managed and has_config and not (known.get(name) or {}).get("id")
+    if not second_env and (managed or has_config or name in known):
+        raise Fail(f"'{name}' is already in this project — adopt never overwrites; choose another name")
+    ledger_p = r / "design" / "slot-ledger.json"
+    ledger = rj(ledger_p) if ledger_p.exists() else {}
+    if not second_env and name in ledger:
+        raise Fail(f"design/slot-ledger.json already has '{name}'")
+
+    # ---- compute everything before writing anything
+    e_new = copy.deepcopy(e)
+    e_new["sites"][name] = {"id": sid, "title": d.get("Title")}
+    model = logical(export, e_new)
+    model["settings"] = canonicalize(model["settings"])
+    ss = d.get("SiteSettings") or {}
+    blob = json.dumps(ss, ensure_ascii=False)
+    secrets = [n for n, rx in SECRET_RES.items() if rx.search(blob)]
+    if secrets:
+        raise Fail(f"site {sid}: secret-like values in its configuration ({', '.join(secrets)}) — nothing written. Secrets must "
+                   "not reach git (I7, ADR-0005): move them out of the site configuration first, then adopt")
+    placed = slots_in_use({k: v for k, v in ss.items() if k != "FilterColumns"})
+    entries = AD.slot_entries(slots_in_use(ss), today, set(slots_in_use(ss)) - set(placed))
+    nf = sum(1 for v in entries.values() if v.get("placement") == "filter-only")
+    rel = f"A-{stamp}-{env}-{name}"
+    payload_a = {k: d.get(k) for k in ("Title", "Body", "ReferenceType", "SiteSettings")}
+    plan_a = {"release": rel, "env": env, "status": "applied", "kind": "adopt", "sites": [name],
+              "applied_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+              "per_site": {name: {"site_id": sid, "payload_file": f"payload-{name}.json"}},
+              "note": "adoption record: the state found on the environment — a drift baseline, not a release (no gate)"}
+    ids_all = {str(v["id"]): k for k, v in e_new["sites"].items() if v.get("id")}
+    raw_scripts = {k: ss.get(k) or [] for k in SCRIPT_KINDS}
+    perms = model.get("permissions") or {}
+    principals = AD.raw_principals(perms) + [
+        f"process '{p.get('Name') or p.get('Id')}' {key}: {x}" for p in model["settings"].get("Processes") or []
+        for key, _ in ACL_KEYS for x in p.get(key) or [] if not str(x).startswith("${principal:")]
+    if perms and not str(perms.get("inherit", "")).startswith("${site:"):
+        principals.insert(0, f"permissions inherited from site {perms.get('inherit')} (not managed) — L-PERM-01")
+    decisions = "\n".join(p.read_text(encoding="utf-8") for p in (r / "design").rglob("*.md")) if (r / "design").exists() else ""
+    undecided = [it.get("Name") or f"(no name, Id {it.get('Id')})" for it in ss.get("ServerScripts") or []
+                 if not it.get("Shared") and (not it.get("Name") or it.get("Name") not in decisions)]
+    counts = {"slots used": len(entries) - nf, "slots only in filters": nf}
+    counts |= {k: len(ss.get(k) or []) for k in ("Columns", "Processes", "Views", "Notifications", "Reminders", "Summaries",
+                                                  "Links", "ServerScripts", "Scripts", "Styles", "Htmls", "DashboardParts")}
+    extra = {
+        "Literal mail addresses (L-MAIL-01)": [f"{p}: {a}" for p, a in SE.literal_addresses(ss)],
+        "Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)": AD.script_id_uses(raw_scripts, ids_all),
+    }
+    if second_env:
+        git = read_tree(r / "config" / name)
+        dd = flat_diff(git["settings"] | git["scripts"], model["settings"] | model["scripts"])
+        extra[f"Differences from config/{name} (this environment vs git)"] = [
+            f"{x['path']}: {short(x.get('before'))} → {short(x.get('after'))}" for x in dd[:40]] + (
+            [f"… {len(dd) - 40} more"] if len(dd) > 40 else [])
+    text = AD.report(name, env, sid, d.get("Title", ""), d.get("ReferenceType", ""), counts, SC.unverified(ss),
+                     sorted(AD.referenced_sites(ss) - {v.get("id") for v in e_new["sites"].values() if v.get("id")}),
+                     principals, undecided, f"releases/{rel}/", today, extra)
+
+    # ---- write; environments.json last; on failure remove what this run created
+    created: list[Path] = []
+    ledger_before = ledger_p.read_text(encoding="utf-8") if ledger_p.exists() else None
+    try:
+        if not second_env:
+            created.append(r / "config" / name)
+            write_tree(model, r / "config" / name)
+            ledger[name] = entries
+            wj(ledger_p, ledger)
+        created.append(r / "releases" / rel)
+        wj(r / "releases" / rel / f"payload-{name}.json", payload_a)
+        wj(r / "releases" / rel / "plan.json", plan_a)
+        out = r / "ops" / "adopt" / f"{today}-{env}-{name}.md"
+        created.append(out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        ev["envs"][env] = e_new
+        if not managed:
+            ev.setdefault("managed_sites", []).append(name)
+        wj(r / "environments.json", ev)
+    except Exception:
+        import shutil
+        for p in created:
+            shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
+        if ledger_before is None:
+            ledger_p.unlink(missing_ok=True)
+        else:
+            ledger_p.write_text(ledger_before, encoding="utf-8")
+        raise
+    n_sus = sum(1 for x in extra["Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)"] if x.startswith("SUSPICIOUS"))
+    print(f"adopted site {sid} as '{name}' ({d.get('ReferenceType')}) from {env} — read only; nothing written to Pleasanter")
+    if second_env:
+        print(f"  second environment: id registered, config/{name} unchanged; "
+              f"{len(extra[f'Differences from config/{name} (this environment vs git)'])} difference line(s) in the report")
+    else:
+        print(f"  config/{name}/, slot ledger: {len(entries) - nf} slot(s) defined or placed + {nf} only in the filter list "
+              f"(zone customer)")
+    print(f"  record releases/{rel}/ (drift baseline, not a release)")
+    print(f"  findings: {len(SC.unverified(ss))} unverified component(s), {len(principals)} unmapped principal(s), "
+          f"{len(undecided)} server script(s) without a decision, {n_sus} suspicious id replacement(s) in scripts")
+    print(f"  report: {out.relative_to(r)}")
+    return 0
+
+
 # ---------------------------------------------------------------- new sites (ADR-0007)
 
 def bootstrap_plan(r: Path, env: str, release: str) -> int:
@@ -890,6 +1030,10 @@ def bootstrap_plan(r: Path, env: str, release: str) -> int:
     for site in envs(r).get("managed_sites", []):
         conf = e["sites"].get(site) or {}
         if conf.get("id"):
+            continue
+        if _adopted(r, site):
+            print(f"{site}: adopted from another environment — not created here; adopt its copy in {env} "
+                  f"(pls adopt --env {env} --site <id> --name {site})")
             continue
         if not conf.get("title"):
             raise Fail(f"envs.{env}.sites.{site}.title is missing")
@@ -1412,6 +1556,16 @@ def http_cmd(r: Path, a) -> int:
             print(f"results: {out}")
             return 0 if all(t["status"] in ("pass", "pass-api-only") for t in res["tests"]) else 1
 
+        if a.cmd == "adopt":
+            adopt_check_name(a.name)
+            env_conf(r, a.env)
+            _, _, c = _client(r, a.env)
+            exp = c.export_site(a.site)                      # the only call to Pleasanter: getsite (read)
+            stamp = _stamp()
+            out = r / ".pls" / "exports" / f"{a.env}-{a.name}-adopt-{stamp}.json"
+            wj(out, exp)
+            return adopt(r, a.env, a.name, exp, datetime.now().astimezone().date().isoformat(), stamp)
+
         if a.cmd == "version":
             env_conf(r, a.env)                               # unknown env → clear error, not a traceback
             ev = rj(r / "environments.json")
@@ -1508,6 +1662,10 @@ def main(argv=None) -> int:
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
     s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s = sp.add_parser("adopt", help="read-only: bring an existing site into this project (config, ledger, drift baseline, report)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--site", required=True, type=int, help="id of the existing site")
+    s.add_argument("--name", required=True, help="stable logical name, e.g. anken")
     s = sp.add_parser("version", help="record the Pleasanter version of an environment (build and schema detected; app label from /versions)")
     s.add_argument("--env", required=True)
     s.add_argument("--app", help="application version read on <url>/versions by a logged-in person, e.g. 1.5.2.0")
@@ -1584,7 +1742,7 @@ def main(argv=None) -> int:
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
 
-    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version"):
+    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt"):
         return http_cmd(r, a)
 
     if a.cmd == "bootstrap-plan":

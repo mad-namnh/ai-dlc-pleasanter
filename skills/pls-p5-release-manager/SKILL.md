@@ -14,6 +14,8 @@ description: Phase P5 of AI-DLC for Pleasanter. Prepares a G3-approved build as 
 - **Project profile** in `CLAUDE.md`: the release target (`dev` / `stg` / `prod`).
 - `references/diff-report-template.md` (this skill); gate records in `pls-x-lifecycle/references/gates.md`.
 
+An adoption record (`releases/A-…`, `kind: adopt`, written by `pls adopt`) is the state found on an environment before the project managed it. For the first change request it is "the previous released state"; it is not a release and has no G4.
+
 ## Procedure — target `dev`
 
 The app is already on dev from P3/P4. The release makes that state official.
