@@ -79,6 +79,22 @@ def update_record(old: dict | None, build: str | None, schema: Any, app: str | N
     return new, msgs
 
 
+def record_from_package(old: dict | None, app: str | None, schema: Any, package_time: str | None,
+                        today: str) -> tuple[dict, list[str]]:
+    """Version read from a site package (HeaderInfo.AssemblyVersion): written by the server itself, so the label is
+    trustworthy for that moment. The login page was not read: the build token is kept only when the package shows the
+    same application version as the record. Used for environments MADLAB cannot reach (a customer's prod)."""
+    old = old or {}
+    msgs = []
+    same = bool(app) and old.get("app") == app
+    if old.get("schema") is not None and schema is not None and old["schema"] != schema:
+        msgs.append(f"settings schema changed {old['schema']} → {schema}: the application was upgraded")
+    if not same and old.get("build"):
+        msgs.append("build token unknown for this version — run `pls version --env <env>` if the environment is reachable")
+    return {"app": app or UNKNOWN, "build": old.get("build") if same else None, "schema": schema, "checked": today,
+            "source": f"site package {package_time or ''}".strip(), "package_time": package_time}, msgs
+
+
 def compare(target: dict | None, tested: dict | None, target_env: str, tested_env: str) -> list[str]:
     """Differences between the environment a release goes to and the one it was tested on (for G4)."""
     if not target or not tested:

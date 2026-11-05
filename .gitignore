@@ -5,6 +5,8 @@
 **/config.json
 
 # Data exported from Pleasanter (customer data) — NEVER commit
+# site packages / exports dropped into docs by hand (I7)
+docs/*.json
 spike/**/data/*
 !spike/**/data/.gitkeep
 

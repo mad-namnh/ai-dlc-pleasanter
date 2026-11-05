@@ -142,6 +142,8 @@ For prod, the release is run by the customer side (ADR-0003); you prepare the pa
 
 A site that exists in Pleasanter but not yet in the project is first adopted, read only: `pls adopt --env <e> --site <id> --name <logical>`. It writes `config/<name>/`, customer-zone slot-ledger entries, an adoption record (the drift baseline) and `ops/adopt/<date>-<env>-<name>.md`. Go through that report with the person before P1: components without round-trip evidence, unmanaged site references, unmapped principals, server scripts without a design decision.
 
+To see how environments differ, compare local files only: `pls env-compare --site <name> --source git --source dev=<export> --source prod=<site package>`. Each difference is `content` (per-environment value → `${env:x}`, or drift to decide), `id-like` (an id not mapped yet) or `not-in-package`. A customer's site package also gives that environment's version: `pls version --env prod --from-package <file>`.
+
 A change request follows the same order. The differences:
 - P1 starts from the current `config/` (impact analysis).
 - No bootstrap.

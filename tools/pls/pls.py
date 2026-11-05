@@ -54,6 +54,7 @@ import pls_side_effects as SE                               # noqa: E402 — mai
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
+import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -1014,6 +1015,63 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     return 0
 
 
+def load_source(r: Path, env: str, path: str, site: str) -> tuple[dict, dict]:
+    """(logical model, info) of one comparison source: `git` (config/<site>), a getsite export or a site package."""
+    if path == "git":
+        model = read_tree(r / "config" / site)
+        model["settings"] = canonicalize(model["settings"])       # same form as the exports below (D8)
+        return model, {"missing": [], "label": "git"}
+    e = env_conf(r, env)
+    info = {"missing": [], "label": f"{env}:{Path(path).name}"}
+    try:
+        doc = rj(Path(path))
+        if CMP.is_package(doc):
+            doc, pinfo = CMP.from_package(doc, (e["sites"].get(site) or {}).get("id"))
+            info |= pinfo
+        model = logical(doc, e)
+    except (OSError, ValueError, TypeError, KeyError) as ex:
+        raise Fail(f"--source {env}={path}: {ex}")
+    model["settings"] = canonicalize(model["settings"])
+    return model, info
+
+
+def env_compare(r: Path, site: str, sources: list[str], today: str) -> int:
+    """Compare every source with the first one after mapping ids to logical names (read-only, local files)."""
+    if len(sources) < 2:
+        raise Fail("give at least two --source ENV=FILE (or --source git)")
+    loaded = []
+    for s_ in sources:
+        env, _, path = s_.partition("=") if s_ != "git" else ("", "", "git")
+        if s_ != "git" and (not path or path == "git"):
+            raise Fail(f"--source {s_!r}: use ENV=FILE, or git on its own")
+        loaded.append(load_source(r, env, path, site))
+    (m0, i0), rows, notes = loaded[0], [], []
+    values = {str(v) for _, ec in envs(r)["envs"].items() for v in (ec.get("values") or {}).values()}
+    for m, info in loaded:
+        if info.get("site"):
+            notes.append(f"{info['label']}: package site {info['site']}")
+        if info.get("app"):
+            notes.append(f"{info['label']}: site package of Pleasanter {info['app']} ({info.get('package_time')})")
+        if info.get("missing"):
+            notes.append(f"{info['label']}: package exported without {', '.join(info['missing'])}")
+    for m, info in loaded[1:]:
+        missing = i0.get("missing", []) + info.get("missing", [])
+        perms = m0.get("permissions") is not None and m.get("permissions") is not None and "permissions" not in missing
+        if not perms:
+            notes.append(f"{i0['label']} → {info['label']}: permissions not compared (one side has none)")
+        for d_ in flat_diff(CMP.comparable(m0, perms), CMP.comparable(m, perms)):
+            rows.append(d_ | {"pair": f"{i0['label']} → {info['label']}", "class": CMP.classify(d_, missing, values)})
+    out = r / "ops" / "env-compare" / f"{today}-{datetime.now():%H%M%S}-{site}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(CMP.report(site, rows, [i["label"] for _, i in loaded], notes, today, short), encoding="utf-8")
+    by = {c: sum(1 for x in rows if x["class"] == c) for c in ("content", "id-like", "not-in-package")}
+    print(f"{site}: {len(rows)} difference(s) after mapping ids — content {by['content']}, id-like {by['id-like']}, "
+          f"not in package {by['not-in-package']}; report {out.relative_to(r)}")
+    for n in notes:
+        print(f"  {n}")
+    return 1 if by["content"] or by["id-like"] else 0
+
+
 # ---------------------------------------------------------------- new sites (ADR-0007)
 
 def bootstrap_plan(r: Path, env: str, release: str) -> int:
@@ -1566,6 +1624,33 @@ def http_cmd(r: Path, a) -> int:
             wj(out, exp)
             return adopt(r, a.env, a.name, exp, datetime.now().astimezone().date().isoformat(), stamp)
 
+        if a.cmd == "version" and a.from_package:
+            env_conf(r, a.env)
+            ev = rj(r / "environments.json")
+            e = ev["envs"][a.env]
+            if a.app:
+                raise Fail("--app and --from-package exclude each other: the package states its own version")
+            try:
+                pkg = rj(Path(a.from_package))
+                if not CMP.is_package(pkg):
+                    raise ValueError("not a site package (no HeaderInfo/Sites)")
+                ids = {int(x["SiteId"]) for x in pkg["Sites"] if x.get("SiteId") is not None}
+                sid = next((v["id"] for v in e["sites"].values() if v.get("id") in ids), None)
+                doc, info = CMP.from_package(pkg, sid or next(iter(sorted(ids)), None))
+            except (OSError, ValueError, TypeError, KeyError) as ex:
+                raise Fail(f"--from-package {a.from_package}: {ex}")
+            old = e.get("pleasanter") or {}
+            if old.get("package_time") and info.get("package_time") and info["package_time"] < old["package_time"]:
+                raise Fail(f"the package ({info['package_time']}) is older than the recorded one ({old['package_time']})")
+            new, msgs = PV.record_from_package(old, info.get("app"), PV.schema_version(doc["Response"]["Data"]),
+                                               info.get("package_time"), datetime.now().astimezone().date().isoformat())
+            e["pleasanter"] = new
+            wj(r / "environments.json", ev)
+            print(f"{a.env}: app {new['app']}, schema {new['schema']}, build {new['build']} (from {new['source']})")
+            for m_ in msgs:
+                print(f"  {m_}")
+            return 0 if new["app"] != PV.UNKNOWN else 1
+
         if a.cmd == "version":
             env_conf(r, a.env)                               # unknown env → clear error, not a traceback
             ev = rj(r / "environments.json")
@@ -1669,6 +1754,10 @@ def main(argv=None) -> int:
     s = sp.add_parser("version", help="record the Pleasanter version of an environment (build and schema detected; app label from /versions)")
     s.add_argument("--env", required=True)
     s.add_argument("--app", help="application version read on <url>/versions by a logged-in person, e.g. 1.5.2.0")
+    s.add_argument("--from-package", help="site package JSON exported from that environment: its AssemblyVersion is recorded (no HTTP)")
+    s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
+    s.add_argument("--site", required=True, help="logical site name")
+    s.add_argument("--source", action="append", required=True, metavar="ENV=FILE|git", help="first = reference; repeat")
     s = sp.add_parser("backup", help="every record of a site → migrations/<dir>/backup/ (ADR-0004)")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -1744,6 +1833,9 @@ def main(argv=None) -> int:
 
     if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt"):
         return http_cmd(r, a)
+
+    if a.cmd == "env-compare":
+        return env_compare(r, a.site, a.source, datetime.now().astimezone().date().isoformat())
 
     if a.cmd == "bootstrap-plan":
         return bootstrap_plan(r, a.env, a.release)

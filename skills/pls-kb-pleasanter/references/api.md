@@ -42,6 +42,20 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 
 `pls version` uses this: build token and schema detected, the application version recorded by a person from `/versions` (ADR-0009).
 
+## Site package exported from the UI (seen 2026-11-05, 1.5.2, site 797)
+
+A JSON file a person exports from the UI (no API key needed — useful for a customer's prod). `pls env-compare` and `pls version --from-package` read it.
+
+| Part | Content |
+|---|---|
+| `HeaderInfo` | `AssemblyVersion` (e.g. `1.5.2.0` — the application version), `BaseSiteId`, `PackageTime` (UTC), `Server`, `CreatorName`, flags `IncludeNotifications`, `IncludeReminders`, `IncludeSitePermission`, `IncludeColumnPermission`, `IncludeRecordPermission`, `Convertors` |
+| `Sites[]` | one entry per site: the getsite fields (`SiteId`, `Title`, `ReferenceType`, `InheritPermission`, …) with `SiteSettings` as an object |
+| `Permissions[]` | `{SiteId, Permissions: [{ReferenceId, DeptId, GroupId, UserId, PermissionType}]}` — the same rights as getsite's `"Group,2,511"` entries |
+| `PermissionIdList` | `GroupIdList [{GroupId, GroupName}]`, `UserIdList [{UserId, LoginId, Name, UserCode}]`, `DeptIdList` — names for mapping principals across environments |
+| `Data` | records, only when exported with data (empty in the seen package) |
+
+Compared with getsite of the same site after mapping ids: 0 differences (settings, scripts, permissions). Parts left out by the `Include…` flags are missing from `SiteSettings`; whether `IncludeNotifications: false` also strips process-level notifications (`Processes[].Notifications`) is **not verified** — `env-compare` treats them as left out too (safe side).
+
 ## Errors seen
 
 | HTTP | Body | Meaning |
