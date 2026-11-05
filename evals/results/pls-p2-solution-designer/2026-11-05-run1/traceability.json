@@ -1,0 +1,42 @@
+{
+  "REQ-001": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[Status]",
+      "config/inquiries/site.json#Columns[DateC]",
+      "config/inquiries/site.json#EditorColumnHash.General",
+      "config/inquiries/site.json#Processes[escalate]",
+      "config/inquiries/site.json#Processes[escalate].DataChanges[1]"
+    ],
+    "tests": []
+  },
+  "REQ-002": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate].View.ColumnFilterHash"
+    ],
+    "tests": []
+  },
+  "REQ-003": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate].Notifications[1]"
+    ],
+    "tests": []
+  },
+  "REQ-004": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Views[2]"
+    ],
+    "tests": []
+  }
+}

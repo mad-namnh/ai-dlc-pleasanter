@@ -1,11 +1,12 @@
-"""Round-trip cấu hình site trên Pleasanter LOCAL rồi so sánh với bản gốc.
+"""Round-trip site configuration on a dev/local Pleasanter and compare with the original.
 
-Chế độ:
-  create : tạo site mới từ cấu hình đã export (dưới roundtrip_parent_id), export lại, diff
-  update : ghi đè cấu hình gốc lên chính site đó N lần (--repeat), export sau mỗi lần, diff
-           (lần i so với gốc, và lần i so với lần i-1 để kiểm tra idempotence)
+Modes:
+  create : create a new site from the exported configuration (under roundtrip_parent_id), export it, diff
+  update : write the original configuration back onto the same site N times (--repeat), export after each, diff
+           (write i vs original, and write i vs write i-1 to check idempotence)
+           NOTE: run update mode only against copies inside the spike folder, never original sites.
 
-Ví dụ:
+Examples:
   python scripts/roundtrip.py --config scripts/config.json --env dev --mode create --label original
   python scripts/roundtrip.py --config scripts/config.json --env dev --mode update --label original --repeat 2
 """
@@ -19,7 +20,7 @@ from common import (DATA_DIR, api_body, confirm_write, diff, env_settings, extra
                     load_config, normalize, post, read_json, top_area, volatile_sets, write_json)
 from export_sites import export_one
 
-# Trường cấp site được gửi lại khi tạo/cập nhật. Xác nhận ở Bước 0 với manual 1.5.x.
+# Site-level fields sent back on create/update. Confirmed in step 0 on 1.5.2.
 SITE_FIELDS = ["Title", "Body", "ReferenceType", "SiteSettings"]
 
 
@@ -30,7 +31,7 @@ def find_new_id(resp: dict) -> int:
                 v = container.get(k)
                 if isinstance(v, int) and v > 0:
                     return v
-    raise RuntimeError(f"Không tìm thấy SiteId mới trong response — kiểm tra Bước 0: {str(resp)[:300]}")
+    raise RuntimeError(f"New SiteId not found in the response — check step 0: {str(resp)[:300]}")
 
 
 def site_payload(site: dict) -> dict:
@@ -42,26 +43,26 @@ def is_id_like(d: dict) -> bool:
 
 
 def render_report(title: str, results: list[dict]) -> str:
-    lines = [f"# {title}", "", "| Site gốc | So với | Số khác biệt | Nghi là tham chiếu ID | Khu vực khác nhiều nhất |",
+    lines = [f"# {title}", "", "| Original site | Compared with | Differences | Likely ID references | Most-changed areas |",
              "|---|---|---|---|---|"]
     for r in results:
         areas = Counter(top_area(d["path"]) for d in r["diffs"]).most_common(3)
         ids = sum(1 for d in r["diffs"] if is_id_like(d))
         lines.append(f"| {r['site']} | {r['compare']} | {len(r['diffs'])} | {ids} | "
                      + ", ".join(f"`{a}` ({n})" for a, n in areas) + " |")
-    lines += ["", "## Chi tiết (tối đa 50 dòng mỗi cặp)", ""]
+    lines += ["", "## Details (max 50 rows per pair)", ""]
     for r in results:
         lines += [f"### Site {r['site']} — {r['compare']}", ""]
         if not r["diffs"]:
-            lines += ["Không có khác biệt ✅", ""]
+            lines += ["No differences ✅", ""]
             continue
-        lines += ["| Path | Loại | Trước | Sau |", "|---|---|---|---|"]
+        lines += ["| Path | Kind | Before | After |", "|---|---|---|---|"]
         for d in r["diffs"][:50]:
             b, a = (str(d["before"])[:60], str(d["after"])[:60])
             tag = " 🔗" if is_id_like(d) else ""
             lines.append(f"| `{d['path']}`{tag} | {d['kind']} | {b} | {a} |")
         lines.append("")
-    lines += ["🔗 = giá trị số nguyên thay đổi, thường là SiteId/ID tham chiếu (dự kiến khác ở chế độ create).", ""]
+    lines += ["🔗 = changed integer value, usually a SiteId/ID reference (expected to differ in create mode).", ""]
     return "\n".join(lines)
 
 
@@ -70,21 +71,21 @@ def main() -> None:
     ap.add_argument("--config", required=True)
     ap.add_argument("--env", default="local")
     ap.add_argument("--mode", choices=["create", "update"], required=True)
-    ap.add_argument("--label", required=True, help="thư mục export gốc, vd original")
+    ap.add_argument("--label", required=True, help="folder of the original export, e.g. original")
     ap.add_argument("--repeat", type=int, default=1)
-    ap.add_argument("--yes", action="store_true", help="bỏ qua bước gõ lại tên host (chỉ cho môi trường dev)")
+    ap.add_argument("--yes", action="store_true", help="skip retyping the host name (dev environments only)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
     env = env_settings(cfg, args.env)
-    confirm_write(env, args.yes)  # chặn sớm, trước khi làm gì
+    confirm_write(env, args.yes)  # fail fast, before doing anything
     volatile, nested = volatile_sets(cfg)
 
     src_dir = DATA_DIR / args.env / args.label
     out_dir = DATA_DIR / args.env / f"roundtrip-{args.mode}"
     originals = sorted(p for p in src_dir.glob("*.json") if not p.name.endswith(".normalized.json"))
     if not originals:
-        raise SystemExit(f"Không có file export trong {src_dir}. Chạy export_sites.py trước.")
+        raise SystemExit(f"No exported files in {src_dir}. Run export_sites.py first.")
 
     results = []
     for raw_path in originals:
@@ -100,8 +101,8 @@ def main() -> None:
             new_id = find_new_id(resp)
             after = normalize(extract_site(export_one(cfg, env, new_id)), volatile, nested)
             write_json(out_dir / f"{sid}-as-{new_id}.normalized.json", after)
-            results.append({"site": sid, "compare": f"site mới {new_id} vs gốc", "diffs": diff(base_norm, after)})
-            print(f"✓ {sid} → tạo {new_id}")
+            results.append({"site": sid, "compare": f"new site {new_id} vs original", "diffs": diff(base_norm, after)})
+            print(f"✓ {sid} → created {new_id}")
 
         else:
             prev = base_norm
@@ -110,17 +111,17 @@ def main() -> None:
                 post(env, cfg["endpoints"]["update_site"].format(id=sid), body, write=True)
                 cur = normalize(extract_site(export_one(cfg, env, sid)), volatile, nested)
                 write_json(out_dir / f"{sid}-iter{i}.normalized.json", cur)
-                results.append({"site": sid, "compare": f"lần {i} vs gốc", "diffs": diff(base_norm, cur)})
+                results.append({"site": sid, "compare": f"write {i} vs original", "diffs": diff(base_norm, cur)})
                 if i > 1:
-                    results.append({"site": sid, "compare": f"lần {i} vs lần {i-1} (idempotence)",
+                    results.append({"site": sid, "compare": f"write {i} vs write {i-1} (idempotence)",
                                     "diffs": diff(prev, cur)})
                 prev = cur
-                print(f"✓ {sid} cập nhật lần {i}")
+                print(f"✓ {sid} updated ({i})")
 
     write_json(out_dir / "diffs.json", results)
     report = render_report(f"Round-trip ({args.mode})", results)
     (out_dir / "report.md").write_text(report, encoding="utf-8")
-    print(f"Báo cáo: {out_dir / 'report.md'}")
+    print(f"Report: {out_dir / 'report.md'}")
 
 
 if __name__ == "__main__":

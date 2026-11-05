@@ -1,0 +1,57 @@
+---
+name: pls-p1-requirements-analyst
+description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meeting notes, email, ticket, drift accepted in operations) into testable EARS requirements with acceptance criteria, derived requirements and open questions for the customer, ready for gate G1. Use whenever a new or changed requirement for a Pleasanter system arrives.
+---
+
+# pls-p1-requirements-analyst
+
+**Goal:** customer intent → testable requirements in the project repository, ready for G1.
+**You do not design or build here.** Mention design ideas only as assumptions to confirm.
+
+## Inputs
+
+- The request, verbatim (save it under `requirements/sources/YYYY-MM-DD-<slug>.md`).
+- Current state: `config/` (unpacked sites), `requirements/index.md`, `design/` — to detect conflicts and impact.
+- `pls-kb-pleasanter` — to know what Pleasanter can and cannot do.
+
+## Procedure
+
+1. **Save the source** verbatim. Note who asked and when. Never paraphrase it away.
+2. **Read the current configuration** of the sites involved (`config/<site>/site.json`, scripts). List the columns, statuses, views, notifications and scripts the request touches.
+3. **Extract requirements** as EARS statements (see `references/ears.md`). One behaviour per requirement, so **exactly one `shall`** in the statement. "Refuse X and show message Y" is two behaviours: keep the refusal as the requirement and put the message in the acceptance criteria (or split into two requirements).
+4. **Derive hidden requirements** from impact on existing behaviour. Typical triggers:
+   - a new status → every view / notification / script that enumerates statuses;
+   - a new column → grid, filters, editor layout, exports;
+   - a new action → who may do it, can it repeat, what if conditions are not met.
+   Mark them `(derived)` and state the source of the derivation.
+   Derived requirements **protect existing behaviour** from the impact of the change (views, notifications, reminders, aggregations, scripts). Behaviour the customer did not ask for and that no existing element needs (a new validation, an extra export, a new message) is **not** a requirement: raise it as a question with an `[assumed]` default, so G1 decides whether it enters scope.
+5. **Write acceptance criteria** for each requirement: observable, numbered, testable through the API or the edit screen. If a criterion cannot be tested automatically (e.g. mail delivery), say so explicitly.
+6. **List open questions** for the customer in **Japanese** (お客様への確認事項), each with the assumption you will use if unanswered, marked `[assumed]`.
+7. **Update `requirements/index.md`** (ID, title, EARS type, status `awaiting G1`) and the questions table.
+8. **Self-check** with the checklist below, then hand over for **G1**. Do not mark anything approved yourself (I4).
+
+## Outputs (project repository)
+
+```
+requirements/sources/YYYY-MM-DD-<slug>.md
+requirements/REQ-NNN-<slug>.md        # one per requirement — template in references/req-template.md
+requirements/index.md                 # table + open questions
+```
+
+IDs are sequential across the project (`REQ-001`, `REQ-002`, …) and never reused.
+
+## Checklist before G1
+
+- [ ] Every requirement is a single EARS statement with a named trigger/state and a system response — count the `shall`s in each `## Requirement` section: exactly one.
+- [ ] Every requirement has ≥ 1 acceptance criterion; untestable ones are flagged.
+- [ ] Impact on existing statuses, views, notifications, scripts and permissions was checked; derived requirements recorded.
+- [ ] Ambiguities are questions with explicit assumptions, not silent choices. Every `[assumed]` in a REQ file points to a question number in `index.md`.
+- [ ] No derived requirement adds behaviour beyond the request that no existing element needs (those are questions).
+- [ ] Customer-facing text (questions, labels) is in Japanese; the rest of the document is English.
+- [ ] Nothing in the requirements depends on a Pleasanter behaviour you have not verified (`pls-kb-pleasanter`).
+
+## Example (illustrative — not a template to copy)
+
+Request on an equipment-loan site: 「返却期限を過ぎた貸出は、総務がまとめて督促できるようにしたい。」
+→ REQ-a (event-driven: when 総務 executes the reminder, the system shall …), REQ-b (state-driven + unwanted: while a loan is overdue and not returned …; if it is returned, then … not offered), REQ-c (derived: a new 督促済 status must still appear in the 貸出中 view and in every notification that watches status), questions such as 「督促は何回まで行いますか？」 with `[assumed]` defaults.
+Your output depends on *this* request and *this* configuration — derive it, do not pattern-match the example.

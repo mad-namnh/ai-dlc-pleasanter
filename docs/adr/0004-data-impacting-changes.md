@@ -1,42 +1,45 @@
-# ADR-0004: Change có ảnh hưởng dữ liệu và gate riêng
+# ADR-0004: Data-impacting changes and a dedicated gate
 
-- **Trạng thái:** Đề xuất
-- **Ngày:** 2026-11-04
-- **Liên quan:** review-findings A1, ADR-0001, ADR-0002
+- **Status:** Proposed
+- **Date:** 2026-11-04
+- **Related:** review-findings A1, D4, ADR-0001, ADR-0002
 
-## Bối cảnh
+## Context
 
-Trên site đã có dữ liệu, một số thay đổi cấu hình thực chất là thay đổi schema. Cấu hình rollback được bằng snapshot, dữ liệu thì không. Cần phân loại tự động và gate riêng cho loại rủi ro.
+On sites that already hold data, some configuration changes are effectively schema changes. Configuration can be rolled back from a snapshot; data cannot. Changes need automatic classification and a dedicated gate for the risky kind.
 
-## Câu hỏi mở
+Spike round 1: omitting a column definition in an `updatesite` payload removes the definition (the column falls back to defaults). The effect on existing cell data has **not** been verified on a site with data yet.
 
-- [ ] Danh sách thay đổi cấu hình nào làm ảnh hưởng dữ liệu hiện có trên 1.5.x (đổi kiểu hiển thị, đổi lựa chọn, đổi công thức, đổi validation, đổi ứng xử khi xóa…) — *Spike*
-- [ ] Giới hạn của API bulk upsert (số lượng, hiệu năng, lịch sử phiên bản) — *Spike*
-- [ ] Khách yêu cầu backup DB trước change loại này không — *IT khách*
+## Open questions
 
-## Phân loại đề xuất
+- [ ] Which configuration changes affect existing data on 1.5.x (display type, choices, formulas, validation, delete behaviour, …) — *Spike*
+- [ ] Does removing a column definition via `updatesite` affect stored values? — *Spike round 2 (site with synthetic data)*
+- [ ] Limits of the bulk upsert API (volume, performance, version history) — *Spike*
+- [ ] Does the customer require a DB backup before such changes? — *Customer IT*
 
-| Loại | Ví dụ | Gate |
+## Proposed classification
+
+| Class | Examples | Gate |
 |---|---|---|
-| **Chỉ cấu hình** | Đổi nhãn, thứ tự, view, thông báo, style | Gate thường |
-| **Ảnh hưởng dữ liệu** | Tái sử dụng / đổi nghĩa ô cột, gỡ cột đang có dữ liệu, đổi lựa chọn đang được dùng, đổi công thức tính lại giá trị, đổi quy trình làm trạng thái cũ không hợp lệ | Gate riêng: script migration + dry-run trên bản sao dữ liệu + kế hoạch rollback + người duyệt nghiệp vụ phía khách |
-| **Ảnh hưởng quyền** | Đổi quyền site/record/cột | Gate riêng: ma trận quyền trước/sau |
+| **Config-only** | Labels, ordering, views, notifications, styles | Standard gate |
+| **Data-impacting** | Reusing / repurposing a column slot, removing a column that holds data, changing choices in use, changing formulas that recompute values, changing workflow so old statuses become invalid | Dedicated gate: migration script + dry run on a copy of the data + rollback plan + business approver on the customer side |
+| **Permission-impacting** | Site/record/column permission changes | Dedicated gate: permission matrix before/after |
 
-## Các phương án
+## Options
 
-### Phương án A — Phân loại bằng quy tắc tĩnh trên diff
-- Ưu: tất định, giải thích được
-- Nhược: phải bảo trì danh sách quy tắc
+### Option A — Classify with static rules on the diff
+- Pros: deterministic, explainable
+- Cons: the rule list must be maintained
 
-### Phương án B — Quy tắc tĩnh + truy vấn production xem ô có dữ liệu không
-- Ưu: chính xác hơn (gỡ cột trống ≠ gỡ cột có dữ liệu)
-- Nhược: cần quyền đọc production (qua runner/người vận hành)
+### Option B — Static rules + query production for whether a slot holds data
+- Pros: more accurate (removing an empty column ≠ removing a column with data)
+- Cons: needs read access to production (via runner/operator)
 
-## Quyết định
+## Decision
 
-*(Chưa chốt)* — Đề xuất **A trước, B khi có runner** (ADR-0003).
+*(Not decided)* — Proposal: **A first, B once a runner exists** (ADR-0003).
 
-## Hệ quả
+## Consequences
 
-- CLI cần lệnh phân loại change, chạy trong CI, kết quả hiện trong báo cáo diff.
-- Mỗi change loại "ảnh hưởng dữ liệu" có thư mục migration: script, dry-run log, rollback.
+- The CLI needs a change-classification command, run in CI, with the result shown in the diff report.
+- Each data-impacting change has a migration folder: script, dry-run log, rollback.

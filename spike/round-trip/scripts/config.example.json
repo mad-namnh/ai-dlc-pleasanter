@@ -1,7 +1,7 @@
 {
   "environments": {
     "dev": {
-      "_comment": "Pleasanter dev nội bộ MADLAB. Chỉ role='dev' + allow_write=true mới được ghi.",
+      "_comment": "MADLAB internal dev Pleasanter. Writes are allowed only with role='dev' + allow_write=true.",
       "base_url": "https://pleasanter-dev.example.internal",
       "api_key_env": "PLEASANTER_DEV_API_KEY",
       "tenant_id": 1,
@@ -17,7 +17,7 @@
       "allow_write": true
     },
     "customer-stg": {
-      "_comment": "Ví dụ: chỉ để export (đọc). role khác 'dev' => script luôn từ chối ghi.",
+      "_comment": "Example: export (read) only. Any role other than 'dev' => the scripts always refuse to write.",
       "base_url": "https://pleasanter-stg.customer.example",
       "api_key_env": "PLEASANTER_CUSTOMER_STG_API_KEY",
       "role": "stg",
@@ -28,7 +28,7 @@
     0
   ],
   "roundtrip_parent_id": 0,
-  "_comment_parent": "roundtrip_parent_id: SiteId của 1 thư mục (フォルダ) riêng cho spike trên dev, vd 'zz_spike_roundtrip'. Site tạo ở chế độ create sẽ nằm dưới đó.",
+  "_comment_parent": "roundtrip_parent_id: SiteId of a dedicated spike folder (フォルダ) on dev, e.g. 'zz_spike_roundtrip'. Sites created in create mode are placed under it.",
   "api_version": 1.1,
   "endpoints": {
     "get_site": "/api/items/{id}/getsite",
@@ -48,9 +48,12 @@
     "UpdatedTime",
     "Timestamp",
     "ApiCountDate",
-    "ApiCount"
+    "ApiCount",
+    "LockedTime",
+    "LockedUser",
+    "ApiVersion"
   ],
-  "_comment_volatile": "volatile_keys: chỉ bỏ ở cấp site. volatile_nested_keys: bỏ ở mọi cấp — để trống trừ khi chắc chắn (SiteId lồng là tham chiếu chéo site).",
+  "_comment_volatile": "volatile_keys: dropped at site level only. volatile_nested_keys: dropped at every level — keep empty unless certain (nested SiteIds are cross-site references).",
   "volatile_nested_keys": [
     "UpdatedTime",
     "CreatedTime"

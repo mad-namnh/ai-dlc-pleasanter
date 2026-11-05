@@ -1,40 +1,60 @@
-# ADR-0005: Chính sách lưu cấu hình và secret
+# ADR-0005: Configuration storage and secrets policy
 
-- **Trạng thái:** Đề xuất
-- **Ngày:** 2026-11-04
-- **Liên quan:** review-findings B1, C4
+- **Status:** Partially accepted (2026-11-05: runtime secrets). Project-repository storage — waiting for the customer (TD-03)
+- **Date:** 2026-11-04
+- **Related:** review-findings B1, C4, D5
 
-## Bối cảnh
+## Context
 
-Dự án on-prem; một phần đội ngũ làm việc từ Việt Nam. Cấu hình có thể chứa thông tin nhạy cảm: webhook URL của thông báo, token/URL trong server script, địa chỉ mail, tên người/phòng ban trong quyền, hostname nội bộ. Dữ liệu nghiệp vụ gần như chắc chắn không được rời mạng khách.
+Projects are on-prem; part of the team works from Vietnam. Configuration may contain sensitive information: notification webhook URLs, tokens/URLs in server scripts, mail addresses, person/department names in permissions, internal hostnames. Business data almost certainly may not leave the customer network.
 
-## Câu hỏi mở
+Spike round 1 found a real external-service API key in plain text inside a shared server script; `getsite` returns it verbatim (D5).
 
-- [ ] Khách có cho phép cấu hình (không kèm dữ liệu) nằm trong git do MADLAB quản lý không? Ở đâu (GitHub org MADLAB / Git server của khách)? — *Hợp đồng/khách*
-- [ ] Thành viên tại Việt Nam được xem cấu hình đến mức nào? — *Hợp đồng/khách*
-- [ ] Những trường nào trong SiteSettings 1.5.x có thể chứa secret — *Spike (quét mẫu export)*
+## Open questions
 
-## Các phương án
+- [ ] May configuration (without data) live in git managed by MADLAB? Where (MADLAB GitHub org / customer Git server)? — *Contract/customer (TD-03)*
+- [ ] How much configuration may members in Vietnam see? — *Contract/customer (TD-03)*
+- [ ] Which SiteSettings fields on 1.5.x can hold secrets — *Spike (round 1: `ServerScripts[].Body`; notifications to be checked with webhooks)*
 
-### Phương án A — Repo dự án trên Git server của khách
-- Ưu: dữ liệu không rời khách, dễ duyệt
-- Nhược: MADLAB phụ thuộc hạ tầng/quyền truy cập của khách
+## Options (storage)
 
-### Phương án B — Repo dự án trong GitHub org của MADLAB, cấu hình đã làm sạch secret
-- Ưu: vận hành thuận tiện, CI/agent dễ dùng
-- Nhược: cần khách đồng ý bằng văn bản; phải chứng minh quét secret hiệu quả
+### Option A — Project repositories on the customer's Git server
+- Pros: data never leaves the customer; easy to audit
+- Cons: MADLAB depends on the customer's infrastructure and access
 
-## Quyết định
+### Option B — Project repositories in MADLAB's GitHub org, with secrets stripped
+- Pros: convenient operations; CI/agents work easily
+- Cons: needs written customer consent; secret scanning must be proven effective
 
-*(Chưa chốt)*
+## Decision
 
-Bất kể phương án nào, các nguyên tắc sau là **bắt buộc**:
-1. Secret không bao giờ vào git: khi unpack, thay bằng tham chiếu `${SECRET_NAME}`; giá trị nằm ở kho secret của từng môi trường.
-2. Quét secret là bước CI bắt buộc (chặn merge nếu phát hiện).
-3. Dữ liệu nghiệp vụ không rời mạng khách; test dùng dữ liệu tổng hợp.
-4. Báo cáo/ví dụ đưa vào repo framework phải được làm sạch.
+*(Storage: not decided — TD-03)*
 
-## Hệ quả
+Regardless of the storage option, the following principles are **mandatory**:
+1. Secrets never enter git: on unpack they are replaced with references; values live in each environment's secret store.
+2. Secret scanning is a mandatory CI step (blocks merge on detection).
+3. Business data never leaves the customer network; tests use synthetic data.
+4. Reports/examples committed to the framework repository must be sanitized.
+5. **Plain-text secrets in configuration are a blocking defect** (D5 — seen for real in the spike: an API key in a shared server script). The framework must detect them at unpack, in CI and in the pre-deploy check; only references to secrets are allowed, never values.
 
-- CLI unpack cần bộ quét + thay thế secret; pack cần bước nạp lại secret theo môi trường.
-- Cần danh mục secret theo môi trường trong repo dự án (chỉ tên, không giá trị).
+## Accepted decision (2026-11-05): runtime secrets
+
+**Three layers:**
+
+| Layer | Where | Content |
+|---|---|---|
+| Declaration | Repository (committed) | Configuration contains references only: `${secret:NAME}` (secret) or `${env:NAME}` (environment setting, not secret). Secret catalogue: name, environments, owner — no values |
+| Value | Per-environment secret store | Dev (AWS): IAM role / Secrets Manager. On-prem production: the customer's secret store |
+| Runtime | Where Pleasanter reads it | The deploy step resolves references |
+
+**Allowed runtime locations, in order of preference:**
+1. **Pleasanter holds no secret** — external services are called through an internal gateway that authenticates with IAM / a secret store. Reference implementation for AI: `patterns/ai-gateway/` (internal ALB → Lambda → Bedrock, no API key anywhere).
+2. 拡張サーバスクリプト (extended server scripts: files on the server, not exposed via the API) — when a gateway cannot be deployed.
+3. ~~Injecting values into server scripts / SiteSettings~~ — **forbidden**. Secret scanning blocks it at unpack, in CI and before deploy.
+
+**Pleasanter → gateway authentication:** network-based (internal ALB + security group), no token — avoids re-creating a secret inside Pleasanter.
+
+## Consequences
+
+- CLI unpack needs a secret scanner + replacement; pack needs per-environment reference resolution.
+- Project repositories need a per-environment secret catalogue (names only, no values).

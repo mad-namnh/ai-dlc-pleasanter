@@ -1,12 +1,12 @@
-"""Tiện ích dùng chung cho spike round-trip.
+"""Shared helpers for the round-trip spike.
 
-Không cần thư viện ngoài (chỉ stdlib).
+No third-party packages (stdlib only).
 
-QUY TẮC AN TOÀN cho lệnh ghi (create/update) — xem CLAUDE.md, không nới:
-  - localhost: luôn được ghi.
-  - Host khác: chỉ khi môi trường khai báo  role = "dev"  VÀ  allow_write = true,
-    và người chạy xác nhận tên host (hoặc truyền --yes).
-  - role "stg" / "prod" (hoặc thiếu role): KHÔNG BAO GIỜ ghi, dù allow_write là gì.
+SAFETY RULES for writes (create/update) — see CLAUDE.md, do not loosen:
+  - localhost: always writable.
+  - Other hosts: only when the environment declares  role = "dev"  AND  allow_write = true,
+    and the operator confirms the host name (or passes --yes).
+  - role "stg" / "prod" (or no role): NEVER written to, whatever allow_write says.
 """
 from __future__ import annotations
 
@@ -40,10 +40,10 @@ def env_settings(cfg: dict, env: str) -> dict:
     try:
         e = cfg["environments"][env]
     except KeyError:
-        sys.exit(f"Không có môi trường '{env}' trong config")
+        sys.exit(f"Environment '{env}' is not defined in the config")
     key = os.environ.get(e["api_key_env"])
     if not key:
-        sys.exit(f"Chưa đặt biến môi trường {e['api_key_env']} (API key)")
+        sys.exit(f"Environment variable {e['api_key_env']} (API key) is not set")
     return {**e, "name": env, "api_key": key}
 
 
@@ -57,28 +57,28 @@ def is_local(base_url: str) -> bool:
 
 
 def assert_writable(env: dict) -> None:
-    """Chặn ghi nếu môi trường không phải localhost hoặc dev đã bật ghi."""
+    """Block writes unless the environment is localhost or a write-enabled dev."""
     if is_local(env["base_url"]):
         return
     role = env.get("role")
     if role not in WRITABLE_ROLES or env.get("allow_write") is not True:
         raise UnsafeTargetError(
-            f"Từ chối ghi vào '{host_of(env['base_url'])}' (môi trường '{env.get('name')}', "
+            f"Refusing to write to '{host_of(env['base_url'])}' (environment '{env.get('name')}', "
             f"role={role!r}, allow_write={env.get('allow_write')!r}). "
-            "Chỉ localhost hoặc môi trường role='dev' + allow_write=true mới được ghi."
+            "Only localhost or an environment with role='dev' + allow_write=true may be written to."
         )
 
 
 def confirm_write(env: dict, assume_yes: bool) -> None:
-    """Gọi 1 lần trước khi ghi vào host không phải localhost."""
+    """Call once before writing to a non-localhost host."""
     assert_writable(env)
     if is_local(env["base_url"]) or assume_yes:
         return
     host = host_of(env["base_url"])
-    print(f"⚠ Sắp GHI cấu hình site vào: {env['base_url']} (môi trường '{env['name']}', role=dev)")
-    ans = input(f"Gõ lại tên host '{host}' để xác nhận: ").strip().lower()
+    print(f"⚠ About to WRITE site configuration to: {env['base_url']} (environment '{env['name']}', role=dev)")
+    ans = input(f"Retype the host name '{host}' to confirm: ").strip().lower()
     if ans != host:
-        raise SystemExit("Đã hủy.")
+        raise SystemExit("Cancelled.")
 
 
 def _ssl_context(env: dict) -> ssl.SSLContext | None:
@@ -100,7 +100,7 @@ def post(env: dict, path: str, body: dict, *, write: bool) -> dict:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as ex:
         detail = ex.read().decode("utf-8", errors="replace")[:500]
-        raise RuntimeError(f"HTTP {ex.code} tại {path}: {detail}") from ex
+        raise RuntimeError(f"HTTP {ex.code} at {path}: {detail}") from ex
 
 
 def api_body(cfg: dict, env: dict, **extra: Any) -> dict:
@@ -108,8 +108,8 @@ def api_body(cfg: dict, env: dict, **extra: Any) -> dict:
 
 
 def extract_site(resp: dict) -> dict:
-    """Lấy phần dữ liệu site từ response. Cấu trúc response cần xác nhận ở Bước 0;
-    hàm này chấp nhận vài dạng phổ biến, nếu không khớp thì trả nguyên response."""
+    """Extract the site data from a response. Confirmed on 1.5.2: {StatusCode, Response: {Data: {...}}}.
+    A few other common shapes are accepted; if nothing matches, the response is returned as-is."""
     r = resp.get("Response", resp)
     if isinstance(r, dict):
         data = r.get("Data", r)
@@ -121,12 +121,12 @@ def extract_site(resp: dict) -> dict:
 
 
 def normalize(obj: Any, volatile: set[str], nested: set[str] | None = None, _depth: int = 0) -> Any:
-    """Sắp key ổn định, bỏ trường biến động. Giữ nguyên thứ tự mảng
-    (thứ tự cột trong GridColumns/EditorColumnHash có ý nghĩa).
+    """Sort keys deterministically and drop volatile fields. Array order is preserved
+    (column order in GridColumns/EditorColumnHash is meaningful).
 
-    volatile: chỉ bỏ ở CẤP SITE (depth 0) — vd SiteId, UpdatedTime của chính site.
-    nested:   bỏ ở mọi cấp. Mặc định rỗng: SiteId lồng bên trong (Link, lookup…)
-              là tham chiếu chéo site, PHẢI giữ lại để phát hiện (review A3)."""
+    volatile: dropped at SITE LEVEL only (depth 0) — e.g. the site's own SiteId, UpdatedTime.
+    nested:   dropped at every level. Empty by default: nested SiteIds (links, lookups, …)
+              are cross-site references and MUST be kept so they can be detected (review A3)."""
     nested = nested or set()
     drop = (volatile | nested) if _depth == 0 else nested
     if isinstance(obj, dict):
@@ -141,7 +141,7 @@ def volatile_sets(cfg: dict) -> tuple[set[str], set[str]]:
 
 
 def diff(a: Any, b: Any, path: str = "$") -> list[dict]:
-    """Diff đệ quy. Trả danh sách {path, kind, before, after}."""
+    """Recursive diff. Returns a list of {path, kind, before, after}."""
     out: list[dict] = []
     if isinstance(a, dict) and isinstance(b, dict):
         for k in sorted(set(a) | set(b)):
@@ -173,6 +173,6 @@ def read_json(path: Path) -> Any:
 
 
 def top_area(p: str) -> str:
-    """Nhóm diff theo khu vực cấp 2 (vd $.SiteSettings.Columns) để báo cáo."""
+    """Group a diff path by its second-level area (e.g. $.SiteSettings.Columns) for reporting."""
     parts = p.replace("[", ".[").split(".")
     return ".".join(parts[:3]) if len(parts) >= 3 else p

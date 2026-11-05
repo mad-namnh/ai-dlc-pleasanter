@@ -1,49 +1,50 @@
-# Báo cáo spike round-trip — YYYY-MM-DD
+# Round-trip spike report — YYYY-MM-DD
 
-> Báo cáo này được commit vào repo framework → **đã làm sạch**: không tên site, tên người, URL nội bộ, giá trị cấu hình của khách.
+> This report is committed to the framework repository → it must be **sanitized**: no site names, person names, internal URLs or customer configuration values.
 
-## Môi trường
+## Environment
 
-- Pleasanter: 1.5.__.__ (bản patch chính xác)
+- Pleasanter: 1.5.__.__ (exact patch)
 - PostgreSQL: __
-- Nguồn cấu hình: site mẫu tự tạo / bản sao cấu hình khách (môi trường: __)
+- Configuration source: self-made sample sites / copy of customer configuration (environment: __)
+- How it was run: Python scripts with API key / browser runner with session
 
-## Kết quả theo câu hỏi
+## Results per question
 
-| Câu hỏi | Kết quả | Bằng chứng |
+| Question | Result | Evidence |
 |---|---|---|
-| 1. Round-trip giống hệt (create) | | `data/dev/roundtrip-create/report.md` |
-| 1. Round-trip giống hệt (update) | | `data/dev/roundtrip-update/report.md` |
-| 2. Thành phần phải làm tay | | `inventory-checklist.md` |
-| 3. Idempotent | | report update, cặp "lần 2 vs lần 1" |
-| 4. Trường chứa secret | | output `scan_secrets.py` (chỉ path) |
+| 1. Identical round-trip (create) | | `data/dev/roundtrip-create/report.md` |
+| 1. Identical round-trip (update) | | `data/dev/roundtrip-update/report.md` |
+| 2. Components requiring manual work | | `inventory-checklist.md` |
+| 3. Idempotent | | update report, pair "write 2 vs write 1" |
+| 4. Fields containing secrets | | `scan_secrets.py` output (paths only) |
 
-## Xác nhận endpoint (Bước 0)
+## Endpoint confirmation (step 0)
 
-| Thao tác | Endpoint 1.5.x | Cấu trúc response | Ghi chú |
+| Operation | 1.5.x endpoint | Response shape | Notes |
 |---|---|---|---|
-| Lấy site | | | |
-| Tạo site | | | |
-| Cập nhật site | | | |
+| Get site | | | |
+| Create site | | | |
+| Update site | | | |
 
 ## Site package vs API
 
-- Site package giữ được mà API không: 
-- API giữ được mà site package không: 
+- Preserved by site packages but not by the API:
+- Preserved by the API but not by site packages:
 
-## MCP tích hợp (nếu đã thử)
+## Built-in MCP (if tried)
 
-- Tool có sẵn: 
-- Dùng được cho framework: 
+- Available tools:
+- Useful for the framework:
 
-## Phát hiện mới → review-findings
+## New findings → review-findings
 
-| ID mới | Mức | Nội dung |
+| New ID | Severity | Content |
 |---|---|---|
 | | | |
 
-## Quyết định
+## Decision
 
-**Go / Đổi hướng / No-go** — lý do:
+**Go / Change direction / No-go** — rationale:
 
-Cập nhật tiếp: ADR-0001 (phạm vi), ADR-0004 (danh sách thay đổi ảnh hưởng dữ liệu), ADR-0005 (trường chứa secret).
+Follow-up updates: ADR-0001 (scope), ADR-0004 (list of data-impacting changes), ADR-0005 (fields containing secrets).

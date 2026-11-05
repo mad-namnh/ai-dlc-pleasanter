@@ -1,0 +1,35 @@
+{
+  "_doc": "Fields Pleasanter adds (set_default) or drops (drop_if) when it saves SiteSettings. Only rules observed on a real environment are listed; each rule names the version and the evidence. Anything not listed is caught by the canonicalise-via-dev step (deploy to dev, export, unpack).",
+  "rules": [
+    {
+      "path": "Processes[]",
+      "drop_if": {"ScreenType": 20},
+      "verified_on": "1.5.2",
+      "evidence": "slice #1 (D8): ScreenType 20 sent, absent after save"
+    },
+    {
+      "path": "Processes[].View",
+      "set_default": {"Id": 0, "ApiColumnKeyDisplayType": 0, "ApiColumnValueDisplayType": 0, "CalendarSiteId": 0, "ApiDataType": 0},
+      "verified_on": "1.5.2",
+      "evidence": "slice #1 (D8)"
+    },
+    {
+      "path": "Processes[].DataChanges[]",
+      "set_default": {"ValueFormulaNotUseDisplayName": false, "ValueFormulaIsDisplayError": false},
+      "verified_on": "1.5.2",
+      "evidence": "slice #1 (D8); schema probe"
+    },
+    {
+      "path": "Processes[].Notifications[]",
+      "set_default": {"MediaType": "application/json", "BeforeCondition": 0, "AfterCondition": 0, "Expression": 0},
+      "verified_on": "1.5.2",
+      "evidence": "slice #1 (D8); schema probe"
+    },
+    {
+      "path": "Views[]",
+      "set_default": {"ApiColumnKeyDisplayType": 0, "ApiColumnValueDisplayType": 0, "CalendarSiteId": 0, "ApiDataType": 0},
+      "verified_on": "1.5.2",
+      "evidence": "every exported view in sites 42410/42411/44565 carries these fields"
+    }
+  ]
+}

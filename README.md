@@ -1,52 +1,71 @@
 # ai-dlc-pleasanter
 
-Framework AI-DLC (AI-Driven Development Lifecycle) của MADLAB dành cho dự án **Pleasanter (プリザンター)**.
+MADLAB's AI-DLC (AI-Driven Development Lifecycle) framework for **Pleasanter (プリザンター)** projects.
 
-Mục tiêu: đưa mô hình "đặt chính bản → AI làm việc qua hook → kiểm tra & người duyệt (G1–G4) → phản hồi lỗi thành quy tắc" vào môi trường low-code, nơi **chính bản là cấu hình** (SiteSettings, script, quyền…) chứ không phải source code.
+**Start here: [`docs/architecture.md`](docs/architecture.md)** — the lifecycle frame (P1 requirements → P6 operate, gates G1–G4, invariants, components).
 
-## Trạng thái
+Goal: bring the model "source of truth in git → AI works through hooks → verification & human approval (G1–G4) → failures fed back as rules" into a low-code environment, where the **source of truth is configuration** (SiteSettings, scripts, permissions, …) rather than source code.
 
-| Hạng mục | Trạng thái |
+## Status
+
+| Item | Status |
 |---|---|
-| Khung repo | ✅ Đã dựng |
-| Review thiết kế (A1–C5) | ✅ Ghi tại `docs/review-findings.md` |
-| ADR 0001–0005 | 🟡 Template + câu hỏi mở, **chưa chốt** |
-| Spike round-trip (B4) | 🟡 Kịch bản + script sẵn sàng, chạy trên Pleasanter dev nội bộ — **chưa chạy** |
-| Lát cắt dọc đầu tiên | ⬜ Chờ kết quả spike + ADR |
+| Repository skeleton | ✅ Done |
+| Architecture (lifecycle frame) | ✅ v0.1 — `docs/architecture.md` |
+| Architecture review (A1–C5, D1–D7) | ✅ Recorded in `docs/review-findings.md` |
+| ADR 0001–0005 | 🟡 Proposed with open questions; ADR-0005 partially accepted (runtime secrets) |
+| Round-trip spike (B4) | 🟡 Round 1 done on internal dev (1.5.2) — **conditional Go**; round 2 pending (`spike/round-trip/report-20261105.md`) |
+| AI gateway (Bedrock) | ⏸ Parked reference pattern for customer apps — deployed on dev, not framework core (`patterns/ai-gateway/`) |
+| First vertical slice (P1→P6) | ✅ Done — `docs/slices/slice-01-report.md`; project repo `pls-demo-inquiry` |
+| `pls` toolchain | 🟡 v0.2 — `tools/pls/` (unpack, pack, canon, lint, diff, drift, classify, coverage, plan, mark-applied) + browser runner |
+| Skills | 🟡 v0.1 — `pls-kb-pleasanter`, `pls-p1-requirements-analyst`, `pls-p2-solution-designer` (`skills/`, evals in `evals/`) |
 
-## Điều kiện môi trường (đã chốt)
+## Environment constraints (agreed)
 
-- Khách dùng **on-prem**
-- Phiên bản **Pleasanter 1.5.x** (ghi chính xác bản patch của dev nội bộ và của khách vào báo cáo spike — hai bên phải trùng)
-- Khách **có thể tự sửa cấu hình** trên UI → đồng bộ hai chiều, xử lý drift là bắt buộc
+- Customer runs Pleasanter **on-prem**
+- Pleasanter **1.5.x** — internal dev is **1.5.2**; record the exact patch of both dev and customer in spike reports (they must match)
+- The customer **can edit configuration** in the UI → two-way sync; drift handling is mandatory
 
-## Phân tách repo
+## Repository split
 
-- **Repo này (framework)**: công cụ, quy tắc, ADR, spike chạy trên dữ liệu tổng hợp. **Không** chứa cấu hình hay dữ liệu của khách.
-- **Repo dự án (mỗi khách 1 repo)**: cấu hình đã unpack, sổ cái, yêu cầu EARS. Đặt ở nơi khách cho phép.
+- **This repository (framework)**: tools, rules, ADRs, spikes run on synthetic data. **Never** contains customer configuration or data.
+- **Project repositories (one per customer)**: unpacked configuration, ledgers, EARS requirements. Hosted wherever the customer allows.
 
-## Cấu trúc hiện tại
+## Layout
 
 ```
 ai-dlc-pleasanter/
 ├─ README.md
-├─ CLAUDE.md               # quy tắc cho agent làm việc trong repo
+├─ CLAUDE.md               # rules for agents working in this repo
+├─ tools/pls/              # deterministic toolchain (stdlib Python) + browser runner
+├─ skills/                 # AI skills, named pls-<phase>-<role>, installed into project repos
+├─ evals/                  # eval cases (input + rubric) per skill
+├─ patterns/               # reusable solutions for customer apps (NOT framework core), e.g. ai-gateway
 ├─ docs/
-│  ├─ plan.md              # lộ trình
-│  ├─ review-findings.md   # kết quả review kiến trúc → backlog
-│  └─ adr/                 # quyết định kiến trúc
-└─ spike/round-trip/       # spike B4: cấu hình có khôi phục nguyên vẹn không
-   ├─ README.md            # kịch bản, tiêu chí go/no-go
-   ├─ env/                 # (tùy chọn) Docker Pleasanter 1.5.x local
-   ├─ scripts/             # export / normalize / roundtrip
+│  ├─ architecture.md      # THE frame: lifecycle phases, gates, invariants, components
+│  ├─ plan.md              # roadmap
+│  ├─ review-findings.md   # architecture review results → backlog
+│  ├─ tech-debt.md         # deliberately deferred work, with deadlines
+│  ├─ slices/              # vertical slice reports
+│  └─ adr/                 # architecture decision records
+└─ spike/round-trip/       # spike B4: does configuration survive export → import unchanged?
+   ├─ README.md            # procedure and go/no-go criteria
+   ├─ browser/             # runner executed in a logged-in browser session
+   ├─ env/                 # (optional) local Docker Pleasanter 1.5.x
+   ├─ scripts/             # export / normalize / roundtrip / scan_secrets
    ├─ inventory-checklist.md
    ├─ report-template.md
-   └─ data/                # (gitignored) dữ liệu export — KHÔNG commit
+   ├─ report-YYYYMMDD.md   # sanitized spike reports
+   └─ data/                # (gitignored) exported data — NEVER commit
 ```
 
-Các thư mục `cli/`, `skills/`, `agents/`, `hooks/`, `test-harness/` **cố ý chưa tạo**. Chúng phụ thuộc kết quả spike và ADR.
+The `cli/`, `skills/`, `agents/`, `hooks/` and `test-harness/` directories are **intentionally not created yet**; they depend on the spike results and ADRs.
 
-## Bắt đầu
+## Getting started
 
-1. Đọc `docs/plan.md`.
-2. Làm theo `spike/round-trip/README.md`.
+1. Read `docs/architecture.md`.
+2. Read `docs/plan.md` for what is next.
+
+## Documentation language
+
+All `*.md` files in this repository are written in **English** (see `CLAUDE.md`).

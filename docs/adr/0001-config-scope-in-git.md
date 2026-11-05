@@ -1,42 +1,49 @@
-# ADR-0001: Phạm vi cấu hình được quản lý trong git
+# ADR-0001: Scope of configuration managed in git
 
-- **Trạng thái:** Đề xuất
-- **Ngày:** 2026-11-04
-- **Liên quan:** review-findings B4, ADR-0004, ADR-0005
+- **Status:** Proposed
+- **Date:** 2026-11-04
+- **Related:** review-findings B4, D3, D4, D6, ADR-0004, ADR-0005
 
-## Bối cảnh
+## Context
 
-Chính bản của dự án Pleasanter là cấu hình nằm trong DB. Framework chỉ kiểm soát được những gì xuất ra file và đưa vào lại được một cách tin cậy. Ở 1.5.x, schema SiteSettings không được tài liệu hóa đầy đủ từng trường. Phạm vi phải dựa trên **kết quả spike round-trip**, không dựa trên giả định.
+The source of truth of a Pleasanter project is configuration stored in the database. The framework can only control what it can reliably export to files and re-import. On 1.5.x, the SiteSettings schema is not documented field by field. The scope must be based on **round-trip spike results**, not assumptions.
 
-## Câu hỏi mở
+## Open questions
 
-- [ ] Những thành phần nào round-trip được 100% qua API site (xem `spike/round-trip/inventory-checklist.md`)? — *Spike*
-- [ ] Site package export/import có giữ được những gì API site không giữ không? — *Spike*
-- [ ] File trên server (thư mục `Parameters/`, extended SQL, …) có được đưa vào quản lý không, ai có quyền đọc/ghi? — *IT khách*
-- [ ] User / group / dept: quản lý trong git hay coi là dữ liệu tham chiếu do khách quản lý? — *Khách*
-- [ ] Dashboard, trang tổng hợp, thiết lập cấp tenant có round-trip được không? — *Spike*
+- [ ] Which components round-trip 100% through the site API (see `spike/round-trip/inventory-checklist.md`)? — *Spike*
+- [ ] Do site package export/import preserve things the site API does not? — *Spike* (round 1: yes, structured cross-site references are remapped — D6)
+- [ ] Are server-side files (`Parameters/`, extended SQL, …) brought under management; who can read/write them? — *Customer IT*
+- [ ] Users / groups / departments: managed in git, or treated as reference data owned by the customer? — *Customer*
+- [ ] Do dashboards, aggregation pages and tenant-level settings round-trip? — *Spike*
 
-## Các phương án
+## Options
 
-### Phương án A — Chỉ quản lý những gì round-trip 100%
-- Ưu: an toàn, git luôn phản ánh đúng thực tế
-- Nhược: phần còn lại phải làm tay, có thể lớn
+### Option A — Manage only what round-trips 100%
+- Pros: safe; git always reflects reality
+- Cons: the rest is manual and may be large
 
-### Phương án B — Quản lý cả phần round-trip một phần, kèm runbook thao tác tay
-- Ưu: phủ rộng hơn, có tài liệu cho mọi thứ
-- Nhược: git có thể lệch thực tế ở phần làm tay; cần kiểm tra sau deploy
+### Option B — Also manage partially round-tripping parts, with manual runbooks
+- Pros: broader coverage; everything is documented
+- Cons: git may diverge from reality for the manual parts; needs post-deploy verification
 
-### Phương án C — Bổ sung đọc/ghi trực tiếp DB cho phần API không phủ
-- Ưu: phủ gần như toàn bộ
-- Nhược: rủi ro cao, phụ thuộc cấu trúc DB nội bộ, khó qua kiểm duyệt của khách và khi nâng cấp phiên bản
+### Option C — Add direct database reads/writes for what the API does not cover
+- Pros: near-complete coverage
+- Cons: high risk; depends on internal DB structure; hard to get customer approval and to survive version upgrades
 
-## Quyết định
+## Spike results, round 1 (2026-11-05)
 
-*(Chưa chốt — chờ spike)*
+- getsite/createsite/updatesite round-trip with **0 differences**, idempotent, on 1.5.2.
+- `updatesite` replaces the whole configuration (desired state) — D4.
+- Site packages remap structured references; the API does not — D6. Neither handles SiteIds inside scripts — D3.
+- Only 8/15 core components covered so far; round 2 must add 期限付きテーブル (time-limited tables), 計算式 (formulas), プロセス (processes), ステータス制御 (status control), client scripts, permissions.
 
-Đề xuất ban đầu: **B**, với điều kiện phần làm tay < ~20% số thành phần theo checklist và không chứa thành phần rủi ro cao (quyền, quy trình). Không chọn C trừ khi có lý do rất mạnh.
+## Decision
 
-## Hệ quả
+*(Not decided — waiting for spike round 2)*
 
-- Danh sách "trong phạm vi" trở thành đầu vào cho CLI unpack/pack và JSON schema validate.
-- Phần ngoài phạm vi phải có runbook và bước kiểm tra sau deploy.
+Initial proposal: **B**, provided the manual part is below ~20% of checklist components and contains no high-risk components (permissions, workflow). Do not choose C without a very strong reason.
+
+## Consequences
+
+- The in-scope list becomes the input for the CLI unpack/pack and JSON schema validation.
+- Out-of-scope parts need runbooks and post-deploy verification steps.

@@ -1,0 +1,13 @@
+# cp terraform.tfvars.example terraform.tfvars  (terraform.tfvars is gitignored)
+
+env    = "dev"
+region = "ap-northeast-1"
+
+vpc_id                       = "vpc-xxxxxxxx"
+alb_subnet_ids               = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"] # 2 AZs, same VPC as the Pleasanter EC2 instance
+pleasanter_security_group_id = "sg-xxxxxxxx"                          # SG attached to the Pleasanter EC2 instance
+
+# Ids from the Bedrock console (ap-northeast-1) → Model catalog / Cross-region inference
+model_map = {
+  fast = "REPLACE-WITH-CLAUDE-HAIKU-INFERENCE-PROFILE-ID"
+}

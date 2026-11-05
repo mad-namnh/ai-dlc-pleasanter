@@ -4,7 +4,7 @@
 !*.env.example
 **/config.json
 
-# Dữ liệu export từ Pleasanter (của khách) — KHÔNG commit
+# Data exported from Pleasanter (customer data) — NEVER commit
 spike/**/data/*
 !spike/**/data/.gitkeep
 
@@ -18,3 +18,15 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+**/build/
+.terraform.lock.hcl.bak
+
+# Temporary leftovers (delete manually)
+_to_delete/

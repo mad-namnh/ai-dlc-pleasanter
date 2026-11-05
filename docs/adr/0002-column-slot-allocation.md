@@ -1,44 +1,44 @@
-# ADR-0002: Dải ô cột theo vùng sở hữu
+# ADR-0002: Column-slot ranges per ownership zone
 
-- **Trạng thái:** Đề xuất
-- **Ngày:** 2026-11-04
-- **Liên quan:** review-findings A2, B2
+- **Status:** Proposed — customer input deferred (TD-01)
+- **Date:** 2026-11-04
+- **Related:** review-findings A2, B2
 
-## Bối cảnh
+## Context
 
-Cột trong Pleasanter là ô có kiểu cố định (Class*, Num*, Date*, Description*, Check*, Attachments*…). Khách có thể tự thêm cột trên UI. Nếu khách và framework cùng cấp một ô trên cùng site, hai trường sẽ đè lên nhau kèm dữ liệu thật.
+Pleasanter columns are fixed-type slots (Class*, Num*, Date*, Description*, Check*, Attachments*, …). The customer can add columns in the UI. If the customer and the framework allocate the same slot on the same site, the two fields overwrite each other, together with real data.
 
-"Vùng sở hữu" không thể thực thi hoàn toàn bằng phân quyền vì admin phía khách vẫn sửa được mọi nơi. Thực thi thật là **phát hiện drift + kiểm tra xung đột ô trước deploy**, cộng thỏa thuận bằng văn bản.
+"Ownership zones" cannot be fully enforced by permissions, because customer admins can still edit anything. Real enforcement is **drift detection + pre-deploy slot-collision checks**, plus a written agreement.
 
-## Câu hỏi mở
+## Open questions
 
-- [ ] Số ô mỗi loại khả dụng trên 1.5.x, và cột mở rộng (拡張項目) hoạt động thế nào — *Spike / manual*
-- [ ] Khách có đồng ý chia dải ô và ghi vào hợp đồng/SLA bảo trì không — *Khách*
-- [ ] Site do khách tự tạo hoàn toàn: framework có theo dõi không — *Khách*
+- [ ] Number of available slots per type on 1.5.x, and how extended columns (拡張項目) behave — *Spike / manual*
+- [ ] Will the customer agree to slot ranges and put them in the contract/maintenance SLA? — *Customer (TD-01)*
+- [ ] Sites created entirely by the customer: does the framework track them? — *Customer*
 
-## Các phương án
+## Options
 
-### Phương án A — Chia dải ô cố định theo vùng
-Ví dụ: MADLAB dùng A–M, khách dùng N trở đi (mỗi loại ô).
-- Ưu: đơn giản, dễ kiểm tra tự động, dễ giải thích với khách
-- Nhược: lãng phí ô; site cũ đã dùng ô lộn xộn phải lập bảng ngoại lệ
+### Option A — Fixed slot ranges per zone
+E.g. MADLAB uses A–M, the customer uses N onward (per slot type).
+- Pros: simple, easy to check automatically, easy to explain to the customer
+- Cons: wastes slots; existing sites with mixed usage need an exception list
 
-### Phương án B — Khách chỉ dùng cột mở rộng
-- Ưu: không đụng dải ô chuẩn
-- Nhược: phụ thuộc giới hạn của cột mở rộng; khách phải học cách khác
+### Option B — The customer only uses extended columns
+- Pros: never touches the standard slot range
+- Cons: depends on extended-column limitations; the customer must learn a different way
 
-### Phương án C — Không chia dải, chỉ khóa ô bằng sổ cấp phát + kiểm tra trước deploy
-- Ưu: linh hoạt
-- Nhược: xung đột chỉ phát hiện lúc deploy, phải hòa giải thủ công thường xuyên
+### Option C — No ranges; lock slots via the allocation ledger + pre-deploy check
+- Pros: flexible
+- Cons: collisions are only detected at deploy time; frequent manual reconciliation
 
-## Quyết định
+## Decision
 
-*(Chưa chốt)*
+*(Not decided)*
 
-Đề xuất ban đầu: **A cho site mới, C cho site hiện hữu** (sổ cấp phát ghi nhận hiện trạng, ô trống mới cấp theo dải).
+Initial proposal: **A for new sites, C for existing sites** (the ledger records the current state; newly freed slots are allocated by range).
 
-## Hệ quả
+## Consequences
 
-- Cần **sổ cấp phát ô cột** trong repo dự án: `site → ô → tên logic → vùng → trạng thái`.
-- Kiểm tra trước deploy: diff ô giữa production và git; ô bị chiếm ngoài sổ → chặn deploy.
-- Báo cáo drift định kỳ gửi khách kiêm bằng chứng khi tranh chấp.
+- Project repositories need a **column-slot allocation ledger**: `site → slot → logical name → zone → status`.
+- Pre-deploy check: diff slots between production and git; a slot occupied outside the ledger → block the deploy.
+- Periodic drift reports to the customer, which also serve as evidence in disputes.

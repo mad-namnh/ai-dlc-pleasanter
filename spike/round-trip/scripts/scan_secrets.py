@@ -1,6 +1,6 @@
-"""Quét file export tìm giá trị có thể là secret / thông tin nhạy cảm.
+"""Scan exported files for values that may be secrets / sensitive information.
 
-Chỉ in PATH và loại phát hiện, không in giá trị (tránh lộ khi chia sẻ log).
+Prints only the PATH and the detection type, never the value (safe to share the log).
 
   python scripts/scan_secrets.py data/local/original
 """
@@ -45,9 +45,9 @@ def main() -> None:
                     hits.append((f.name, path, name))
     for fname, path, name in hits:
         print(f"{name:11} {fname}  {path}")
-    print("\nTổng hợp theo loại:", dict(Counter(h[2] for h in hits)))
+    print("\nSummary by type:", dict(Counter(h[2] for h in hits)))
     generic = Counter(re.sub(r"\[\d+\]", "[]", h[1]) for h in hits).most_common(15)
-    print("Path hay gặp nhất (để đưa vào ADR-0005):")
+    print("Most frequent paths (input for ADR-0005):")
     for p, n in generic:
         print(f"  {n:4}  {p}")
 

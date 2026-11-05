@@ -1,27 +1,37 @@
-# Kết quả review kiến trúc (2026-11-04)
+# Architecture review findings (2026-11-04)
 
-**Kết luận:** Duyệt có điều kiện. Hướng "cấu hình là code + đồng bộ hai chiều + round-trip" đúng. Phải xử lý A1–A3, B1 trước khi đưa lên production của khách.
+**Verdict:** Approved with conditions. The direction "configuration as code + two-way sync + round-trip" is right. A1–A3 and B1 must be addressed before touching a customer's production.
 
-Mỗi mục là một dòng backlog. Cập nhật cột *Trạng thái* và *Xử lý tại* khi tiến triển.
+Each item is a backlog entry. Update *Status* and *Addressed in* as work progresses.
 
-| ID | Mức | Vấn đề | Đề xuất | Xử lý tại | Trạng thái |
+| ID | Severity | Issue | Recommendation | Addressed in | Status |
 |---|---|---|---|---|---|
-| A1 | Critical | Thiết kế chỉ quản lý cấu hình, chưa tính dữ liệu. Ô cột có kiểu cố định; đổi nghĩa ô / ẩn cột trên site có dữ liệu là thay đổi schema. Revert cấu hình được, revert dữ liệu không | Khái niệm **migration**: change đụng dữ liệu kèm script chuyển đổi (bulk upsert) + kế hoạch rollback. CI phân loại *chỉ cấu hình* / *ảnh hưởng dữ liệu* | ADR-0004 | Mở |
-| A2 | Critical | Xung đột ô cột: khách thêm cột trên UI (vd NumD), git cũng cấp NumD → đè nhau kèm dữ liệu thật | **Sổ cấp phát ô cột**, chia dải ô theo vùng. Kiểm tra trước deploy chặn khi xung đột | ADR-0002 | Mở |
-| A3 | Critical | Không có transaction xuyên site; deploy hỏng giữa chừng → production nửa cũ nửa mới | **Deploy plan**: snapshot → thứ tự theo đồ thị phụ thuộc → áp → smoke test → tự khôi phục. Phân giải ID xử lý tham chiếu chéo site | Bước 4 | Mở |
-| B1 | High | Hook không phải ranh giới bảo mật (`curl` vượt được). API key tenant admin quá mạnh | Chặn ở **tầng mạng**. AI không giữ key production; runner trong mạng khách deploy sau G4, key quyền tối thiểu, audit log. Quét secret khi unpack | ADR-0003, ADR-0005 | Mở |
-| B2 | High | "Vùng sở hữu" là thỏa thuận tổ chức, không phải kỹ thuật — admin phía khách vẫn sửa được mọi nơi | Ghi vào hợp đồng/SLA. Thực thi bằng phát hiện drift + kiểm tra trước deploy. Báo cáo drift định kỳ | ADR-0002 | Mở |
-| B3 | High | Báo cáo diff do AI viết có thể sai → gate an toàn giả | Diff có cấu trúc sinh **tất định** bằng code; AI chỉ diễn đạt lại; luôn kèm bảng diff gốc | Lát cắt #1 | Mở |
-| B4 | High | Giả định round-trip chưa kiểm chứng; schema SiteSettings 1.5.x không tài liệu hóa đầy đủ | **Spike có tiêu chí go/no-go** trước mọi việc khác. JSON schema suy ra từ mẫu export thật | `spike/round-trip/` | **Đang làm** |
-| C1 | Medium | Core + Adapter là trừu tượng hóa quá sớm | Làm adapter Pleasanter trước; lõi chỉ là quy ước. Tách code chung khi có nền tảng thứ 2 | Đã áp dụng (repo riêng) | Đóng |
-| C2 | Medium | Lộ trình chia lớp ngang, không hợp người làm một mình | Lát cắt dọc mỏng | `docs/plan.md` | Đóng |
-| C3 | Medium | E2E Playwright trên DOM Pleasanter dễ vỡ | Ưu tiên: kiểm tra tĩnh → test API → ma trận quyền → Playwright chỉ smoke | Bước 4 | Mở |
-| C4 | Medium | Dữ liệu on-prem không mang ra ngoài/sang VN được | Seed data tổng hợp. Xác nhận với khách việc lưu cấu hình (không dữ liệu) trong git MADLAB | ADR-0005 | Mở |
-| C5 | Medium | Job drift hằng đêm quá thô | Kiểm tra drift trước deploy là chính; job đêm chỉ để báo cáo | Bước 4 | Mở |
+| A1 | Critical | The design manages configuration but not data. Column slots have fixed types; repurposing a slot or hiding a column on a site with data is a schema change. Configuration can be reverted, data cannot | Introduce **migrations**: data-impacting changes ship with a conversion script (bulk upsert) and a rollback plan. CI classifies changes as *config-only* / *data-impacting* | ADR-0004 | Open |
+| A2 | Critical | Column-slot collisions: the customer adds a column in the UI (e.g. NumD) while git also allocates NumD → they overwrite each other, with real data | **Column-slot allocation ledger** with slot ranges per zone. Pre-deploy check blocks on collision | ADR-0002 | Open |
+| A3 | Critical | No cross-site transaction; a deploy failing midway leaves production half old, half new | **Deploy plan**: snapshot → order by dependency graph → apply → smoke test → automatic restore. ID resolution must handle cross-site references | Step 4 | Open |
+| B1 | High | Hooks are not a security boundary (`curl` bypasses them). Tenant-admin API keys are very powerful | Enforce at the **network layer**. AI never holds production keys; a runner inside the customer network deploys after G4 with least-privilege keys and audit logs. Scan for secrets on unpack | ADR-0003, ADR-0005 | Open |
+| B2 | High | "Ownership zones" are an organizational agreement, not a technical control — customer admins can still edit anything | Put it in the contract/maintenance SLA. Enforce via drift detection + pre-deploy check. Periodic drift reports | ADR-0002 | Open |
+| B3 | High | AI-written diff reports may be wrong → false sense of safety at the gate | Generate the structured diff **deterministically** in code; AI only rephrases; always attach the raw diff | Slice #1 | Open |
+| B4 | High | Round-trip assumption unverified; 1.5.x SiteSettings schema not fully documented | **Spike with go/no-go criteria** before anything else. Derive JSON schema from real exports | `spike/round-trip/report-20261105.md` | **Conditional Go** — round 1 done, round 2 needed (7 remaining core components) |
+| C1 | Medium | Core + Adapter is premature abstraction | Build the Pleasanter adapter first; the "core" is only conventions for now. Extract shared code when a second platform appears | Applied (separate repo) | Closed |
+| C2 | Medium | Horizontal-layer roadmap does not suit a solo builder | Thin vertical slices | `docs/plan.md` | Closed |
+| C3 | Medium | Playwright E2E on Pleasanter's DOM is brittle | Priority: static checks → API tests → permission matrix → Playwright for smoke only | Step 4 | Open |
+| C4 | Medium | On-prem data cannot leave the customer network / go to Vietnam | Synthetic seed data. Confirm with the customer whether configuration (without data) may live in MADLAB's git | ADR-0005 | Open |
+| C5 | High (raised by D4) | Nightly drift job alone is too coarse | Pre-deploy drift check is the primary control; the nightly job is for reporting only | Step 4 | Open |
 
-## Phát hiện bổ sung (thêm trong quá trình spike)
+## Additional findings (added during the spike)
 
-| ID | Mức | Vấn đề | Đề xuất | Xử lý tại | Trạng thái |
+| ID | Severity | Issue | Recommendation | Addressed in | Status |
 |---|---|---|---|---|---|
-| D1 | Info | Pleasanter có **MCP server tích hợp sẵn** (bật qua `Parameters/McpServer.json`, transport HTTP, header `X-Api-Key`, có rate limit và log). Key MCP mang đúng quyền của user phát hành | Đánh giá trong spike: dùng MCP tích hợp cho thao tác record/đọc thay vì tự viết. Dùng user quyền tối thiểu riêng cho AI. Giữ rate limit + logging bật | Spike bước 6 | Mở |
-| D2 | Info | Lệnh CodeDefiner thay đổi từ 1.4.6 | Dựng môi trường local theo đúng manual Docker hiện hành cho 1.5.x | `spike/round-trip/env/` | Mở |
+| D1 | Info | Pleasanter has a **built-in MCP server** (enabled via `Parameters/McpServer.json`, HTTP transport, `X-Api-Key` header, rate limiting and logging). An MCP key carries exactly the issuing user's permissions | Evaluate in the spike: use the built-in MCP for record operations/reads instead of writing our own. Use a dedicated least-privilege user for AI. Keep rate limiting + logging on | Spike step 6 | Open |
+| D2 | Info | CodeDefiner commands changed in 1.4.6 | Build the local environment from the current Docker manual for 1.5.x | `spike/round-trip/env/` | Open |
+| D3 | High | SiteIds of other sites are **hard-coded inside server-script strings** (e.g. `related.siteId`). Structured diffs miss them; neither the API nor site packages remap them | ID resolution must also scan script bodies. Mandatory convention: scripts must not hard-code SiteIds — read them from a reference table generated by the framework at deploy time | Slice #1, CLAUDE.md rules | Open |
+| D4 | Critical | `updatesite` **replaces SiteSettings entirely**: elements/keys missing from the payload are deleted. Customer edits made in the UI are silently overwritten | Always deploy the complete configuration; partial payloads are forbidden. Pre-deploy drift check is **mandatory** (raises C5). Upside: git can serve as the desired state | ADR-0003, Step 4 | Open |
+| D5 | Critical | A real secret (external service API key) sits in **plain text** in a shared server script; `getsite` returns it verbatim to anyone who can read site configuration | The framework **detects and blocks** secrets in configuration (unpack, CI, pre-deploy). Configuration holds references only; values come from a secret store / gateway. Temporarily accepted for the spike by the project owner | ADR-0005, `patterns/ai-gateway/` | Designed (Bedrock gateway) — pending dev deployment + revocation of the old key |
+| D6 | Info | Site packages (`copysitepackage`) **remap** structured references (`ChoicesText [[id]]`, `Links`, `Summaries`) to new IDs and return an OldSiteId→NewSiteId map; API `createsite` does not | Consider site packages for first-time creation (bootstrap) + `updatesite` afterwards, or remap in the CLI. Decide in ADR-0001 | ADR-0001 | Open |
+| D7 | High | A **shared** server script that declares a top-level `const`/`let` makes every record save fail (`ServerScriptExecutionFailed`, HTTP 422) when combined with another server script — Pleasanter re-runs shared scripts in the same engine. Verified on 1.5.2: each script alone works, the pair fails; `var` works. The original demo site 42410 uses this pattern (`const CLAUDE_API_KEY`) | Static check in the framework: shared scripts must not declare top-level `const`/`let`. Add a regression test that saves a record on every site with server scripts after each deploy | `patterns/ai-gateway/pleasanter/shared-env.js`, future lint rule | Fixed in gateway template; lint rule open |
+| D8 | High | Pleasanter **canonicalises configuration on save**: adds default fields (e.g. `View.ApiDataType`, notification `MediaType`) and drops default-valued ones (`ScreenType: 20`). Git must hold the canonical form or every drift check is a false positive | Canonicalise via dev after the first deploy (export → unpack); later a defaults table in `pls` | architecture P3, slice #1 S1 | Process defined; automation open |
+| D9 | Info | Checkbox view filters are **2-state** (only "checked" can be filtered) on 1.5.2 → a process display condition cannot test "checkbox is off" | Design rule: use status or choice columns for state that drives display conditions | Pleasanter knowledge base (S7) | Open |
+| D10 | Info | Executing a process via the API (`ProcessId`) **enforces the process display condition** (HTTP 400 outside the condition) | Display conditions can be relied on as server-side guards | Pleasanter knowledge base (S7) | Verified |
+| D11 | High | Drift must be measured against the **last released state**, not git HEAD; and **reverting** a customer edit can be data-impacting (removing a used choice) | `pls drift --baseline`; `pls plan` blocks on drift; drift resolution always via `pls classify` | `pls`, ADR-0004, slice #1 S2/S3 | Open |
+

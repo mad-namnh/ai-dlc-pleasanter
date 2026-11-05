@@ -1,36 +1,36 @@
-# ADR-XXXX: <Tiêu đề quyết định>
+# ADR-XXXX: <Decision title>
 
-- **Trạng thái:** Đề xuất | Đã chấp nhận | Thay thế bởi ADR-YYYY | Bãi bỏ
-- **Ngày:** YYYY-MM-DD
-- **Người quyết định:** 
-- **Liên quan:** review-findings <ID>, ADR-…
+- **Status:** Proposed | Accepted | Superseded by ADR-YYYY | Deprecated
+- **Date:** YYYY-MM-DD
+- **Deciders:** 
+- **Related:** review-findings <ID>, ADR-…
 
-## Bối cảnh
+## Context
 
-Vấn đề là gì, vì sao phải quyết bây giờ. Ràng buộc (kỹ thuật, khách hàng, hợp đồng).
+What the problem is and why it must be decided now. Constraints (technical, customer, contractual).
 
-## Câu hỏi mở
+## Open questions
 
-Những gì phải biết trước khi chốt. Ghi rõ ai/cái gì trả lời được (spike, IT khách, hợp đồng).
+What must be known before deciding. State who/what can answer (spike, customer IT, contract).
 
 - [ ] …
 
-## Các phương án
+## Options
 
-### Phương án A — …
-- Ưu:
-- Nhược:
+### Option A — …
+- Pros:
+- Cons:
 
-### Phương án B — …
-- Ưu:
-- Nhược:
+### Option B — …
+- Pros:
+- Cons:
 
-## Quyết định
+## Decision
 
-Chọn phương án … vì …
+Option … because …
 
-## Hệ quả
+## Consequences
 
-- Điều trở nên dễ hơn:
-- Điều trở nên khó hơn / chi phí:
-- Việc cần làm tiếp:
+- What becomes easier:
+- What becomes harder / costs:
+- Follow-up work:

@@ -1,44 +1,47 @@
-# ADR-0003: Cách deploy lên production (on-prem)
+# ADR-0003: Production deployment (on-prem)
 
-- **Trạng thái:** Đề xuất
-- **Ngày:** 2026-11-04
-- **Liên quan:** review-findings A3, B1, D1
+- **Status:** Proposed — customer IT input deferred (TD-02)
+- **Date:** 2026-11-04
+- **Related:** review-findings A3, B1, D1, D4
 
-## Bối cảnh
+## Context
 
-Production nằm trong mạng on-prem của khách. API key quản trị tenant rất mạnh. Hook của agent không phải ranh giới bảo mật. Nguyên tắc cứng: **AI không bao giờ giữ key production, không có đường mạng tới production.**
+Production is inside the customer's on-prem network. Tenant-admin API keys are very powerful. Agent hooks are not a security boundary. Hard rule: **AI never holds production keys and has no network path to production.**
 
-## Câu hỏi mở
+Spike round 1 showed that `updatesite` replaces the whole configuration (D4): any deploy silently overwrites customer UI edits unless drift is checked first.
 
-- [ ] Khách cho phép runner tự động chạy trong mạng của họ không? Ở đâu (máy chủ, VM, GitHub self-hosted runner…)? — *IT khách*
-- [ ] Có môi trường staging on-prem không? Cấu hình có giống production không? — *IT khách*
-- [ ] Ai được phát hành API key, quyền tối thiểu cần thiết cho deploy cấu hình là gì? — *Spike + IT khách*
-- [ ] Khung giờ được phép deploy, quy trình thông báo người dùng — *Khách*
-- [ ] Có dùng MCP tích hợp của Pleasanter ở môi trường nào không (D1)? — *Khách*
+## Open questions
 
-## Các phương án
+- [ ] Will the customer allow an automated runner inside their network? Where (server, VM, self-hosted CI runner, …)? — *Customer IT (TD-02)*
+- [ ] Is there an on-prem staging environment? Does it mirror production? — *Customer IT*
+- [ ] Who issues API keys; what is the minimum permission needed to deploy configuration? — *Spike + customer IT*
+- [ ] Allowed deployment windows; user notification procedure — *Customer*
+- [ ] Will Pleasanter's built-in MCP be used in any environment (D1)? — *Customer*
 
-### Phương án A — Runner trong mạng khách, deploy tự động sau G4
-- Ưu: nhanh, lặp lại được, có log đầy đủ
-- Nhược: cần IT khách duyệt hạ tầng; phải bảo vệ runner
+## Options
 
-### Phương án B — Gói deploy + người vận hành phía khách import tay
-Framework xuất "gói deploy" (cấu hình đã pack + deploy plan + checklist + script kiểm tra sau deploy).
-- Ưu: dễ được khách chấp nhận, không cần hạ tầng mới
-- Nhược: chậm, phụ thuộc người, dễ sai bước
+### Option A — Runner inside the customer network, automated deploy after G4
+- Pros: fast, repeatable, full logs
+- Cons: needs customer IT approval for infrastructure; the runner must be protected
 
-### Phương án C — Bắt đầu B, chuyển dần sang A
-- Ưu: khởi động được ngay, xây lòng tin trước
-- Nhược: phải duy trì hai luồng trong giai đoạn chuyển tiếp
+### Option B — Deploy package + manual import by the customer's operator
+The framework produces a "deploy package" (packed configuration + deploy plan + checklist + post-deploy verification script).
+- Pros: easy for the customer to accept; no new infrastructure
+- Cons: slow, person-dependent, error-prone
 
-## Quyết định
+### Option C — Start with B, move gradually to A
+- Pros: can start immediately; builds trust first
+- Cons: two flows to maintain during the transition
 
-*(Chưa chốt)*
+## Decision
 
-Đề xuất ban đầu: **C**. Gói deploy được thiết kế sao cho chính runner ở phương án A cũng dùng nguyên gói đó.
+*(Not decided)*
 
-## Hệ quả
+Initial proposal: **C**. The deploy package is designed so that the runner in option A consumes exactly the same package.
 
-- Mọi deploy đều đi qua **deploy plan** (A3): snapshot → thứ tự phụ thuộc → áp → smoke test → khôi phục nếu lỗi.
-- Môi trường làm việc của AI (local/CI của MADLAB) không có route tới mạng khách — thực thi ở tầng mạng.
-- Audit log: ai duyệt, ai chạy, bản nào, lúc nào.
+## Consequences
+
+- Every deploy goes through a **deploy plan** (A3): snapshot → dependency order → apply → smoke test → restore on failure.
+- Every deploy sends the **complete** configuration and is preceded by a **mandatory drift check** (D4).
+- The AI working environment (MADLAB local/CI) has no route to the customer network — enforced at the network layer.
+- Audit log: who approved, who ran it, which version, when.

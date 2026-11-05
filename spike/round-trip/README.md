@@ -1,101 +1,104 @@
-# Spike B4 — Round-trip cấu hình Pleasanter 1.5.x
+# Spike B4 — Pleasanter 1.5.x configuration round-trip
 
-## Câu hỏi cần trả lời
+## Questions to answer
 
-1. Cấu hình site export qua API/site package → đưa vào lại → export lần nữa có **giống hệt** bản gốc không (sau khi bỏ các trường biến động như ID, thời gian)?
-2. Thành phần nào **không** đi qua được, phải làm tay?
-3. Ghi lại cùng một cấu hình hai lần có cho kết quả như nhau không (**idempotent**)?
-4. Cấu hình có chứa secret / thông tin nhạy cảm ở trường nào?
+1. Does site configuration exported via the API/site package → re-imported → exported again come out **identical** to the original (after removing volatile fields such as IDs and timestamps)?
+2. Which components do **not** survive and must be handled manually?
+3. Does writing the same configuration twice give the same result (**idempotent**)?
+4. Which fields of the configuration contain secrets / sensitive information?
 
-## Tiêu chí quyết định
+## Decision criteria
 
-| Kết quả | Điều kiện | Hành động |
+| Outcome | Condition | Action |
 |---|---|---|
-| **Go** | Thành phần cốt lõi (cột, editor, grid, プロセス, ステータス制御, thông báo, script, quyền site) round-trip 100%; phần làm tay < ~20% checklist; idempotent | Chốt ADR-0001 phương án B, sang lát cắt dọc |
-| **Đổi hướng** | Cốt lõi đạt nhưng một nhóm quan trọng (vd quyền, cột mở rộng) không round-trip | Thu hẹp phạm vi git, viết runbook cho phần làm tay, cân nhắc site package thay API |
-| **No-go** | Cột/editor/プロセス không round-trip ổn định, hoặc không idempotent | Dừng, xem lại chiến lược (ADR-0001 phương án C hoặc mô hình khác) |
+| **Go** | Core components (columns, editor, grid, プロセス, ステータス制御, notifications, scripts, site permissions) round-trip 100%; manual part < ~20% of the checklist; idempotent | Decide ADR-0001 option B, move to the vertical slice |
+| **Change direction** | Core passes but an important group (e.g. permissions, extended columns) does not round-trip | Narrow the git scope, write runbooks for manual parts, consider site packages instead of the API |
+| **No-go** | Columns/editor/プロセス do not round-trip reliably, or not idempotent | Stop and revisit the strategy (ADR-0001 option C or another model) |
 
-## Chuẩn bị
+## Preparation
 
-1. Môi trường Pleasanter 1.5.x **cùng bản patch** với khách:
-   - **Mặc định: Pleasanter dev nội bộ của MADLAB** — khai báo ở môi trường `dev` trong config.
-   - Tùy chọn: dựng local bằng Docker (`env/README.md`) nếu cần môi trường sạch, reset được.
-2. Trên dev, tạo **một thư mục (フォルダ) riêng cho spike**, vd `zz_spike_roundtrip`, lấy SiteId của nó điền vào `roundtrip_parent_id`. Mọi site mẫu và site sinh ra khi round-trip nằm trong đó.
-3. Tạo API key cho user tenant admin trên dev (API site yêu cầu quyền này).
-4. `cp scripts/config.example.json scripts/config.json`, sửa `environments.dev.base_url`. Nếu dev dùng chứng chỉ nội bộ, điền đường dẫn CA vào `ca_bundle`.
-5. Đặt API key vào biến môi trường (không ghi vào file):
+1. A Pleasanter 1.5.x environment on the **same patch** as the customer:
+   - **Default: MADLAB internal dev Pleasanter** — declared as the `dev` environment in the config.
+   - Optional: a local Docker instance (`env/README.md`) when a clean, resettable environment is needed.
+2. On dev, create **a dedicated folder (フォルダ) for the spike**, e.g. `zz_spike_roundtrip`, and put its SiteId in `roundtrip_parent_id`. All sample sites and round-trip copies live there.
+3. Create an API key for a tenant-admin user on dev (site APIs require it).
+4. `cp scripts/config.example.json scripts/config.json` and set `environments.dev.base_url`. If dev uses an internal certificate, set the CA path in `ca_bundle`.
+5. Put the API key in an environment variable (never in a file):
    - PowerShell: `$env:PLEASANTER_DEV_API_KEY = "..."`
    - bash: `export PLEASANTER_DEV_API_KEY=...`
-6. Python 3.10+, không cần thư viện ngoài.
+6. Python 3.10+, no third-party packages.
 
-### Cơ chế bảo vệ khi ghi
+If the machine running the scripts cannot reach dev (proxy / internal network), use the browser runner in `browser/` instead — it authenticates with the logged-in browser session and needs no API key.
 
-| Môi trường | Được ghi? |
+### Write protection
+
+| Environment | Writes allowed? |
 |---|---|
-| localhost | Có |
-| `role: "dev"` + `allow_write: true` | Có — phải **gõ lại tên host** để xác nhận (hoặc `--yes`) |
-| `role` khác (`stg`, `prod`…) hoặc thiếu | **Không bao giờ**, kể cả khi `allow_write: true` |
+| localhost | Yes |
+| `role: "dev"` + `allow_write: true` | Yes — you must **retype the host name** to confirm (or pass `--yes`) |
+| any other `role` (`stg`, `prod`, …) or missing | **Never**, even with `allow_write: true` |
 
-Export (chỉ đọc) chạy được trên mọi môi trường đã khai báo.
+Exports (read-only) work against any declared environment.
 
-## Các bước
+## Steps
 
-### Bước 0 — Xác nhận endpoint (30 phút)
+### Step 0 — Confirm endpoints (30 min)
 
-Đối chiếu manual 1.5.x xem endpoint lấy/tạo/cập nhật site đúng như trong `config.example.json` (`endpoints`). Nếu khác, sửa trong `config.json`, **không** sửa code.
+Check against the 1.5.x manual that the get/create/update site endpoints match `config.example.json` (`endpoints`). If they differ, change `config.json`, **not** the code.
 
-### Bước 1 — Tạo site mẫu trên local (2–3 giờ)
+### Step 1 — Create sample sites (2–3 h)
 
-Tạo bằng tay trên UI dev (trong thư mục spike) một bộ site **phủ checklist** (`inventory-checklist.md`): ít nhất 1 期限付きテーブル + 1 記録テーブル có liên kết với nhau, có プロセス, ステータス制御, thông báo, リマインダー, server script, client script, style, quyền site/cột, view, công thức, lựa chọn (選択肢).
+In the dev UI (inside the spike folder), create a set of sites that **covers the checklist** (`inventory-checklist.md`): at least one 期限付きテーブル (time-limited table) + one 記録テーブル (record table) linked to each other, with プロセス, ステータス制御, notifications, リマインダー (reminders), server scripts, client scripts, styles, site/column permissions, views, formulas, choices (選択肢).
 
-> Không dùng dữ liệu khách ở bước này. Bước 5 mới dùng cấu hình thật, trong môi trường được phép.
+> Do not use customer data in this step. Real configuration is only used in step 5, in an environment where it is allowed.
 
-### Bước 2 — Export
+### Step 2 — Export
 
 ```bash
 python scripts/export_sites.py --config scripts/config.json --env dev --label original
 ```
-Kết quả: `data/dev/original/<siteId>.json` (raw) và `.normalized.json`.
+Output: `data/dev/original/<siteId>.json` (raw) and `.normalized.json`.
 
-### Bước 3 — Round-trip "create" (tạo site mới từ cấu hình đã export)
+### Step 3 — "create" round-trip (new site from the exported configuration)
 
 ```bash
 python scripts/roundtrip.py --config scripts/config.json --env dev --mode create --label original
 ```
-Script tạo site mới dưới `roundtrip_parent_id`, export lại, diff với bản gốc → `data/dev/roundtrip-create/report.md`.
+Creates a new site under `roundtrip_parent_id`, exports it, diffs against the original → `data/dev/roundtrip-create/report.md`.
 
-### Bước 4 — Round-trip "update" + idempotence
+### Step 4 — "update" round-trip + idempotence
 
 ```bash
 python scripts/roundtrip.py --config scripts/config.json --env dev --mode update --label original --repeat 2
 ```
-Ghi lại cấu hình gốc lên chính site đó 2 lần, export sau mỗi lần, diff. Lần 1 và lần 2 phải không khác nhau.
+Writes the original configuration back onto the same site twice, exports after each write, diffs. Writes 1 and 2 must not differ.
 
-### Bước 5 — Thử site package (UI)
+### Step 5 — Site packages
 
-Export site package của cùng bộ site trên UI → import vào thư mục khác → chạy lại Bước 2 trên site import → so sánh. Ghi nhận site package giữ được gì mà API không giữ (và ngược lại).
+Export a site package of the same sites in the UI (or via `copysitepackage`) → import into another folder → repeat step 2 on the imported sites → compare. Record what site packages preserve that the API does not (and vice versa).
 
-Nếu được phép: lặp lại trên **bản sao cấu hình thật của khách** (không dữ liệu) trong môi trường khách cho phép.
+If allowed: repeat on **a copy of the customer's real configuration** (no data) in an environment the customer permits.
 
-### Bước 6 — Đánh giá MCP tích hợp (D1, tùy chọn)
+### Step 6 — Evaluate the built-in MCP (D1, optional)
 
-Bật `Parameters/McpServer.json` trên dev (nếu được phép sửa Parameters), kết nối thử, ghi lại danh sách tool và việc nào dùng được cho framework (đọc cấu hình? chỉ record?).
+Enable `Parameters/McpServer.json` on dev (if editing Parameters is allowed), connect, list the tools and note which are useful for the framework (configuration reads? records only?).
 
-### Bước 7 — Quét secret
+### Step 7 — Secret scan
 
 ```bash
 python scripts/scan_secrets.py data/dev/original
 ```
-Ghi nhận trường nào chứa URL, token, mail, hostname.
+Record which fields contain URLs, tokens, mail addresses, hostnames.
 
-### Bước 8 — Viết báo cáo
+### Step 8 — Write the report
 
-Điền `report-template.md`, lưu thành `report-YYYYMMDD.md` (đã làm sạch), cập nhật `docs/review-findings.md` và ADR-0001.
+Fill in `report-template.md`, save as `report-YYYYMMDD.md` (sanitized), and update `docs/review-findings.md` and ADR-0001.
 
-## An toàn
+## Safety
 
-- `scripts/common.py` chặn ghi vào mọi môi trường không phải localhost hoặc dev đã bật ghi (bảng ở trên). Không nới điều kiện này.
-- Dev nội bộ có thể dùng chung với dự án khác: chỉ làm việc trong thư mục spike, không sửa site ngoài thư mục đó.
-- `data/` bị gitignore. Không commit.
-- `report.md` sinh trong `data/` có in **giá trị thật** (trước/sau) để bạn đối chiếu — có thể chứa webhook URL, tên người. Chỉ báo cáo đã làm sạch theo `report-template.md` mới được đưa ra ngoài `data/`.
-- Chế độ `create` sẽ khác ở các tham chiếu chéo site (Link, lookup trỏ SiteId cũ) — đánh dấu 🔗 trong báo cáo. Đây là bằng chứng cho yêu cầu phân giải ID xuyên site (A3), không phải lỗi round-trip.
+- `scripts/common.py` blocks writes to any environment that is not localhost or a write-enabled dev (table above). Do not loosen this.
+- Internal dev may be shared with other projects: work only inside the spike folder; never modify sites outside it.
+- Never write to the original sample sites; round-trips run on copies.
+- `data/` is gitignored. Never commit it.
+- The `report.md` generated under `data/` prints **real values** (before/after) for your review — it may contain webhook URLs or person names. Only reports sanitized per `report-template.md` may leave `data/`.
+- In `create` mode, cross-site references (links, lookups pointing to old SiteIds) will differ — flagged 🔗 in the report. This is evidence for cross-site ID resolution (A3), not a round-trip failure.

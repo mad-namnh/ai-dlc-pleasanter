@@ -1,24 +1,24 @@
-# Môi trường Pleasanter 1.5.x local (Docker + PostgreSQL) — TÙY CHỌN
+# Local Pleasanter 1.5.x (Docker + PostgreSQL) — OPTIONAL
 
-> Mặc định spike chạy trên **Pleasanter dev nội bộ của MADLAB** (môi trường `dev` trong config). Chỉ dùng thư mục này khi cần một môi trường sạch, reset được.
+> By default the spike runs on **MADLAB's internal dev Pleasanter** (the `dev` environment in the config). Use this folder only when a clean, resettable environment is needed.
 
-Dựa trên cách dựng bằng image chính thức `implem/pleasanter`. **Đối chiếu manual Docker hiện hành trước khi chạy** — lệnh CodeDefiner đã thay đổi từ 1.4.6:
+Based on the official `implem/pleasanter` image. **Check the current Docker manual before running** — CodeDefiner commands changed in 1.4.6:
 
 - Manual: https://pleasanter.org/ja/manual/getting-started-pleasanter-docker
-- Thay đổi CodeDefiner: https://pleasanter.org/ja/manual/codedefiner-changed-steps
+- CodeDefiner changes: https://pleasanter.org/ja/manual/codedefiner-changed-steps
 
-## Các bước
+## Steps
 
-1. `cp .env.example .env`, điền mật khẩu và **đúng bản patch 1.5.x của khách** vào `PLEASANTER_VERSION`.
-2. Khởi động DB: `docker compose up -d db`
-3. Chạy CodeDefiner lần đầu theo manual (khởi tạo DB, ngôn ngữ `ja`, timezone `Asia/Tokyo`). Lệnh mẫu trong `compose.yaml` là service `codedefiner`; **xác nhận tham số với manual** rồi chạy:
+1. `cp .env.example .env`, set passwords and **the exact 1.5.x patch used by the customer** in `PLEASANTER_VERSION`.
+2. Start the database: `docker compose up -d db`
+3. Run CodeDefiner once per the manual (initialize the DB, language `ja`, time zone `Asia/Tokyo`). The sample command is the `codedefiner` service in `compose.yaml`; **verify its arguments against the manual** before running:
    `docker compose run --rm codedefiner`
-4. Khởi động: `docker compose up -d pleasanter`
-5. Mở http://localhost:50001 — đăng nhập mặc định Administrator / pleasanter, **đổi mật khẩu ngay**.
-6. Bật API nếu chưa (`Parameters/Api.json` → `Enabled: true`), tạo API key cho user tenant admin.
+4. Start: `docker compose up -d pleasanter`
+5. Open http://localhost:50001 — default login Administrator / pleasanter; **change the password immediately**.
+6. Enable the API if needed (`Parameters/Api.json` → `Enabled: true`) and create an API key for a tenant-admin user.
 
-## Ghi chú
+## Notes
 
-- Ghi lại chính xác phiên bản đã dùng vào báo cáo spike.
-- Muốn reset hoàn toàn: `docker compose down -v` (xóa cả volume DB).
-- Không mở cổng ra ngoài máy local.
+- Record the exact version used in the spike report.
+- Full reset: `docker compose down -v` (also deletes the DB volume).
+- Do not expose the port outside the local machine.
