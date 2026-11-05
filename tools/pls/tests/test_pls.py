@@ -143,8 +143,11 @@ class PlsTest(unittest.TestCase):
         diffs, text = pls.drift_report(self.r, ENVS["envs"]["stg"], "stg", "a", json.loads(edited.read_text()), None)
         self.assertIn("Reverting this drift would be: data-impacting", text)
         self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2"]), 1)
-        self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2",
-                                   "--accept-drift", "ops/drift/decision.md"]), 0)
+        # planning over the accepted drift would remove the customer's choice → data-impacting → migration required
+        args = ["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2", "--accept-drift", "ops/drift/decision.md"]
+        self.assertEqual(pls.main(args), 1)
+        self._migration("mig")
+        self.assertEqual(pls.main(args + ["--migration", "mig"]), 0)
 
     def _ledger(self, slots):
         (self.r / "design").mkdir(exist_ok=True)
@@ -265,6 +268,77 @@ class PlsTest(unittest.TestCase):
         # drift baseline for each site is that site's payload in the multi-site release
         self.assertEqual(pls.main(["drift", str(lives["b"]), "--env", "stg", "--site", "b"]), 0)
         self.assertEqual(pls.main(["drift", str(lives["a"]), "--env", "stg", "--site", "a"]), 0)
+
+    def _migration(self, name, files=("migration.json", "backup", "dry-run.md")):
+        d = self.r / name
+        d.mkdir(exist_ok=True)
+        if "migration.json" in files:
+            (d / "migration.json").write_text(json.dumps({"site": "a", "keys": ["ClassA"], "rollback": "bulkupsert backup/"}), encoding="utf-8")
+        if "backup" in files:
+            (d / "backup").mkdir(exist_ok=True)
+            (d / "backup/records.json").write_text("[]", encoding="utf-8")
+        if "dry-run.md" in files:
+            (d / "dry-run.md").write_text("dry run ok", encoding="utf-8")
+        return d
+
+    def test_migration_problems(self):
+        self.assertTrue(pls.migration_problems(self.r, None))
+        self._migration("m1", files=("migration.json",))
+        probs = pls.migration_problems(self.r, "m1")
+        self.assertTrue(any("backup" in p for p in probs) and any("dry-run" in p for p in probs))
+        self._migration("m2")
+        self.assertEqual(pls.migration_problems(self.r, "m2"), [])
+
+    # ---------------------------------------------------------- permissions (C3, D15)
+
+    def _with_perms(self, ex, inherit, entries):
+        ex["Response"]["Data"].update(InheritPermission=inherit, Permissions=entries)
+        return ex
+
+    def test_permissions_unpack_refs_pack_resolves_and_lint(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"admins": "Group,2"}
+        envs["envs"]["stg"]["principals"] = {"admins": "Group,7"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        exp = self.r / "dev.json"
+        exp.write_text(json.dumps(self._with_perms(export(101, 102, "http://dev.internal"), 101, ["Group,2,511", "User,99,1"])), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"]), 0)
+        perms = json.loads((self.r / "config/a/permissions.json").read_text(encoding="utf-8"))
+        self.assertEqual(perms["inherit"], "${site:a}")
+        self.assertIn("${principal:admins},511", perms["entries"])
+        self.assertTrue(any(i["rule"] == "L-PERM-01" and "User,99" in i["msg"] for i in pls.lint(self.r)))
+        # unmapped principal cannot be packed for another environment
+        with self.assertRaises(pls.Fail):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        perms["entries"] = ["${principal:admins},511"]
+        (self.r / "config/a/permissions.json").write_text(json.dumps(perms), encoding="utf-8")
+        p = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        self.assertEqual((p["InheritPermission"], p["Permissions"]), (201, ["Group,7,511"]))
+
+    def test_permissions_not_managed_means_not_compared_and_not_sent(self):
+        self.unpack_dev()                                  # export without permission keys → no permissions.json
+        self.assertFalse((self.r / "config/a/permissions.json").exists())
+        p = pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")
+        self.assertNotIn("Permissions", p)                 # omitted → live permissions untouched (D15)
+        live = self.r / "stg-perm.json"
+        live.write_text(json.dumps(self._with_perms(export(201, 202, "http://stg.internal"), 201, ["User,1,511"])), encoding="utf-8")
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        self.assertEqual(pls.main(["plan", str(live), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
+        self.assertEqual(json.loads((self.r / "releases/R1/plan.json").read_text(encoding="utf-8"))["classification"]["classification"], "config-only")
+
+    def test_permission_change_is_permission_impacting(self):
+        envs = json.loads(json.dumps(ENVS))
+        for k, v in (("dev", "Group,2"), ("stg", "Group,7")):
+            envs["envs"][k]["principals"] = {"admins": v}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        exp = self.r / "dev.json"
+        exp.write_text(json.dumps(self._with_perms(export(101, 102, "http://dev.internal"), 101, ["Group,2,511"])), encoding="utf-8")
+        pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"])
+        live = self.r / "stg-perm.json"
+        live.write_text(json.dumps(self._with_perms(export(201, 202, "http://stg.internal"), 201, ["Group,7,31"])), encoding="utf-8")
+        diffs = pls.flat_diff(pls.same_meta(pls.logical(json.loads(live.read_text()), envs["envs"]["stg"]), pls.read_tree(self.r / "config/a")),
+                              pls.read_tree(self.r / "config/a"))
+        self.assertEqual(pls.classify(diffs)["classification"], "permission-impacting")
 
     def test_last_applied_release_compares_instants_not_strings(self):
         # Escaped in slice 1.5: R-01 applied_at "…T09:19:30+09:00" (00:19 UTC) sorted after

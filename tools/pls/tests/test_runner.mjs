@@ -65,3 +65,16 @@ test('refuses when a payload or rollback file is missing', async () => {
   const r = await runner.applyRelease(plan, {...files, 'rollback-b.json': undefined});
   assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
 });
+
+test('backupRecords pages through every record', async () => {
+  const records = Array.from({length: 5}, (_, i) => ({ResultId: i + 1}));
+  const calls = [];
+  const fetch = async (path, opts) => {
+    const b = JSON.parse(opts.body); calls.push(b.Offset);
+    return {status: 200, text: async () => JSON.stringify({Response: {TotalCount: 5, Data: records.slice(b.Offset, b.Offset + b.PageSize)}})};
+  };
+  const ctx = {fetch, console}; vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  const r = await ctx.plsRunner.backupRecords(9, 2);
+  assert.equal(r.count, 5); assert.deepEqual(calls, [0, 2, 4]);
+});

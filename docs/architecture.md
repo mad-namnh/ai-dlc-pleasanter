@@ -62,8 +62,9 @@ v0.1 uses JSON for machine-read files (stdlib only). Reference implementation: t
 │     ├─ site.json                # SiteSettings without scripts, IDs replaced by logical references
 │     ├─ server-scripts/*.js
 │     ├─ scripts/*.js  styles/*.css
-│     └─ meta.yaml                # logical name, reference type, parent, zone
-├─ environments.json              # dev/stg/prod: base URL, role, logical name → SiteId map, ${env:} values
+│     ├─ meta.yaml                # logical name, reference type, parent, zone
+│     └─ permissions.json         # optional (ADR-0006): inherit + entries with ${principal:x}
+├─ environments.json              # dev/stg/prod: base URL, role, logical name → SiteId map, ${env:} values, principals
 ├─ secrets.catalog.json           # secret NAMES per environment, owner — no values (I7)
 ├─ tests/
 │  ├─ api/                        # behaviour tests through the Pleasanter API
@@ -243,6 +244,8 @@ One file, `traceability.json`, links the chain in both directions:
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
+| L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
+| P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
 
 ### 7.3 AI assets (framework templates, installed into project repos)
 
@@ -274,8 +277,8 @@ Usage of AI per project and phase (tokens, time, number of human corrections) is
 | P1 Requirements | 🟡 | Skill `pls-p1-requirements-analyst` v0.1 + eval case 001 |
 | P2 Design | 🟡 | Skill `pls-p2-solution-designer` v0.1 + knowledge base `pls-kb-pleasanter` + eval case 001 |
 | P3 Build | 🟡 | `pls unpack/pack` with logical references; canonicalise-via-dev step proven |
-| P4 Verify | 🟡 | `pls lint` (6 rules), `pls coverage`, browser test runner (create / exec process / UI button / config checks) |
-| P5 Release | 🟡 | `pls plan` (complete payload, rollback, classification), pre-apply drift re-check, business diff report |
+| P4 Verify | 🟡 | `pls lint` (L-SEC/REF/SCR/SLOT/LAD/CAN/PERM), `pls coverage`, browser test runner (create / exec process / UI button / config checks); effective permission tests per role not yet (TD-11) |
+| P5 Release | 🟡 | `pls plan` / `release-plan` (complete payload, drift + slot checks, multi-site order, rollback, classification, migration gate), runner `applyRelease` (preflight, automatic restore), `backupRecords` / `bulkUpsert`, business diff report |
 | P6 Operate | 🟡 | `pls drift` against the last applied release; revert classification |
 
 ## 9. Next step

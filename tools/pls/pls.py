@@ -7,7 +7,7 @@ talks to Pleasanter itself, so it can never write to an environment (invariant I
 
 Project layout used (see docs/architecture.md §3.2; v0.1 uses JSON, stdlib only):
   environments.json     envs → role, site ids/titles per logical name, env values
-  config/<site>/        unpacked desired state: site.json, meta.json, server-scripts/
+  config/<site>/        unpacked desired state: site.json, meta.json, server-scripts/, permissions.json (opt-in, ADR-0006)
   design/slot-ledger.json, traceability.json, tests/results/*.json, releases/R-*/
 
 Commands:
@@ -22,10 +22,10 @@ Commands:
   classify <export.json> --env E --site S       config-only / data-impacting / permission-impacting
   slots    <export.json> --env E --site S       column-slot check: live target vs git vs slot ledger (A2); also run by plan
   coverage                                      requirements ↔ config ↔ passing tests
-  plan     <export.json> --env E --site S --release R [--accept-drift DECISION]
+  plan     <export.json> --env E --site S --release R [--accept-drift DECISION] [--migration DIR]
                                                 deploy plan with complete payload + rollback; refuses on drift
                                                 and on column-slot collisions
-  release-plan --env E --release R --export S=F [--export S2=F2 …] [--accept-drift DECISION]
+  release-plan --env E --release R --export S=F [--export S2=F2 …] [--accept-drift DECISION] [--migration DIR]
                                                 multi-site plan (A3): every per-site check, then order by dependency
                                                 (${site:x} references, referenced sites first), snapshot + rollback per
                                                 site, reverse-order rollback; nothing is written if any site fails
@@ -51,7 +51,7 @@ SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId"
 META_FIELDS = ["ReferenceType", "Body", "SiteName", "SiteGroupName"]
 SCRIPT_KINDS = {"ServerScripts": ("server-scripts", ".js"), "Scripts": ("scripts", ".js"), "Styles": ("styles", ".css"),
                 "Htmls": ("htmls", ".html")}
-REF_RE = re.compile(r"\$\{(site|env):([A-Za-z0-9_\-]+)\}")
+REF_RE = re.compile(r"\$\{(site|env|principal):([A-Za-z0-9_\-]+)\}")
 SECRET_RES = {
     "anthropic-key": re.compile(r"sk-ant-[A-Za-z0-9_\-]{10,}"),
     "aws-access-key": re.compile(r"AKIA[0-9A-Z]{16}"),
@@ -142,6 +142,11 @@ def from_refs(obj: Any, e: dict, key: str = "") -> Any:
                 if name not in e["sites"]:
                     raise Fail(f"unresolved reference ${{site:{name}}}")
                 return str(e["sites"][name]["id"])
+            if kind == "principal":
+                val = (e.get("principals") or {}).get(name)
+                if val is None:
+                    raise Fail(f"unresolved reference ${{principal:{name}}} — add it to environments.json principals")
+                return val
             val = (e.get("values") or {}).get(name)
             if val is None:
                 raise Fail(f"unresolved reference ${{env:{name}}}")
@@ -201,7 +206,26 @@ def logical(export: Any, e: dict) -> dict:
         "settings": ss,
         "scripts": scripts,
     }
-    return to_refs(model, ids, vals)
+    model = to_refs(model, ids, vals)
+    if "Permissions" in d or "InheritPermission" in d:
+        model["permissions"] = perms_to_refs(d, e)
+    return model
+
+
+def perms_to_refs(d: dict, e: dict) -> dict:
+    """Site permissions (InheritPermission + "Type,Id,Value" entries) with environment-specific IDs replaced:
+    sites → ${site:x}, principals → ${principal:x} via environments.json "principals" ({"name": "Group,2"}).
+    Unmapped IDs stay raw and are reported by lint L-PERM-01."""
+    ids, _ = id_maps(e)
+    rev = {v: k for k, v in (e.get("principals") or {}).items()}
+    inh = d.get("InheritPermission")
+    inherit = "${site:%s}" % ids[str(inh)] if str(inh) in ids else inh
+    entries = []
+    for x in d.get("Permissions") or []:
+        typ, pid, val = (str(x).split(",") + ["", "", ""])[:3]
+        key = f"{typ},{pid}"
+        entries.append("${principal:%s},%s" % (rev[key], val) if key in rev else str(x))
+    return {"inherit": inherit, "entries": sorted(entries)}
 
 
 def write_tree(model: dict, out: Path) -> None:
@@ -211,6 +235,8 @@ def write_tree(model: dict, out: Path) -> None:
                 f.write_text("", encoding="utf-8")  # truncate; stale files reported by lint
     wj(out / "meta.json", model["meta"])
     wj(out / "site.json", model["settings"])
+    if model.get("permissions") is not None:
+        wj(out / "permissions.json", model["permissions"])
     for kind, (folder, ext) in SCRIPT_KINDS.items():
         items = model["scripts"].get(kind) or []
         if not items:
@@ -238,10 +264,18 @@ def read_tree(d: Path) -> dict:
                 it["Body"] = (d / folder / f).read_text(encoding="utf-8")
                 items.append(it)
         scripts[kind] = items
-    return {"meta": rj(d / "meta.json"), "settings": rj(d / "site.json"), "scripts": scripts}
+    pf = d / "permissions.json"
+    perms = rj(pf) if pf.exists() and pf.read_text(encoding="utf-8").strip() else None
+    model = {"meta": rj(d / "meta.json"), "settings": rj(d / "site.json"), "scripts": scripts}
+    if perms is not None:
+        model["permissions"] = perms
+    return model
 
 
 def payload(model: dict, e: dict, site: str) -> dict:
+    raw = [x for x in ((model.get("permissions") or {}).get("entries") or []) if not str(x).startswith("${principal:")]
+    if raw:
+        raise Fail(f"{site}: permissions use environment-specific principal ids {raw} (L-PERM-01) — map them in environments.json principals")
     m = from_refs(copy.deepcopy(model), e)
     ss = m["settings"]
     for kind, items in m["scripts"].items():
@@ -249,6 +283,13 @@ def payload(model: dict, e: dict, site: str) -> dict:
             ss[kind] = items
     p = {"Title": e["sites"][site].get("title", site), "ReferenceType": m["meta"].get("ReferenceType"),
          "Body": m["meta"].get("Body", ""), "SiteSettings": ss}
+    if m.get("permissions") is not None:
+        # Permission keys are optional in updatesite: omitted → live permissions untouched (D15, probe 2026-11-05).
+        inh = m["permissions"].get("inherit")
+        if not str(inh).isdigit():
+            raise Fail(f"{site}: permissions.inherit '{inh}' is not resolvable in this environment")
+        p["InheritPermission"] = int(inh)
+        p["Permissions"] = list(m["permissions"].get("entries") or [])
     return p
 
 
@@ -323,7 +364,7 @@ def classify(diffs: list[dict]) -> dict:
                 cfg.append(p)
         elif re.match(r"settings\.Columns\[\w+\]\.(Formula|DefaultInput)", p):
             data.append(f"{p}: formula/default changed")
-        elif "Permission" in p or "AccessControl" in p:
+        elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
         else:
             cfg.append(p)
@@ -358,6 +399,13 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
+        perms = m.get("permissions")
+        if perms is not None:
+            if not str(perms.get("inherit", "")).startswith("${site:"):
+                issues.append({"rule": "L-PERM-01", "site": site, "msg": f"permissions.inherit '{perms.get('inherit')}' is an environment-specific id; map the site in environments.json"})
+            for x in perms.get("entries") or []:
+                if not str(x).startswith("${principal:"):
+                    issues.append({"rule": "L-PERM-01", "site": site, "msg": f"permission entry '{x}' uses an environment-specific principal id; map it in environments.json principals"})
         if canonicalize(m["settings"]) != m["settings"]:
             issues.append({"rule": "L-CAN-01", "site": site, "msg": "configuration is not in canonical form; run `pls canon` (D8)"})
         if ledger is not None:
@@ -474,7 +522,10 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
 
 def same_meta(live: dict, base: dict) -> dict:
     """Release payloads carry only ReferenceType/Body; compare meta on the keys the baseline has."""
-    return dict(live, meta={k: v for k, v in live["meta"].items() if k in base["meta"]})
+    out = dict(live, meta={k: v for k, v in live["meta"].items() if k in base["meta"]})
+    if base.get("permissions") is None:
+        out.pop("permissions", None)   # permissions not managed in git for this site (opt-in)
+    return out
 
 
 def drift_report(r: Path, e: dict, env: str, site: str, export: Any, explicit: str | None) -> tuple[list[dict], str]:
@@ -518,6 +569,28 @@ def order_sites(deps: dict) -> tuple[list, list]:
 
 
 SEVERITY = ["config-only", "permission-impacting", "data-impacting"]
+MIGRATION_FILES = ("migration.json", "backup", "dry-run.md")
+
+
+def migration_problems(r: Path, mig: str | None) -> list[str]:
+    """Data-impacting gate (ADR-0004): a migration folder with the conversion (migration.json: site, keys,
+    bulkupsert data or mapping), the backup of the affected records taken before (folder `backup/`,
+    exported with the runner's backupRecords) and the log of a dry run on a copy (dry-run.md)."""
+    if not mig:
+        return ["data-impacting change without --migration DIR (ADR-0004)"]
+    d = (r / mig) if not Path(mig).is_absolute() else Path(mig)
+    out = [f"{mig}/{f} is missing" for f in MIGRATION_FILES if not (d / f).exists()]
+    if (d / "backup").is_dir() and not any((d / "backup").iterdir()):
+        out.append(f"{mig}/backup/ is empty")
+    if (d / "migration.json").exists():
+        try:
+            m = rj(d / "migration.json")
+            for k in ("site", "keys", "rollback"):
+                if k not in m:
+                    out.append(f"{mig}/migration.json lacks '{k}'")
+        except json.JSONDecodeError as ex:
+            out.append(f"{mig}/migration.json is not JSON: {ex}")
+    return out
 
 
 def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None) -> tuple[bool, list, dict]:
@@ -542,7 +615,7 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
     if missing:
         return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
-    diffs = flat_diff(live, git)
+    diffs = flat_diff(same_meta(live, git), git)
     snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
     return True, msgs, {
         "site_id": e["sites"][site]["id"], "changes": len(diffs), "classification": classify(diffs),
@@ -556,7 +629,7 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     }
 
 
-def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None) -> int:
+def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None) -> int:
     e = env_conf(r, env)
     if e.get("role") == "prod":
         print("note: production plans are executed by the customer-side runner (ADR-0003)")
@@ -575,6 +648,16 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     order, cyc = order_sites({s: res["deps"] for s, res in results.items()})
     rel = r / "releases" / release
     worst = max((res["classification"]["classification"] for res in results.values()), key=SEVERITY.index)
+    if worst == "data-impacting":
+        probs = migration_problems(r, migration)
+        if probs:
+            for s_, res in results.items():
+                for x in res["classification"]["data_impacting"]:
+                    print(f"DATA {s_}: {x}")
+            for x in probs:
+                print(f"MIGRATION {x}")
+            print("release plan REFUSED: data-impacting change needs a migration (ADR-0004); no files written")
+            return 1
     per_site = {}
     for s in order:
         res = results[s]
@@ -592,6 +675,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                      for s in reversed(order)],
         "on_failure": "stop; restore every site already touched (including the failing one) from its rollback payload, in reverse order",
         "preflight": "every site's UpdatedTime must equal expect_updated_time, otherwise nothing is applied",
+        "migration": migration if worst == "data-impacting" else None,
     }
     wj(rel / "plan.json", plan)
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
@@ -614,6 +698,7 @@ def main(argv=None) -> int:
         if c == "plan":
             s.add_argument("--release", required=True)
             s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
+            s.add_argument("--migration", help="migration folder required for data-impacting changes (ADR-0004)")
     s = sp.add_parser("pack")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -625,6 +710,7 @@ def main(argv=None) -> int:
     s.add_argument("--release", required=True)
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
+    s.add_argument("--migration", help="migration folder required for data-impacting changes (ADR-0004)")
     s = sp.add_parser("mark-applied")
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
@@ -644,7 +730,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "release-plan":
         exports = dict(x.split("=", 1) for x in a.export)
-        return release_plan(r, a.env, a.release, exports, a.accept_drift)
+        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration)
 
     if a.cmd == "mark-applied" and (rj(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release
@@ -719,7 +805,7 @@ def main(argv=None) -> int:
     e = env_conf(r, a.env)
     live = logical(rj(Path(a.export)), e)
     git = read_tree(r / "config" / a.site)
-    diffs = flat_diff(live, git)
+    diffs = flat_diff(same_meta(live, git), git)
 
     if a.cmd == "diff":
         print(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live vs git"))
@@ -765,6 +851,16 @@ def main(argv=None) -> int:
                 print(f"SLOT {c['kind']:15} {c['msg']}")
             print("plan REFUSED: column-slot check failed (A2, ADR-0002). Resolve in the ledger / git first.")
             return 1
+        cls = classify(diffs)
+        if cls["classification"] == "data-impacting":
+            probs = migration_problems(r, a.migration)
+            if probs:
+                for x in cls["data_impacting"]:
+                    print(f"DATA {x}")
+                for x in probs:
+                    print(f"MIGRATION {x}")
+                print("plan REFUSED: data-impacting change needs a migration (ADR-0004)")
+                return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
         missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
@@ -775,7 +871,8 @@ def main(argv=None) -> int:
             "status": "planned",
             "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
             "checks": {"L-DEP-01_complete_payload": not missing, "keys_missing_from_payload": missing,
-                       "drift_vs_last_release": drift_note, "slot_collisions": "clean"},
+                       "drift_vs_last_release": drift_note, "slot_collisions": "clean",
+                       "migration": a.migration if cls["classification"] == "data-impacting" else None},
             "classification": classify(diffs),
             "steps": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "payload.json"}],
             "rollback": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "rollback.json"}],

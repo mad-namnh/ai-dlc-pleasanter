@@ -21,6 +21,15 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 | Read | `/api/items/{recordId}/get` | `Response.Data[0]` |
 | Update | `/api/items/{recordId}/update` | Add `"ProcessId": n` to execute a process (spelling in the manual table is `ProccessId`; `ProcessId` works on 1.5.2). Display condition is enforced → HTTP 400 `要求が不正です。` outside it (D10) |
 
+## Bulk, paging, principals (verified 2026-11-05)
+
+| Operation | Endpoint | Notes |
+|---|---|---|
+| Read records (paged) | `/api/items/{siteId}/get` with `Offset`, `PageSize`, `View` | Response has `Offset`, `PageSize`, `TotalCount`, `Data[]` |
+| Bulk upsert | `/api/items/{siteId}/bulkupsert` with `Keys: ["ClassX"]`, `Data: [...]` | Matched by keys → update; otherwise create (D13) |
+| Site permissions | `getsite` → `InheritPermission` (site id), `Permissions` (`["User,1,511", "Group,2,…", "Dept,3,…"]`); `updatesite` accepts both (D15) | 511 = all rights (bit flags) |
+| Principals | `/api/users/get`, `/api/groups/get`, `/api/depts/get` | IDs are per environment — map to logical names |
+
 ## Errors seen
 
 | HTTP | Body | Meaning |

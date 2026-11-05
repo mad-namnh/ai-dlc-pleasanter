@@ -9,6 +9,9 @@
 //                                                        automatic reverse-order restore on failure (A3)
 //   await plsRunner.rollbackRelease(plan, files, sites) → restore the given sites (default: all) in reverse order
 //   files = {"payload-<site>.json": {...}, "rollback-<site>.json": {...}} — content of the release folder
+//   await plsRunner.backupRecords(siteId)              → every record of a site (paged), for migration/backup/ (ADR-0004)
+//   await plsRunner.bulkUpsert(siteId, keys, data)     → /bulkupsert; records matched by `keys` are updated, others created
+//     API updates do not create record versions (Ver stays 1 — D14), so the backup is the only way back.
 var plsRunner = (() => {
   const call = async (path, body, method = 'POST') => {
     const r = await fetch(path, {method, headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
@@ -121,5 +124,23 @@ var plsRunner = (() => {
     return {status: 'applied-unverified', log: [...log, 'next: export every site and run `pls mark-applied <release> --export site=file …`']};
   };
 
-  return {exportSite, apply, runTests, applyRelease, rollbackRelease};
+  const backupRecords = async (siteId, pageSize = 200) => {
+    const all = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const r = await call(`/api/items/${siteId}/get`, {Offset: offset, PageSize: pageSize, View: {ColumnSorterHash: {ResultId: 'asc'}}});
+      if (r.http !== 200 || !r.json) throw new Error(`get ${siteId} offset ${offset}: HTTP ${r.http}`);
+      const page = r.json.Response.Data || [];
+      all.push(...page);
+      const total = r.json.Response.TotalCount;
+      if (page.length === 0 || (total != null && all.length >= total) || page.length < pageSize) break;
+    }
+    return {site_id: siteId, taken_at: new Date().toISOString(), count: all.length, records: all};
+  };
+
+  const bulkUpsert = async (siteId, keys, data) => {
+    const r = await call(`/api/items/${siteId}/bulkupsert`, {Keys: keys, Data: data});
+    return {http: r.http, message: r.json && r.json.Message};
+  };
+
+  return {exportSite, apply, runTests, applyRelease, rollbackRelease, backupRecords, bulkUpsert};
 })();

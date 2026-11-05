@@ -4,7 +4,7 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
 
 | Skill | Phase | Version | Status |
 |---|---|---|---|
-| `pls-kb-pleasanter` | all (knowledge base) | 0.2 | built from spike + slice #1 findings; slice-specific examples generalised |
+| `pls-kb-pleasanter` | all (knowledge base) | 0.3 | + D12–D15 (data behind removed definitions, bulkupsert, no record versions via API, permissions in updatesite), bulk/paging/principal API |
 | `pls-p1-requirements-analyst` | P1 | 0.2 | eval case 001 **passed** with a fresh agent (run 2, 2026-11-05) — `evals/results/` |
 | `pls-p2-solution-designer` | P2 | 0.2 | eval case 001 **passed** with a fresh agent (2026-11-05) — `evals/results/` |
 
