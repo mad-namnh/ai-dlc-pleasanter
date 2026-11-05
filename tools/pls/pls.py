@@ -464,7 +464,7 @@ def lint(r: Path) -> list[dict]:
                          "env": set(ec.get("values") or {})}[kind_]
                 if name_ not in known:
                     issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
-                                   f"({'principals' if kind_ == 'principal' else 'sites/managed_sites' if kind_ == 'site' else 'values'} in environments.json)"})
+                                   f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
         for name, rx in SECRET_RES.items():
             if rx.search(blob):
                 issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
@@ -1004,30 +1004,7 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     return problems
 
 
-def apply_roles(target: Path, roles_file: Path) -> list[str]:
-    """roles.json → principals placeholders in environments.json, one key per role in connections.example.json
-    and design/roles.json (the roles P2 may use, decision B2). Returns the roles."""
-    roles = rj(roles_file)["roles"]
-    (target / "design").mkdir(parents=True, exist_ok=True)
-    wj(target / "design" / "roles.json", rj(roles_file))
-    ev = rj(target / "environments.json")
-    for env in ev["envs"].values():
-        env["principals"] = {n: f"{r_['principal']},<{'user' if r_['principal'] == 'User' else 'group'} id of {r_.get('group_name') or n}>"
-                             for n, r_ in roles.items()}
-    wj(target / "environments.json", ev)
-    cx = target / "connections.example.json"
-    c = rj(cx)
-    for env_name, conn in c.items():
-        if env_name.startswith("_"):
-            continue
-        conn["keys"] = {n: f"env:{r_['key_env'].replace('DEV', env_name.upper())}" for n, r_ in roles.items() if r_.get("key_env")}
-        conn["default_key"] = next((n for n, r_ in roles.items() if r_.get("default_key")), next(iter(conn["keys"]), "admin"))
-    wj(cx, c)
-    return list(roles)
-
-
-def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK,
-                 roles: Path | None = None) -> None:
+def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK) -> None:
     if target.exists() and any(target.iterdir()):
         raise Fail(f"{target} exists and is not empty - pls init only creates new projects")
     tpl = fw / "templates" / "project"
@@ -1051,8 +1028,6 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
-    if roles:
-        apply_roles(target, roles)
     sync_skills(target, fw)
 
 
@@ -1073,7 +1048,7 @@ def _lookup(client, path: str, column: str, value: str, id_field: str) -> int | 
     return int(hits[0][id_field]) if st == 200 and len(hits) == 1 else None
 
 
-def setup_profile(name: str, roles_file: Path | None, ask=input, ask_secret=None) -> dict:
+def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
     """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers."""
     import getpass
     import pls_http as H
@@ -1081,8 +1056,6 @@ def setup_profile(name: str, roles_file: Path | None, ask=input, ask_secret=None
     d = profile_dir()
     pf = d / f"{name}.json"
     old = rj(pf) if pf.exists() else {}
-    roles = rj(roles_file)["roles"] if roles_file else (old.get("roles") or
-                                                        {"admin": {"principal": "User", "key_env": "PLS_DEV_ADMIN_KEY", "default_key": True}})
 
     def q(prompt, default=None):
         v = ask(f"{prompt}" + (f" [{default}]" if default else "") + ": ").strip()
@@ -1109,24 +1082,13 @@ def setup_profile(name: str, roles_file: Path | None, ask=input, ask_secret=None
     if st != 200 or not js or js["Response"]["Data"].get("ReferenceType") != "Sites":
         raise Fail(f"folder {parent}: HTTP {st} - check the URL, the key and that the id is a folder")
     print(f"ok: folder {parent} '{js['Response']['Data'].get('Title')}' readable with your key")
-    principals = dict(old.get("principals") or {})
-    for role, spec in roles.items():
-        if spec.get("principal") == "User":
-            login = q(f"Your login id (role '{role}')", old.get("login"))
-            uid = _lookup(client, "/api/users/get", "LoginId", login, "UserId") if login else None
-            old["login"] = login
-            if uid is None:
-                uid = int(q(f"User id of '{login}' (not found automatically)", principals.get(role, "User,").split(",")[1] or None))
-            principals[role] = f"User,{uid}"
-        else:
-            gname = spec.get("group_name") or role
-            gid = _lookup(client, "/api/groups/get", "GroupName", gname, "GroupId")
-            if gid is None:
-                gid = int(q(f"Group id of '{gname}' (not found automatically - create the group first)",
-                            principals.get(role, "Group,").split(",")[1] or None))
-            principals[role] = f"Group,{gid}"
-        print(f"ok: {role} = {principals[role]}")
-    prof = {"url": url, "parent_id": parent, "login": old.get("login"), "principals": principals, "roles": roles,
+    login = q("Your login id", old.get("login"))
+    uid = _lookup(client, "/api/users/get", "LoginId", login, "UserId") if login else None
+    if uid is None:
+        uid = int(q(f"Your user id (login '{login}' not found automatically)", str(old.get("user_id") or "") or None))
+    print(f"ok: you = User,{uid} (principal 'admin')")
+    principals = {"admin": f"User,{uid}"}
+    prof = {"url": url, "parent_id": parent, "login": login, "user_id": uid, "principals": principals,
             "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": True,
             "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
     wj(pf, prof)
@@ -1140,9 +1102,39 @@ def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
     e["parent_id"] = prof["parent_id"]
     e["principals"] = dict(prof["principals"])
     wj(target / "environments.json", ev)
-    wj(target / "design" / "roles.json", {"roles": prof["roles"]})
     wj(target / ".pls" / "connections.json", {env: {"url": prof["url"], "keys": prof["keys"], "default_key": prof["default_key"],
                                                     "allow_write": prof.get("allow_write", True)}})
+
+
+def bind_principals(r: Path, env: str, client) -> list[str]:
+    """design/roles.json (written by P2, permission design) → envs.<env>.principals, ids looked up by name.
+    Returns the groups/users that do not exist yet (the person creates them in Pleasanter)."""
+    rf = r / "design" / "roles.json"
+    if not rf.exists():
+        raise Fail("design/roles.json not found - the roles come from the permission design in P2")
+    roles = rj(rf).get("roles") or {}
+    ev = rj(r / "environments.json")
+    e = ev["envs"][env]
+    pr = e.setdefault("principals", {})
+    missing = []
+    for role, spec in roles.items():
+        if pr.get(role) and "<" not in str(pr[role]):
+            print(f"{role}: {pr[role]} (already bound)")
+            continue
+        if spec.get("principal") == "User":
+            uid = _lookup(client, "/api/users/get", "LoginId", spec.get("login", ""), "UserId")
+            found, what = (f"User,{uid}" if uid else None), f"user with login '{spec.get('login')}'"
+        else:
+            gid = _lookup(client, "/api/groups/get", "GroupName", spec.get("group_name") or role, "GroupId")
+            found, what = (f"Group,{gid}" if gid else None), f"group '{spec.get('group_name') or role}'"
+        if found:
+            pr[role] = found
+            print(f"{role}: {found} ({what})")
+        else:
+            missing.append(what)
+            print(f"{role}: MISSING - create the {what} in Pleasanter, then run pls principals again")
+    wj(r / "environments.json", ev)
+    return missing
 
 
 def _git_first_commit(target: Path) -> str:
@@ -1409,17 +1401,17 @@ def main(argv=None) -> int:
     s.add_argument("--stage", choices=["demo", "project"], default="demo")
     s.add_argument("--target", choices=["dev", "stg", "prod"], default="dev", help="release target of the project")
     s.add_argument("--approver", help="name of the person who approves the gates (demo stage)")
-    s.add_argument("--roles", help="roles.json (e.g. demo/roles.json): principals placeholders + one key per role")
     s.add_argument("--profile", help="machine profile from `pls setup` (default: 'dev' if it exists)")
     s.add_argument("--no-git", action="store_true", help="do not run git init / first commit")
     s = sp.add_parser("setup", help="one-time: connect this machine to a Pleasanter environment (profile for every pls init)")
     s.add_argument("--profile", default="dev")
-    s.add_argument("--roles", help="roles.json of the apps you will build (e.g. demo/roles.json)")
+    s = sp.add_parser("principals", help="bind the roles of design/roles.json to group/user ids of an environment (read-only lookup)")
+    s.add_argument("--env", required=True)
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     a = ap.parse_args(argv)
     if a.cmd == "setup":
-        setup_profile(a.profile, Path(a.roles).resolve() if a.roles else None)
+        setup_profile(a.profile)
         print("next: python <framework>/tools/pls/pls.py init <new project folder>")
         return 0
     if a.cmd == "init":
@@ -1428,7 +1420,7 @@ def main(argv=None) -> int:
         prof = rj(profile_dir() / f"{pname}.json") if pname else None
         if a.profile and not prof:
             raise Fail(f"profile '{a.profile}' not found - run pls setup --profile {a.profile}")
-        init_project(target, a.stage, a.target, a.approver, roles=Path(a.roles).resolve() if a.roles else None)
+        init_project(target, a.stage, a.target, a.approver)
         if prof:
             apply_profile(target, prof)
         msg = _git_first_commit(target) if not a.no_git else "git: skipped"
@@ -1448,6 +1440,16 @@ def main(argv=None) -> int:
         problems = skills_check(r)
         print("\n".join(problems) if problems else "skills match the lock and the framework")
         return 1 if problems else 0
+
+    if a.cmd == "principals":
+        import pls_http as H
+        try:
+            _, _, c = _client(r, a.env)
+            missing = bind_principals(r, a.env, c)
+        except H.TransportError as ex:
+            print(f"pls: {ex}", file=sys.stderr)
+            return 2
+        return 1 if missing else 0
 
     if a.cmd == "canon":
         p = r / "config" / a.site / "site.json"

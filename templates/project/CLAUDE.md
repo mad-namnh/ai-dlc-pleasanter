@@ -45,7 +45,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 | Path | Holds |
 |---|---|
 | `requirements/` | `sources/` (spec verbatim), `REQ-*.md`, `index.md` (status + questions) |
-| `design/` | `decisions/DES-*.md`, `probes/`, `slot-ledger.json` |
+| `design/` | `decisions/DES-*.md`, `probes/`, `slot-ledger.json`, `roles.json` (permission design: roles → groups) |
 | `config/<site>/` | desired configuration (unpacked): `site.json`, `meta.json`, scripts, `permissions.json` |
 | `environments.json` | environments: role, `parent_id`, site ids, principals |
 | `tests/api/` | test specs; `tests/results/` results |

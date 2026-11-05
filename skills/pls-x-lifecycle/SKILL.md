@@ -64,13 +64,14 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 - A new app also gets these outputs:
   - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
-  - roles only from `envs.<env>.principals`. Roles and their groups are prepared at setup; in the demo they come from `demo/roles.json`. Test users and keys exist only with role tests `per-role keys`. A design that needs a role not listed there is an open point for the person before G2. `pls lint` (L-REF-02) must show every `${principal:x}` and `${site:x}` defined.
+  - **permission design** (P2 step 1b): roles → groups → matrix, in `design/roles.json` and the DES. Nothing about groups exists before this step.
 - `traceability.json` gets REQ → design ids and the config paths that P3 will create (P2 skill, step 8).
 - **Stop at G2.**
 
 ### P3 Build (no gate)
 Skill: `pls-p3-config-builder`.
 
+0. **Principals (after G2).** Tell the person which groups from `design/roles.json` to create in Pleasanter, unless they already exist. Then run `pls principals --env dev`, which binds their ids by name and is read only. Exit 1 lists the groups still missing. `pls lint` must then show no L-REF-02. Test users and keys exist only with role tests `per-role keys`.
 1. **New sites only, once per environment:**
    1. `pls bootstrap-plan --env dev --release B-YYYYMMDD-dev`
    2. The person runs (or allows `--yes` for) `pls bootstrap B-YYYYMMDD-dev`. This creates the skeletons and writes their ids into `environments.json`.

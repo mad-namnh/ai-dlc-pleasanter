@@ -377,26 +377,28 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(pls.main(["http-check", "--env", "dev"]), 1)                     # 401 = bad key
 
 
-    def test_setup_once_then_init_needs_no_editing(self):                                  # D4 simplification
+    def test_setup_once_then_init_then_principals_after_design(self):                     # D4 + permission design in P2
         os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")
         try:
-            roles = self.r / "roles.json"
-            roles.write_text(json.dumps({"roles": {"admin": {"principal": "User", "default_key": True},
-                                                   "somu": {"principal": "Group", "group_name": "zz_demo_総務"},
-                                                   "staff": {"principal": "Group", "group_name": "zz_demo_社員"}}}, ensure_ascii=False), encoding="utf-8")
             answers = iter([self.url, f"{self.url}/items/{FOLDER}/index", "nam"])
-            prof = pls.setup_profile("dev", roles, ask=lambda *_: next(answers), ask_secret=lambda *_: "K-ADMIN")
+            prof = pls.setup_profile("dev", ask=lambda *_: next(answers), ask_secret=lambda *_: "K-ADMIN")
             self.assertEqual(prof["parent_id"], FOLDER)
-            self.assertEqual(prof["principals"], {"admin": "User,7", "somu": "Group,374", "staff": "Group,375"})  # exact name, not 総務2
-            pf = (self.r / "_profiles/dev.json").read_text(encoding="utf-8")
-            self.assertNotIn("K-ADMIN", pf)                                               # the key is never in the profile
+            self.assertEqual(prof["principals"], {"admin": "User,7"})
+            self.assertNotIn("K-ADMIN", (self.r / "_profiles/dev.json").read_text(encoding="utf-8"))   # key never in the profile
             proj = self.r / "app"
             self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam", "--no-git"]), 0)
             os.chdir(proj)
             self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)
             self.assertEqual(pls.lint(proj), [])
+            # P2 permission design writes design/roles.json; after G2 the groups are bound by name
+            (proj / "design/roles.json").write_text(json.dumps({"roles": {
+                "somu": {"principal": "Group", "group_name": "zz_demo_総務"},
+                "staff": {"principal": "Group", "group_name": "zz_demo_社員"},
+                "audit": {"principal": "Group", "group_name": "zz_demo_監査"}}}, ensure_ascii=False), encoding="utf-8")
+            self.assertEqual(pls.main(["principals", "--env", "dev"]), 1)                   # 監査 does not exist yet
             ev = json.loads((proj / "environments.json").read_text(encoding="utf-8"))
-            self.assertEqual(ev["envs"]["dev"]["principals"]["somu"], "Group,374")
+            self.assertEqual(ev["envs"]["dev"]["principals"],
+                             {"admin": "User,7", "somu": "Group,374", "staff": "Group,375"})   # exact name, not 総務2
         finally:
             os.environ.pop("PLS_PROFILE_DIR", None)
 
