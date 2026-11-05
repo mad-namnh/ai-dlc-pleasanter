@@ -30,6 +30,18 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 | Site permissions | `getsite` → `InheritPermission` (site id), `Permissions` (`["User,1,511", "Group,2,…", "Dept,3,…"]`); `updatesite` accepts both (D15) | 511 = all rights (bit flags) |
 | Principals | `/api/users/get`, `/api/groups/get`, `/api/depts/get` | IDs are per environment — map to logical names |
 
+## Version of the installed Pleasanter (probe 2026-11-05, MADLAB dev 1.5.2, read-only)
+
+| Source | Result |
+|---|---|
+| API responses (`getsite`) | No application version. `ApiVersion` (1.1) is the request protocol echoed back; `Ver` is the record version of the site |
+| `/api/versions` | HTTP 404 |
+| `/versions` (page) | Exists; redirects to `/users/login?ReturnUrl=%2Fversions` without a logged-in session, so an API key cannot read it |
+| `/users/login` (no login) | Links `assets/css/style.min.css?v=<token>` (`201520` on 1.5.2). The token follows the installed build; its mapping to a version number is **not verified** — use it only to detect a change |
+| `SiteSettings.Version` in an export | Settings schema version (`1.017` on 1.5.2), not the application version |
+
+`pls version` uses this: build token and schema detected, the application version recorded by a person from `/versions` (ADR-0009).
+
 ## Errors seen
 
 | HTTP | Body | Meaning |

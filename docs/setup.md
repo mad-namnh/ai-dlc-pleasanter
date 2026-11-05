@@ -60,6 +60,8 @@ python pls.py http-check --env dev
 
 **Demo stage:** role tests are deferred. The agent works with your key only, and proves the restrictions of the other roles in the configuration. Testing as each role, with a test user and key for each, comes in a later phase (TD-11).
 
+**Pleasanter version (ADR-0009).** Run `python pls.py version --env dev` once. It detects the build and the settings schema by itself. The application version is only shown to a logged-in user, so open `<url>/versions` in your browser and record what it says: `python pls.py version --env dev --app 1.5.2.0`. When the server is upgraded, `http-check` warns that the build changed; run `version` again.
+
 **Mail and scheduled jobs (ADR-0010).** Notifications and reminders send mail when tests change records on dev. `environments.json` therefore says what each environment does with mail and jobs: `"side_effects": {"mail": "unknown", "jobs": "unknown"}`. While mail is `unknown`, `pls test` refuses tests that change records on a site with notifications or reminders, and `pls apply` refuses a release that adds or changes them. Ask whoever runs the Pleasanter server whether SMTP is configured, then set the value yourself:
 
 | `mail` | Meaning |

@@ -1,6 +1,6 @@
 # ADR-0009: Pleasanter version detection and executable KB verification
 
-- **Status:** Proposed (2026-11-05)
+- **Status:** Proposed (2026-11-05) — part 1 (version label) implemented on branch `brownfield-adr` (plan BR2)
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** I5, I9; KB `pls-kb-pleasanter` (every entry says "1.5.2"); D8 (canonicalisation); ADR-0001; plan Step 4c
@@ -19,7 +19,7 @@ A version difference can silently break a design that relies on a KB entry (e.g.
 
 ## Open questions
 
-- [ ] Does Pleasanter 1.5.x expose the application version over the API, or only on a page (login page, footer, "about")? — *probe on dev*; record the answer in KB `api.md`.
+- [x] Does Pleasanter 1.5.x expose the application version over the API, or only on a page? — **Probed 2026-11-05 (1.5.2):** not in API responses; `/api/versions` 404; the page `/versions` needs a logged-in session; the login page shows a build token (`style.min.css?v=201520`) whose mapping to a version is unknown. KB `api.md` "Version".
 - [ ] Which versions do the customer's dev, stg and prod run today? — answered by the tool once it exists.
 - [ ] Does `SiteSettings.Version` change together with the application version, or only with schema changes? — *probe after the next dev upgrade*.
 - [ ] Can the customer's dev hold a probe folder for `kb-verify` (write access, `allow_write`)? — *customer / project lead*.
@@ -48,6 +48,15 @@ A version difference can silently break a design that relies on a KB entry (e.g.
 4. **Skills** (P2, P3, P4) treat an entry not verified on the target version as an assumption: design the branch that is safe if it is wrong, or carry it as an open point (existing P2 rule).
 5. **`release-plan`** compares the target's version label with the dev version the release was tested on. If they differ, it lists the KB entries the release relies on that are not verified on the target version; the P5 diff report must show that list at G4.
 6. **Canonical defaults** (`canonical-defaults.json`) are keyed by schema version, so `canon` and drift do not report false differences across versions.
+
+### Implementation notes (BR2, 2026-11-05)
+
+- The probe changed point 1 of the decision: no source readable with an API key gives the application version. `pls version --env <e>` therefore **detects** the build token (login page, no credentials) and the settings schema (`SiteSettings.Version` of a managed site), and stores the **application version recorded by a person** from `/versions` (`--app`). The label is kept only while the build token was **read and is unchanged** and the schema is unchanged; otherwise it is reset to `unknown`, so a stale label cannot survive an upgrade (also when the token disappears from the page, e.g. behind a proxy or SSO). Exit code 1 while the label is unknown, the token is missing or the schema could not be read. The schema is read from the first site the key can read (then `parent_id`).
+- `http-check` shows the recorded version, warns when the build token changed, and says *build NOT verified* when the page is unreachable or has no token (5 s timeout, only when a version is recorded; informational, never fails the check).
+- `release-plan` writes `version_check` (target vs `dev`, where releases are tested) into `plan.json` and prints `VERSION …` lines; never a refusal (the person decides at G4).
+- Not built: a reader of `/versions` through the browser runner (session) — possible later if typing the label proves error-prone. Points 2–6 (KB `verified_on`, `kb-verify`, canonical defaults per schema) are plan BR8.
+- `tools/pls/pls_version.py`, 10 tests in `tests/test_version.py`. An independent code review found eight gaps (stale label kept when the token is missing — high; schema change not resetting the label; http-check silent when nothing was verified; exceptions other than `OSError`; …); all fixed and tested. First real run on MADLAB dev: build `201520`, schema `1.017`, app label pending.
+- Open: does `SiteSettings.Version` differ between sites of one installation (lazy migration)? If so, the reported schema depends on which site is read first — probe after the next upgrade.
 
 ## Consequences
 

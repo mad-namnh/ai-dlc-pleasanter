@@ -27,6 +27,8 @@ Before doing anything, establish the state from the repository. Do not rely on m
 
 Also read the **Project profile** in `CLAUDE.md`: stage, release target and approvers. If it is missing, ask for it once.
 
+`pls http-check --env <e>` prints the recorded Pleasanter version. If it says *not recorded* or *build changed*, run `pls version --env <e>`; when it reports the application version as unknown, ask the person to read it on `<url>/versions` (logged in) and record it with `--app`. Never guess the version (ADR-0009).
+
 Tell the user in two or three lines where the project stands and what comes next, then continue.
 
 ## 2. Rules that hold in every phase

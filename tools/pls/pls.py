@@ -51,6 +51,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
+import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -831,7 +832,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         "on_failure": "stop; restore every site already touched (including the failing one) from its rollback payload, in reverse order",
         "preflight": "every site's UpdatedTime must equal expect_updated_time, otherwise nothing is applied",
         "migration": migration if worst == "data-impacting" else None,
+        "version_check": version_check(r, env),
     }
+    for x in plan["version_check"]["differences"]:
+        print(f"VERSION {x}")
     wj(rel / "plan.json", plan)
     if any(per_site[s]["side_effects"] for s in order) and e.get("role") != "prod":
         eff = SE.effects(e)
@@ -840,6 +844,21 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
           + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
     return 0
+
+
+def version_check(r: Path, env: str, tested_env: str = "dev") -> dict:
+    """Version of the target vs the environment releases are tested on (ADR-0009). Shown at G4, never a refusal."""
+    all_envs = envs(r)["envs"]
+    target, tested = all_envs.get(env, {}).get("pleasanter"), all_envs.get(tested_env, {}).get("pleasanter")
+    if env != tested_env:
+        diffs = PV.compare(target, tested, env, tested_env)
+    elif not target:
+        diffs = [f"version of {env} not recorded — run `pls version --env {env}` (ADR-0009)"]
+    elif target.get("app") in (None, PV.UNKNOWN):
+        diffs = [f"application version not known for {env} — record it with `pls version --env {env} --app …` (ADR-0009)"]
+    else:
+        diffs = []
+    return {"target": target, "tested_on": {tested_env: tested}, "differences": diffs}
 
 
 # ---------------------------------------------------------------- new sites (ADR-0007)
@@ -1228,6 +1247,23 @@ def http_cmd(r: Path, a) -> int:
             except ValueError as ex:
                 bad += 1
                 print(f"{a.env}: {ex} (ADR-0010)")
+            rec = e.get("pleasanter") or {}
+            build = None
+            if rec:
+                try:
+                    build = PV.build_token(PV.fetch_login_page(conn["url"], timeout=5))
+                except PV.PageError:
+                    build = None
+            if not rec:
+                print(f"pleasanter: version not recorded — run `pls version --env {a.env}` (ADR-0009)")
+            elif not build:
+                print(f"pleasanter: recorded app {rec.get('app')}, build {rec.get('build')} — build NOT verified "
+                      "(login page unreachable or token not found)")
+            elif rec.get("build") and build != rec["build"]:
+                print(f"pleasanter: WARNING build changed {rec['build']} → {build} since {rec.get('checked')} — "
+                      f"run `pls version --env {a.env}` and record the new version (ADR-0009)")
+            else:
+                print(f"pleasanter: app {rec.get('app')}, build {rec.get('build')}, schema {rec.get('schema')} (checked {rec.get('checked')})")
             return 1 if bad else 0
 
         if a.cmd == "export":
@@ -1363,6 +1399,33 @@ def http_cmd(r: Path, a) -> int:
             print(f"results: {out}")
             return 0 if all(t["status"] in ("pass", "pass-api-only") for t in res["tests"]) else 1
 
+        if a.cmd == "version":
+            env_conf(r, a.env)                               # unknown env → clear error, not a traceback
+            ev = rj(r / "environments.json")
+            e = ev["envs"][a.env]
+            conn = H.load_connection(r, a.env)
+            try:
+                build = PV.build_token(PV.fetch_login_page(conn["url"]))
+            except PV.PageError as ex:
+                raise H.TransportError(f"{a.env}: login page not readable ({ex})")
+            client = H.Client(conn["url"], H.resolve_key(conn, None))
+            schema = None
+            for sid in [v["id"] for v in (e.get("sites") or {}).values() if v.get("id")] + [e.get("parent_id")]:
+                if not sid:
+                    continue
+                try:                                         # first site this key can read
+                    schema = PV.schema_version(client.export_site(sid)["Response"]["Data"])
+                    break
+                except H.TransportError:
+                    continue
+            new, msgs = PV.update_record(e.get("pleasanter"), build, schema, a.app, datetime.now().astimezone().date().isoformat())
+            e["pleasanter"] = new
+            wj(r / "environments.json", ev)
+            print(f"{a.env}: app {new['app']}, build {new['build']}, schema {new['schema']}")
+            for m in msgs:
+                print(f"  {m}")
+            return 1 if new["app"] == PV.UNKNOWN or not build or schema is None else 0
+
         if a.cmd == "backup":
             e = env_conf(r, a.env)
             _, _, c = _client(r, a.env)
@@ -1431,6 +1494,9 @@ def main(argv=None) -> int:
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
     s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s = sp.add_parser("version", help="record the Pleasanter version of an environment (build and schema detected; app label from /versions)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--app", help="application version read on <url>/versions by a logged-in person, e.g. 1.5.2.0")
     s = sp.add_parser("backup", help="every record of a site → migrations/<dir>/backup/ (ADR-0004)")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -1504,7 +1570,7 @@ def main(argv=None) -> int:
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
 
-    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup"):
+    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version"):
         return http_cmd(r, a)
 
     if a.cmd == "bootstrap-plan":
