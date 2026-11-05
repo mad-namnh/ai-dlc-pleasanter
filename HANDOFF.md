@@ -1,4 +1,4 @@
-# Handoff — state as of 2026-11-05 (evening, after slice #2) JST
+# Handoff — state as of 2026-11-05 14:45 JST (after slice #3 and ADR-0008)
 
 > Next session may run on another Claude account: everything needed is in the two repositories; nothing lives only in the chat.
 
@@ -50,6 +50,14 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 - Customer questions (Q1–Q24, O7), the prod environment and the real groups (O3) are **prod-stage items**. They are deferred and do not block anything. Keep using the `[assumed]` defaults.
 - The test principals (10061, 372, 373) stay as they are.
 - Mail stays deferred (TD-10).
+
+## Start of the next session
+
+1. Check that both repos are committed (`git status` in `ai-dlc-pleasanter`, `pls-demo-equipment`, `pls-demo-inquiry`); the last changes of 2026-11-05 14:40 (pls HTTP fixes, staff spec) may still be uncommitted.
+2. Optional: Nam re-runs `pls test tests/api/equipment.json --env dev --site loans` from `pls-demo-equipment` (HTTP transport) — expected all pass / pass-api-only.
+3. Then continue with step 4 below (architecture gaps) or step 5 (architecture.md v0.3). Multi-user HTTP role tests are deferred (demo stage).
+
+Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6 node tests. The agent sandbox cannot reach Pleasanter over HTTP (proxy 403); agents use the built-in browser runner, people use `pls` over HTTP.
 
 ## Next steps (in order)
 

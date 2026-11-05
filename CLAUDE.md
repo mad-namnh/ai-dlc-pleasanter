@@ -7,6 +7,7 @@ Current phase: **architecture v0.1 adopted; next is vertical slice #1 through P1
 ## Mandatory
 
 1. **Write only to dev environments.** Write operations (create/update) may run only when the target is localhost, or an environment declared with `role: "dev"` **and** `allow_write: true` in `config.json`. Never set `role: "dev"` on a customer stg/production environment. Do not modify or loosen `assert_writable` in `scripts/common.py`. Agents must not add `--yes` unless the user asks for it.
+   - `pls` HTTP transport (ADR-0008): writes need environments.json `role: "dev"` or `"stg"` **and** `allow_write: true` in the operator's local `.pls/connections.json`; `role: "prod"` is never written. Do not modify or loosen `assert_writable` in `tools/pls/pls_http.py`, and never write keys into any file other than the operator's own key files under `.pls/`. Agents never ask for keys in chat.
 2. **Never hold production API keys.** Exports from customer environments are run by the customer's operator or an authorized person. Agents work only on exported files.
 3. **Never commit customer data.** Everything under `spike/round-trip/data/` is gitignored. Do not copy customer configuration, site names, person names or internal URLs into any other file in the repo. Spike reports must be sanitized.
 4. **Never commit secrets.** `.env`, API keys, webhook URLs and tokens stay out of git. Plain-text secrets inside Pleasanter configuration are a blocking defect (ADR-0005).
