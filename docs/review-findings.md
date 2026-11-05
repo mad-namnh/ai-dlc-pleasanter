@@ -42,3 +42,4 @@ Each item is a backlog entry. Update *Status* and *Addressed in* as work progres
 | D17 | Info | `EditorReadOnly` does not protect a column from API writes | Treat as UI convenience | KB | Addressed |
 | D18 | Info | `bulkupsert`: partial update keeps other columns; duplicate key → HTTP 400, nothing changed (PR-3) | Uniqueness check before migrations | KB, ADR-0004 | Addressed |
 | D19 | Info | Permission value 1 = read-only incl. inherited child sites and attachment download; writes and process execution → 403 (PR-1/PR-2, test user on dev) | Read-only roles use 1 | KB, DES-003 | Addressed |
+| D20 | High | Read-only users still see process buttons unless the process has access control (`Groups`/`Users`/`Depts` ID lists); those IDs are environment-specific (slice #2 T-015, PR-4) | Map them to `${principal:x}`; restrict actions that roles must not see | `pls` acl mapping, L-PERM-01, KB | Addressed |

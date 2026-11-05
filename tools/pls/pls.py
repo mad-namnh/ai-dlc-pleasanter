@@ -207,9 +207,43 @@ def logical(export: Any, e: dict) -> dict:
         "scripts": scripts,
     }
     model = to_refs(model, ids, vals)
+    acl_to_refs(model["settings"], e)
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
     return model
+
+
+ACL_KEYS = (("Groups", "Group"), ("Users", "User"), ("Depts", "Dept"))
+
+
+def acl_to_refs(settings: dict, e: dict) -> None:
+    """Process access control (1.5.2, PR-4): Processes[].Groups/Users/Depts are lists of principal IDs.
+    Replace them with ${principal:x} (environments.json principals); unmapped IDs stay raw (L-PERM-01)."""
+    rev = {v: k for k, v in (e.get("principals") or {}).items()}
+    for proc in settings.get("Processes") or []:
+        for key, typ in ACL_KEYS:
+            if key in proc:
+                proc[key] = ["${principal:%s}" % rev[f"{typ},{i}"] if f"{typ},{i}" in rev else i for i in proc[key]]
+
+
+def acl_from_refs(settings: dict, e: dict, site: str) -> None:
+    for proc in settings.get("Processes") or []:
+        for key, typ in ACL_KEYS:
+            if key not in proc:
+                continue
+            out = []
+            for x in proc[key]:
+                m = REF_RE.fullmatch(str(x))
+                if not m or m.group(1) != "principal":
+                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} uses an environment-specific id {x} (L-PERM-01)")
+                val = (e.get("principals") or {}).get(m.group(2))
+                if val is None:
+                    raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
+                vtyp, vid = val.split(",")[:2]
+                if vtyp != typ:
+                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
+                out.append(int(vid))
+            proc[key] = out
 
 
 def perms_to_refs(d: dict, e: dict) -> dict:
@@ -276,7 +310,9 @@ def payload(model: dict, e: dict, site: str) -> dict:
     raw = [x for x in ((model.get("permissions") or {}).get("entries") or []) if not str(x).startswith("${principal:")]
     if raw:
         raise Fail(f"{site}: permissions use environment-specific principal ids {raw} (L-PERM-01) — map them in environments.json principals")
-    m = from_refs(copy.deepcopy(model), e)
+    m0 = copy.deepcopy(model)
+    acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
+    m = from_refs(m0, e)
     ss = m["settings"]
     for kind, items in m["scripts"].items():
         if items:
@@ -402,6 +438,11 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
+        for proc in m["settings"].get("Processes") or []:
+            for key, _ in ACL_KEYS:
+                for x in proc.get(key) or []:
+                    if not str(x).startswith("${principal:"):
+                        issues.append({"rule": "L-PERM-01", "site": site, "msg": f"process '{proc.get('Name')}' {key} uses an environment-specific id {x}; map it in environments.json principals"})
         perms = m.get("permissions")
         if perms is not None:
             if not str(perms.get("inherit", "")).startswith("${site:"):

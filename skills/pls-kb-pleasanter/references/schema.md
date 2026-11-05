@@ -31,7 +31,8 @@ Editor layout: `EditorColumnHash.General` (ordered list). Grid: `GridColumns`. F
 | `View.ColumnFilterHash` | **display condition**, e.g. `{"Status": "[\"100\",\"200\"]", "ClassE": "[\"高\"]"}` |
 | `DataChanges[]` | `{Id, Type, ColumnName, Value?, BaseDateTime?, …}` |
 | `Notifications[]` | `{Id, Type (1 = mail), Address ("[Manager]"), Subject, Body}` — placeholders like `[ClassA]` |
-| `ValidateInputs[]`, `AccessControl`, `AutoNumbering*` | exist; not yet exercised |
+| `Groups[]`, `Users[]`, `Depts[]` | process access control — principal IDs (D20); `pls` stores `${principal:x}` |
+| `ValidateInputs[]`, `AutoNumbering*` | exist; not yet exercised |
 
 `DataChanges[].Type`: `CopyValue`, `CopyDisplayValue`, `InputValue`, `InputValueFormula`, `InputDate`, `InputDateTime`, `InputDept`, `InputUser`.
 `BaseDateTime`: `CurrentDate`, `CurrentTime`, `UpdatedTime`, or a column name.

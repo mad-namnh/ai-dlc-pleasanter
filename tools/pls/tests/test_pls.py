@@ -343,6 +343,31 @@ class PlsTest(unittest.TestCase):
                               pls.read_tree(self.r / "config/a"))
         self.assertEqual(pls.classify(diffs)["classification"], "permission-impacting")
 
+    def test_process_access_control_refs(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"support": "Group,373"}
+        envs["envs"]["stg"]["principals"] = {"support": "Group,9"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        ex = export(101, 102, "http://dev.internal")
+        ex["Response"]["Data"]["SiteSettings"]["Processes"] = [{"Id": 1, "Name": "escalate", "Groups": [373], "Users": [5]}]
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        proc = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))["Processes"][0]
+        self.assertEqual(proc["Groups"], ["${principal:support}"])
+        self.assertEqual(proc["Users"], [5])                                   # unmapped → raw → lint + pack refuses
+        self.assertTrue(any(i["rule"] == "L-PERM-01" and "Users" in i["msg"] for i in pls.lint(self.r)))
+        with self.assertRaises(pls.Fail):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        del site["Processes"][0]["Users"]
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        self.assertEqual(pl["SiteSettings"]["Processes"][0]["Groups"], [9])   # resolved per environment
+        envs["envs"]["stg"]["principals"]["support"] = "User,9"                  # wrong principal type
+        with self.assertRaises(pls.Fail):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+
     def test_last_applied_release_compares_instants_not_strings(self):
         # Escaped in slice 1.5: R-01 applied_at "…T09:19:30+09:00" (00:19 UTC) sorted after
         # R-02 "…T01:48:06+00:00" as strings, so drift kept using the older release as baseline.
