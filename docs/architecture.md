@@ -307,6 +307,9 @@ Naming: `pls-<phase>-<role>` (`p1`…`p6`, `kb`, `x`) — see `CLAUDE.md`.
 | `pls-p5-release-manager` (built 0.1 as a skill) | skill | P5 |
 | `pls-p6-ops-watcher` | agent | P6 |
 | `pls-x-lifecycle` (+ project `CLAUDE.md` template) | skill (orchestration: phase order, gate stops, commands, token rules) | all |
+| `pls-x-onboarding`, `pls-x-spec-recovery` (brownfield, branch `brownfield-adr`) | skills (take over an existing app read only; as-is specification) | before P1 |
+| `pls-p3-script-engineer` (brownfield) | skill (editing legacy scripts) | P3 |
+| `pls-p6-maintenance-triage` (brownfield) | skill (inquiries/incidents → cause and route) | P6 |
 | `pls-kb-pleasanter` | knowledge base (Pleasanter behaviour: D7–D10, S7) | all |
 | Hooks: env write guard, secret guard, post-edit lint | hooks | P3–P5 |
 | Evals: sample requirements with expected designs/configs | evals | all |

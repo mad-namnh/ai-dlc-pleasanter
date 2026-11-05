@@ -137,8 +137,11 @@ For prod, the release is run by the customer side (ADR-0003); you prepare the pa
 ### P6 Operate (no gate)
 - After a release, `pls drift` on the released environment should show 0 differences. Record the baseline in `ops/drift/YYYY-MM-DD-<env>-baseline.md`.
 - Later drift is explained and classified (`pls classify`), and accept or revert is asked. An accepted change goes back to P1 as a change request.
+- An inquiry or incident (問い合わせ／障害) on the running app: skill `pls-p6-maintenance-triage` (facts, drift, version, env-compare, xref → cause and route; no fix).
 
 ## 4. Change requests to an existing app
+
+**Taking over an app built without this framework:** skill `pls-x-onboarding` (read only: versions, mail/jobs, adopt, env-compare, scope, principals, scripts — one decision per finding), then `pls-x-spec-recovery` for the as-is 画面設計書 of each site. Only then the first P1. A change that touches scripts is built with `pls-p3-script-engineer` next to `pls-p3-config-builder`.
 
 A site that exists in Pleasanter but not yet in the project is first adopted, read only: `pls adopt --env <e> --site <id> --name <logical>`. It writes `config/<name>/`, customer-zone slot-ledger entries, an adoption record (the drift baseline) and `ops/adopt/<date>-<env>-<name>.md`. Go through that report with the person before P1: components without round-trip evidence, unmanaged site references, unmapped principals, server scripts without a design decision.
 
