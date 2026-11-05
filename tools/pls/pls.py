@@ -583,7 +583,7 @@ def migration_problems(r: Path, mig: str | None) -> list[str]:
         return ["data-impacting change without --migration DIR (ADR-0004)"]
     d = (r / mig) if not Path(mig).is_absolute() else Path(mig)
     out = [f"{mig}/{f} is missing" for f in MIGRATION_FILES if not (d / f).exists()]
-    if (d / "backup").is_dir() and not any((d / "backup").iterdir()):
+    if (d / "backup").is_dir() and not any(f for f in (d / "backup").iterdir() if not f.name.startswith(".")):
         out.append(f"{mig}/backup/ is empty")
     if (d / "migration.json").exists():
         try:

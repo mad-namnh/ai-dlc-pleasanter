@@ -288,6 +288,9 @@ class PlsTest(unittest.TestCase):
         self.assertTrue(any("backup" in p for p in probs) and any("dry-run" in p for p in probs))
         self._migration("m2")
         self.assertEqual(pls.migration_problems(self.r, "m2"), [])
+        (self.r / "m2/backup/records.json").unlink()
+        (self.r / "m2/backup/.keep").write_text("", encoding="utf-8")       # a placeholder is not a backup
+        self.assertTrue(any("empty" in p for p in pls.migration_problems(self.r, "m2")))
 
     # ---------------------------------------------------------- permissions (C3, D15)
 
