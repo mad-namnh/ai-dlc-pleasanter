@@ -1,5 +1,5 @@
 {
-  "_doc": "Roles of the demo app (decision B2: prepared before the demo). `pls init --roles demo/roles.json` writes one principal placeholder and one key per role; fill in the ids in environments.json and set the key variables (docs/setup.md). P2 may use only these roles.",
+  "_doc": "Roles of the demo app (decision B2: prepared before the demo). `pls init --roles demo/roles.json` writes one principal placeholder per role; fill in the ids in environments.json (docs/setup.md). P2 may use only these roles. Demo stage: role tests are deferred, so only `admin` (your own user) needs an API key; the two groups only need to exist so the app's permissions can be deployed. They need no members.",
   "roles": {
     "admin": {
       "principal": "User",
@@ -10,16 +10,12 @@
     "somu": {
       "principal": "Group",
       "group_name": "zz_demo_総務",
-      "description": "総務部: registers equipment and loans, marks loans as returned.",
-      "test_user": "zz_demo_somu",
-      "key_env": "PLS_DEV_SOMU_KEY"
+      "description": "総務部: registers equipment and loans, marks loans as returned."
     },
     "staff": {
       "principal": "Group",
       "group_name": "zz_demo_社員",
-      "description": "一般社員: may only view the equipment register.",
-      "test_user": "zz_demo_staff",
-      "key_env": "PLS_DEV_STAFF_KEY"
+      "description": "一般社員: may only view the equipment register."
     }
   }
 }

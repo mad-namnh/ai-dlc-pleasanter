@@ -64,7 +64,7 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 - A new app also gets these outputs:
   - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
-  - roles only from `envs.<env>.principals`. Roles, groups, users and keys are prepared at setup; in the demo they come from `demo/roles.json`. A design that needs a role not listed there is an open point for the person before G2. `pls lint` (L-REF-02) must show every `${principal:x}` and `${site:x}` defined.
+  - roles only from `envs.<env>.principals`. Roles and their groups are prepared at setup; in the demo they come from `demo/roles.json`. Test users and keys exist only with role tests `per-role keys`. A design that needs a role not listed there is an open point for the person before G2. `pls lint` (L-REF-02) must show every `${principal:x}` and `${site:x}` defined.
 - `traceability.json` gets REQ → design ids and the config paths that P3 will create (P2 skill, step 8).
 - **Stop at G2.**
 
@@ -99,7 +99,7 @@ Skill: `pls-p3-config-builder`.
 ### P4 Verify → G3
 Skill: `pls-p4-test-writer`.
 
-- Write `tests/api/*.json` from the acceptance criteria. Each restricted role gets tests run with that role's key (`as_key`).
+- Write `tests/api/*.json` from the acceptance criteria. Restricted roles are tested as the project profile's **Role tests** says: with each role's key (`as_key`), or, when `deferred`, by config checks.
 - Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so `pls test` needs `allow_write: true`; run them only on dev (and stg smoke tests after G4).
 - On failure, find the cause before changing anything:
   - **build defect** → back to P3, then redeploy;

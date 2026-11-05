@@ -129,3 +129,4 @@ Metrics:
 | 2026-11-05 | Stage = test/demo to shape architecture, design and process; customer questions, prod environment, real groups and mail deferred to the prod stage |
 | 2026-11-05 | Feature work paused; demo readiness first (review `docs/reviews/demo-readiness.md`, plan Step 4b D1–D7) |
 | 2026-11-05 | Architecture review after D3: GO with conditions. Decisions: B1 P5 on dev = record only; B2 roles prepared before the demo; B3 skeletons in the KB (D3b) |
+| 2026-11-05 | Demo: one API key (the operator's); role tests deferred (project profile `Role tests: deferred`), restrictions verified in the configuration; per-role test users and keys in a later phase (TD-11) |

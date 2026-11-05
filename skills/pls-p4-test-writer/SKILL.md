@@ -5,7 +5,9 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
 
 # pls-p4-test-writer
 
-**Goal:** every in-scope acceptance criterion is proven on dev by a passing test, or explicitly marked as manual. Every restricted role is tested with that role's own key.
+**Goal:** every in-scope acceptance criterion is proven on dev by a passing test, or explicitly marked as manual. Restricted roles are proven as the project profile says (**Role tests**):
+- `per-role keys`: each restricted role is tested with its own key.
+- `deferred` (demo stage): only the operator's key exists. Role restrictions are proven in the configuration (permissions entries and process access control, checked with `siteConfig` and by the 0-difference round trip) and listed in G3 as "role test deferred".
 **Tests prove the requirement, not the configuration.** A test that passes because it was bent to the build is worse than a failing one.
 
 ## Inputs
@@ -13,7 +15,7 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
 - G1-approved `requirements/REQ-*.md` (acceptance criteria), `design/decisions/DES-*.md`, `traceability.json`.
 - dev deployed by P3 (round trip 0).
 - `references/test-spec.md` (this skill) — the spec format; `references/g3-template.md` — the evidence file.
-- `.pls/connections.json` keys: one per role the tests use (`pls http-check --env dev` lists them).
+- `.pls/connections.json` keys: `pls http-check --env dev` lists them. With role tests `deferred` there is one key.
 
 ## Procedure
 
@@ -26,7 +28,8 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
 2. **Write the specs** in `tests/api/<area>.json` (`references/test-spec.md`):
    - Positive path with exact expectations.
    - Negative path for every "shall not / only when / cannot" criterion: `expectHttp` with 400, 403, 404 or 500 per the KB (D10, D19, D20, D21).
-   - One spec file per role. `as_key` names the role key; fixtures are created in steps that run with an authorised key (step-level `as_key`).
+   - Role tests `per-role keys`: one spec file per role. `as_key` names the role key; fixtures are created in steps that run with an authorised key (step-level `as_key`).
+   - Role tests `deferred`: no `as_key` (default key). For each "cannot / only" criterion of a restricted role, write a `siteConfig` check of the setting that enforces it (e.g. `Processes.0.Groups`). Write the role test as a manual or deferred item.
    - Records are created by the test itself (`save` / `$var`); never depend on data already on dev.
    - Test record titles start with `テスト` so a person can find and remove them.
 3. **Run** `pls test tests/api/<spec>.json --env dev --site <default site> [--var k=v]`. Results go to `tests/results/<env>-<date>-<spec>-http.json`. Read the console summary only; for a failure, read that test's log lines.
@@ -46,7 +49,7 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
 ## Checklist before G3
 
 - [ ] Every acceptance criterion maps to a test or to a named manual check.
-- [ ] Every "cannot / only" criterion has a negative test, run as the role it restricts.
+- [ ] Every "cannot / only" criterion has a negative test run as the role it restricts (`per-role keys`), or a config check plus a "role test deferred" line (`deferred`).
 - [ ] No test depends on pre-existing records; no test was edited to pass without a reason.
 - [ ] All tests `pass` or `pass-api-only`. An `editPage` step needs a browser session and stays a manual check over HTTP.
 - [ ] `pls coverage` 100 %, `pls lint` 0 issues, dev round trip 0.

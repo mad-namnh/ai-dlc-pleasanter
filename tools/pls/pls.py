@@ -1046,6 +1046,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     text = re.sub(r"\| Release target \|.*\|", f"| Release target | `{release_target}` |", text, count=1)
     if approver:
         text = re.sub(r"\| Approvers \|.*\|", f"| Approvers | {approver} (all gates) |", text, count=1)
+    text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
     cm.write_text(text, encoding="utf-8")
     (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
     (target / ".claude").mkdir(exist_ok=True)
