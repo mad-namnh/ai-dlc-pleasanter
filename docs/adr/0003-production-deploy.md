@@ -45,3 +45,7 @@ Initial proposal: **C**. The deploy package is designed so that the runner in op
 - Every deploy sends the **complete** configuration and is preceded by a **mandatory drift check** (D4).
 - The AI working environment (MADLAB local/CI) has no route to the customer network — enforced at the network layer.
 - Audit log: who approved, who ran it, which version, when.
+
+## Note (2026-11-05)
+
+ADR-0008 gives `pls apply` an HTTP transport with operator-local connections and keys. Option A can run exactly that command inside the customer network; the agent never holds the keys (I3).

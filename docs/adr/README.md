@@ -9,5 +9,6 @@
 | [0005](0005-config-storage-and-secrets.md) | Configuration storage & secrets policy | Partially accepted (runtime secrets); storage deferred (TD-03) |
 | [0006](0006-site-permissions-in-git.md) | Site permissions in git (opt-in, logical principals) | Accepted (2026-11-05) |
 | [0007](0007-creating-new-sites.md) | Creating new sites: skeleton bootstrap, then the normal release | Proposed (2026-11-05) |
+| [0008](0008-http-transport.md) | HTTP transport with local connections (no browser in the loop) | Proposed (2026-11-05) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

@@ -46,6 +46,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
+
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
                  "ApiVersion", "Comments", "Permissions", "ClassHash", "NumHash", "DateHash", "DescriptionHash",
@@ -86,7 +88,7 @@ def root() -> Path:
 
 
 def rj(p: Path) -> Any:
-    return json.loads(p.read_text(encoding="utf-8"))
+    return json.loads(p.read_text(encoding="utf-8-sig"))   # tolerate a BOM (files edited on Windows)
 
 
 def wj(p: Path, obj: Any) -> None:
@@ -536,7 +538,7 @@ def coverage(r: Path) -> dict:
     for req, links in sorted(tr.items()):
         cfg = links.get("config", [])
         tests = links.get("tests", [])
-        passed = [t for t in tests if results.get(t) == "pass"]
+        passed = [t for t in tests if results.get(t) in ("pass", "pass-api-only")]   # api-only: UI check skipped (HTTP transport)
         missing_cfg = [c for c in cfg if not (r / c.split("#")[0]).exists()]
         good = bool(cfg) and not missing_cfg and bool(tests) and len(passed) == len(tests)
         ok &= good
@@ -835,6 +837,174 @@ def bind(r: Path, env: str, release: str, created: dict) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- HTTP transport commands (ADR-0008)
+
+def _client(r: Path, env: str, key: str | None = None):
+    import pls_http as H
+    conn = H.load_connection(r, env)
+    return H, conn, H.Client(conn["url"], H.resolve_key(conn, key))
+
+
+def _confirm(release: str, yes: bool, what: str) -> bool:
+    if yes:
+        return True
+    print(what)
+    try:
+        typed = input(f"type the release id to confirm ({release}): ").strip()
+    except EOFError:
+        typed = ""
+    if typed != release:
+        print("not confirmed — nothing written")
+        return False
+    return True
+
+
+def _stamp() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def http_cmd(r: Path, a) -> int:
+    import pls_http as H
+    try:
+        if a.cmd == "http-check":
+            e = env_conf(r, a.env)
+            conn = H.load_connection(r, a.env)
+            sid = next((v["id"] for v in e["sites"].values() if v.get("id")), None) or e.get("parent_id")
+            if not sid:
+                raise H.TransportError(f"{a.env}: no site id or parent_id to read")
+            bad = 0
+            seen: dict = {}
+            for k in sorted(conn.get("keys") or {}):
+                try:
+                    v = H.resolve_key(conn, k)
+                except H.TransportError:
+                    continue
+                if v in seen:
+                    bad += 1
+                    print(f"{a.env}: keys '{seen[v]}' and '{k}' are the SAME key — role tests would run with one user's rights")
+                seen.setdefault(v, k)
+            for k in (a.key or sorted(conn.get("keys") or {})):
+                try:
+                    c = H.Client(conn["url"], H.resolve_key(conn, k))
+                    st, js, _ = c.call(f"/api/items/{sid}/getsite")
+                    print(f"{a.env} key '{k}': getsite {sid} → HTTP {st}" + (f" ({js['Response']['Data'].get('Title')})" if st == 200 and js else ""))
+                except H.TransportError as ex:
+                    bad += 1
+                    print(f"{a.env} key '{k}': {ex}")
+            print(f"writes: {'allowed' if e.get('role') in H.WRITABLE_ROLES and conn.get('allow_write') is True else 'refused'} "
+                  f"(role {e.get('role')!r}, allow_write {conn.get('allow_write')!r})")
+            return 1 if bad else 0
+
+        if a.cmd == "export":
+            e = env_conf(r, a.env)
+            _, _, c = _client(r, a.env)
+            for site in a.site:
+                if not e["sites"].get(site, {}).get("id"):
+                    raise H.TransportError(f"site '{site}' has no id in {a.env}")
+                out = r / ".pls" / "exports" / f"{a.env}-{site}-{_stamp()}.json"
+                wj(out, c.export_site(e["sites"][site]["id"]))
+                print(f"{site}: {out.relative_to(r)}")
+            return 0
+
+        if a.cmd == "apply":
+            rel = r / "releases" / a.release
+            plan = rj(rel / "plan.json")
+            if not plan.get("sites"):
+                raise H.TransportError("single-site plans: use pls release-plan (multi-site format) for the HTTP transport")
+            e = env_conf(r, plan["env"])
+            H_, conn, c = _client(r, plan["env"])
+            H.assert_writable(e, conn, plan["env"])
+            if plan.get("status") != "planned":
+                raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+            files = {f.name: rj(f) for f in rel.glob("*.json") if f.name.startswith(("payload-", "rollback-"))}
+            if not _confirm(a.release, a.yes, f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
+                                             f"{plan.get('classification')}"):
+                return 1
+            res = H.apply_release(c, plan, files)
+            for line in res["log"]:
+                print(line)
+            wj(rel / "apply-log.json", {"transport": "http", "at": datetime.now().astimezone().isoformat(timespec="seconds"), **res})
+            if res["status"] != "applied-unverified":
+                print(f"{a.release}: {res['status']}")
+                return 1
+            exports = []
+            for site in plan["sites"]:
+                out = r / ".pls" / "exports" / f"{plan['env']}-{site}-after-{a.release}.json"
+                wj(out, c.export_site(plan["per_site"][site]["site_id"]))
+                exports += ["--export", f"{site}={out}"]
+            return main(["mark-applied", a.release, *exports])
+
+        if a.cmd == "bootstrap":
+            bp = r / "releases" / a.release / "bootstrap.json"
+            plan = rj(bp)
+            e = env_conf(r, plan["env"])
+            _, conn, c = _client(r, plan["env"])
+            H.assert_writable(e, conn, plan["env"])
+            if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
+                                             f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)"):
+                return 1
+            res = H.bootstrap(c, plan)
+            for line in res["log"]:
+                print(line)
+            if res["created"]:
+                bind(r, plan["env"], a.release, res["created"])
+            return 0 if res["status"] == "created" else 1
+
+        if a.cmd == "test":
+            e = env_conf(r, a.env)
+            conn = H.load_connection(r, a.env)
+            cache: dict = {}
+
+            def clients(role):
+                k = role or conn.get("default_key") or "admin"
+                if k not in cache:
+                    cache[k] = H.Client(conn["url"], H.resolve_key(conn, k))
+                return cache[k]
+            fixtures = dict(x.split("=", 1) for x in a.var)
+            specs = []
+            for f in a.specs:
+                for spec in from_refs(rj(Path(f)), e):
+                    if spec.get("vars") or fixtures:
+                        spec["vars"] = {**{k: v for k, v in (spec.get("vars") or {}).items() if not str(v).startswith("<")}, **fixtures}
+                    specs.append(spec)
+            # A role test run with another role's key is worse than useless: refusals it expects may succeed
+            # (slice #3: a 社員 test with the admin key deleted its fixture). Refuse before sending anything.
+            roles = {x for sp_ in specs for x in [sp_.get("as_key")] + [st.get("as_key") for st in sp_["steps"]] if x}
+            vals = {}
+            for role in sorted(roles | {conn.get("default_key") or "admin"}):
+                v = H.resolve_key(conn, role)
+                if v in vals:
+                    raise H.TransportError(f"keys '{vals[v]}' and '{role}' are the same key — use a key created by a user of each role")
+                vals[v] = role
+            sid = e["sites"][a.site]["id"]
+            res = H.run_tests(clients, sid, specs, a.env)
+            res["executed_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+            res["specs"] = [str(Path(f)) for f in a.specs]
+            for t in res["tests"]:
+                print(f"{t['status']:13} {t['id']:6} as {t['as']:8} {t.get('title') or ''}")
+                if t["status"] not in ("pass", "pass-api-only"):
+                    for line in t["log"]:
+                        print(f"      {line}")
+            name = "-".join(Path(f).stem for f in a.specs)
+            out = Path(a.out) if a.out else r / "tests" / "results" / f"{a.env}-{datetime.now():%Y%m%d}-{name}-http.json"
+            wj(out, res)
+            print(f"results: {out}")
+            return 0 if all(t["status"] in ("pass", "pass-api-only") for t in res["tests"]) else 1
+
+        if a.cmd == "backup":
+            e = env_conf(r, a.env)
+            _, _, c = _client(r, a.env)
+            b = c.backup_records(e["sites"][a.site]["id"])
+            out = Path(a.out) / f"{a.env}-{a.site}-{_stamp()}.json"
+            wj(out, b)
+            print(f"{b['count']} record(s) → {out}  (never commit backups, I7)")
+            return 0
+    except H.TransportError as ex:
+        print(f"pls: {ex}", file=sys.stderr)
+        return 2
+    return 2
+
+
 # ---------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
@@ -870,6 +1040,29 @@ def main(argv=None) -> int:
     s.add_argument("--env", required=True)
     s.add_argument("--release", required=True)
     s.add_argument("--created", action="append", required=True, metavar="SITE=ID", help="id returned by createsite")
+    # HTTP transport (ADR-0008) — talks to Pleasanter with keys from .pls/connections.json
+    s = sp.add_parser("http-check", help="check the connection and the key(s) of an environment")
+    s.add_argument("--env", required=True)
+    s.add_argument("--key", action="append", help="key name to check (default: every key of the connection)")
+    s = sp.add_parser("export", help="getsite → .pls/exports/<env>-<site>-<time>.json")
+    s.add_argument("--env", required=True)
+    s.add_argument("--site", action="append", required=True)
+    s = sp.add_parser("apply", help="apply a planned release over HTTP, then export and mark-applied")
+    s.add_argument("release")
+    s.add_argument("--yes", action="store_true", help="skip typing the release id (only when the person asks for it)")
+    s = sp.add_parser("bootstrap", help="create the sites of a bootstrap plan over HTTP, then bind (ADR-0007)")
+    s.add_argument("release")
+    s.add_argument("--yes", action="store_true")
+    s = sp.add_parser("test", help="run test specs over HTTP; each spec's as_key picks the role's key")
+    s.add_argument("specs", nargs="+")
+    s.add_argument("--env", required=True)
+    s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
+    s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
+    s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s = sp.add_parser("backup", help="every record of a site → migrations/<dir>/backup/ (ADR-0004)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--site", required=True)
+    s.add_argument("--out", required=True)
     s = sp.add_parser("mark-applied")
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
@@ -886,6 +1079,9 @@ def main(argv=None) -> int:
         wj(p, after)
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
+
+    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup"):
+        return http_cmd(r, a)
 
     if a.cmd == "bootstrap-plan":
         return bootstrap_plan(r, a.env, a.release)
