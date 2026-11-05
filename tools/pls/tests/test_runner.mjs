@@ -1,0 +1,67 @@
+// Tests for the browser runner's release logic with a fake Pleasanter (node --test tools/pls/tests/)
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+
+const src = readFileSync(new URL('../browser/pls-runner.js', import.meta.url), 'utf8');
+
+function fakePleasanter(sites, failOn = null) {
+  const calls = [];
+  const fetch = async (path, opts) => {
+    const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/);
+    calls.push(`${op} ${id}`);
+    const site = sites[id];
+    if (op === 'getsite') return {status: 200, text: async () => JSON.stringify({Response: {Data: site}})};
+    if (op === 'updatesite') {
+      if (failOn === Number(id)) return {status: 500, text: async () => '{"Message":"boom"}'};
+      const body = JSON.parse(opts.body);
+      Object.assign(site, {SiteSettings: body.SiteSettings, UpdatedTime: `${site.UpdatedTime}+`});
+      return {status: 200, text: async () => '{"Message":"ok"}'};
+    }
+    throw new Error(`unexpected ${path}`);
+  };
+  const ctx = {fetch, console};
+  vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  return {runner: ctx.plsRunner, calls};
+}
+
+const plan = {
+  steps: [{site: 'b', site_id: 202, payload_file: 'payload-b.json', expect_updated_time: 'tb'},
+          {site: 'a', site_id: 201, payload_file: 'payload-a.json', expect_updated_time: 'ta'}],
+  rollback: [{site: 'a', site_id: 201, payload_file: 'rollback-a.json'},
+             {site: 'b', site_id: 202, payload_file: 'rollback-b.json'}],
+};
+const pl = tag => ({Title: tag, ReferenceType: 'Results', SiteSettings: {tag}});
+const files = {'payload-a.json': pl('new-a'), 'payload-b.json': pl('new-b'), 'rollback-a.json': pl('old-a'), 'rollback-b.json': pl('old-b')};
+const sites = () => ({201: {UpdatedTime: 'ta', SiteSettings: {tag: 'old-a'}}, 202: {UpdatedTime: 'tb', SiteSettings: {tag: 'old-b'}}});
+
+test('applies in plan order', async () => {
+  const s = sites(); const {runner, calls} = fakePleasanter(s);
+  const r = await runner.applyRelease(plan, files);
+  assert.equal(r.status, 'applied-unverified');
+  assert.deepEqual(calls.filter(c => c.startsWith('updatesite')), ['updatesite 202', 'updatesite 201']);
+  assert.equal(s[201].SiteSettings.tag, 'new-a'); assert.equal(s[202].SiteSettings.tag, 'new-b');
+});
+
+test('failure on the second site restores both, in reverse order', async () => {
+  const s = sites(); const {runner, calls} = fakePleasanter(s, 201);
+  const r = await runner.applyRelease(plan, files);
+  assert.equal(r.status, 'rolled-back'); assert.equal(r.failed_site, 'a');
+  assert.deepEqual(calls.filter(c => c.startsWith('updatesite')), ['updatesite 202', 'updatesite 201', 'updatesite 201', 'updatesite 202']);
+  assert.equal(s[202].SiteSettings.tag, 'old-b');
+});
+
+test('preflight refuses when a target changed since the plan; nothing written', async () => {
+  const s = sites(); s[201].UpdatedTime = 'changed'; const {runner, calls} = fakePleasanter(s);
+  const r = await runner.applyRelease(plan, files);
+  assert.equal(r.status, 'refused');
+  assert.equal(calls.filter(c => c.startsWith('updatesite')).length, 0);
+});
+
+test('refuses when a payload or rollback file is missing', async () => {
+  const {runner, calls} = fakePleasanter(sites());
+  const r = await runner.applyRelease(plan, {...files, 'rollback-b.json': undefined});
+  assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
+});

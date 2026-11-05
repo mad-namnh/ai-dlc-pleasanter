@@ -201,6 +201,71 @@ class PlsTest(unittest.TestCase):
         self.unpack_dev()
         self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a", "--release", "R1"]), 1)
 
+    # ---------------------------------------------------------- multi-site release plan (A3)
+
+    def _two_sites(self):
+        """config/a references site b (Links + script); config/b references nothing."""
+        self.unpack_dev()
+        b = {"StatusCode": 200, "Response": {"Data": {"SiteId": 102, "Title": "dev_B", "ReferenceType": "Results", "Body": "",
+             "UpdatedTime": "t0", "SiteSettings": {"Version": 1.017, "Columns": [{"ColumnName": "ClassA", "LabelText": "Code"}]}}}}
+        p = self.r / "dev-b.json"
+        p.write_text(json.dumps(b), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(p), "--env", "dev", "--site", "b"]), 0)
+        (self.r / "design").mkdir(exist_ok=True)
+        (self.r / "design/slot-ledger.json").write_text(json.dumps({
+            "a": {"ClassA": {"label": "No", "status": "allocated"}, "ClassB": {"label": "", "status": "allocated"}},
+            "b": {"ClassA": {"label": "Code", "status": "allocated"}}}), encoding="utf-8")
+        sa = self.r / "stg-a.json"
+        sa.write_text(json.dumps(export(201, 202, "http://stg.internal")), encoding="utf-8")
+        bs = json.loads(json.dumps(b)); bs["Response"]["Data"].update(SiteId=202, Title="stg_B", UpdatedTime="t-stg-b")
+        sb = self.r / "stg-b.json"
+        sb.write_text(json.dumps(bs), encoding="utf-8")
+        return sa, sb
+
+    def test_order_sites_and_cycles(self):
+        self.assertEqual(pls.order_sites({"a": {"b"}, "b": set(), "c": {"a"}}), (["b", "a", "c"], []))
+        self.assertEqual(pls.order_sites({"a": {"b"}, "b": {"a"}, "c": set()}), (["c", "a", "b"], ["a", "b"]))
+
+    def test_release_plan_orders_by_dependency_and_reverses_rollback(self):
+        sa, sb = self._two_sites()
+        self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]), 0)
+        rel = self.r / "releases/R1"
+        plan = json.loads((rel / "plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["sites"], ["b", "a"])                      # a references b → b first
+        self.assertEqual([x["site"] for x in plan["rollback"]], ["a", "b"])
+        self.assertEqual(plan["per_site"]["a"]["depends_on"], ["b"])
+        self.assertEqual(plan["per_site"]["b"]["snapshot_updated_time"], "t-stg-b")
+        for f in ("payload-a.json", "payload-b.json", "rollback-a.json", "rollback-b.json", "raw-diff-a.md", "raw-diff-b.md"):
+            self.assertTrue((rel / f).exists(), f)
+        pa = json.loads((rel / "payload-a.json").read_text(encoding="utf-8"))
+        self.assertIn("202", json.dumps(pa))                              # ${site:b} resolved to stg id
+        self.assertNotIn("${site:", json.dumps(pa))
+
+    def test_release_plan_writes_nothing_if_one_site_fails(self):
+        sa, sb = self._two_sites()
+        bad = json.loads(sb.read_text(encoding="utf-8"))
+        bad["Response"]["Data"]["SiteSettings"]["Columns"].append({"ColumnName": "NumZ", "LabelText": "customer"})
+        sb.write_text(json.dumps(bad), encoding="utf-8")
+        self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]), 1)
+        self.assertFalse((self.r / "releases/R1").exists())
+
+    def test_release_plan_mark_applied_and_drift_per_site(self):
+        sa, sb = self._two_sites()
+        self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]), 0)
+        rel = self.r / "releases/R1"
+        lives = {}
+        for site, sid in (("a", 201), ("b", 202)):
+            pl = json.loads((rel / f"payload-{site}.json").read_text(encoding="utf-8"))
+            p = self.r / f"live-{site}.json"
+            p.write_text(json.dumps({"Response": {"Data": dict(pl, SiteId=sid)}}), encoding="utf-8")
+            lives[site] = p
+        self.assertEqual(pls.main(["mark-applied", "R1", "--export", f"a={lives['a']}"]), 1)   # every site required
+        self.assertEqual(pls.main(["mark-applied", "R1", "--export", f"a={lives['a']}", "--export", f"b={lives['b']}"]), 0)
+        self.assertEqual(json.loads((rel / "plan.json").read_text(encoding="utf-8"))["status"], "applied")
+        # drift baseline for each site is that site's payload in the multi-site release
+        self.assertEqual(pls.main(["drift", str(lives["b"]), "--env", "stg", "--site", "b"]), 0)
+        self.assertEqual(pls.main(["drift", str(lives["a"]), "--env", "stg", "--site", "a"]), 0)
+
     def test_last_applied_release_compares_instants_not_strings(self):
         # Escaped in slice 1.5: R-01 applied_at "…T09:19:30+09:00" (00:19 UTC) sorted after
         # R-02 "…T01:48:06+00:00" as strings, so drift kept using the older release as baseline.

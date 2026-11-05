@@ -51,7 +51,7 @@ Priority after slice #1:
 Then:
 
 1. ✅ Drift check + column-slot conflict check before deploy (A2, D4 — mandatory) — `pls plan` refuses on drift (v0.2) and on slot findings (v0.3, L-SLOT-02, `pls slots`)
-2. Deploy plan: dependency ordering, snapshot, configuration rollback (A3)
+2. ✅ Deploy plan: dependency ordering, snapshot, configuration rollback (A3) — `pls release-plan` + runner `applyRelease` (v0.3); open: automatic smoke-then-restore, creating new sites
 3. Data migration (A1)
 4. Permission matrix (C3)
 5. First skills/agents, only for what the pilot needs

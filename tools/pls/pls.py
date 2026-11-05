@@ -25,7 +25,12 @@ Commands:
   plan     <export.json> --env E --site S --release R [--accept-drift DECISION]
                                                 deploy plan with complete payload + rollback; refuses on drift
                                                 and on column-slot collisions
+  release-plan --env E --release R --export S=F [--export S2=F2 …] [--accept-drift DECISION]
+                                                multi-site plan (A3): every per-site check, then order by dependency
+                                                (${site:x} references, referenced sites first), snapshot + rollback per
+                                                site, reverse-order rollback; nothing is written if any site fails
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
+  mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
 """
 from __future__ import annotations
 
@@ -436,7 +441,8 @@ def releases_for(r: Path, env: str, site: str, status: str | None = None) -> lis
     out = []
     for p in sorted((r / "releases").glob("*/plan.json")) if (r / "releases").exists() else []:
         plan = rj(p)
-        if plan.get("env") == env and plan.get("site") == site and (status is None or plan.get("status") == status):
+        in_plan = plan.get("site") == site or site in (plan.get("sites") or [])
+        if plan.get("env") == env and in_plan and (status is None or plan.get("status") == status):
             out.append((p.parent, plan))
     return sorted(out, key=lambda x: (_applied_key(x[1].get("applied_at")), x[1]["release"]))
 
@@ -460,7 +466,8 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
         applied = releases_for(r, env, site, "applied")
         if not applied:
             return read_tree(r / "config" / site), "git HEAD (no applied release recorded for this env/site)"
-        src = applied[-1][0] / "payload.json"
+        rel_dir, rel_plan = applied[-1]
+        src = rel_dir / ((rel_plan.get("per_site") or {}).get(site, {}).get("payload_file") or "payload.json")
     pl = rj(src)
     return logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
 
@@ -481,6 +488,115 @@ def drift_report(r: Path, e: dict, env: str, site: str, export: Any, explicit: s
                  + ("".join(f"\n- {x}" for x in rev["data_impacting"] + rev["permission_impacting"]))
                  + "\nResolve by accepting (fold into git + requirement) or reverting (via a release with its own gate); see D11.\n")
     return diffs, text
+
+
+# ---------------------------------------------------------------- multi-site release plan (A3)
+
+def site_deps(model: dict, site: str, known: set) -> set:
+    """Sites this site's desired state references (${site:x} in settings or scripts)."""
+    blob = json.dumps(model, ensure_ascii=False)
+    return {m.group(2) for m in REF_RE.finditer(blob) if m.group(1) == "site" and m.group(2) in known and m.group(2) != site}
+
+
+def order_sites(deps: dict) -> tuple[list, list]:
+    """Topological order, referenced sites first (ties by name). Returns (order, sites in a cycle).
+    Sites in a cycle are appended by name: all sites already exist, so updatesite order only matters
+    for readability of the failure point and for rollback order, not for ID resolution."""
+    pending = {k: set(v) & set(deps) for k, v in deps.items()}
+    order = []
+    while True:
+        ready = sorted(k for k, v in pending.items() if not v)
+        if not ready:
+            break
+        for k in ready:
+            order.append(k)
+            del pending[k]
+        for v in pending.values():
+            v.difference_update(ready)
+    cyc = sorted(pending)
+    return order + cyc, cyc
+
+
+SEVERITY = ["config-only", "permission-impacting", "data-impacting"]
+
+
+def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None) -> tuple[bool, list, dict]:
+    """All pre-deploy checks for one site. Returns (ok, messages, result)."""
+    msgs = []
+    live = logical(export, e)
+    git = read_tree(r / "config" / site)
+    drift_note = "no applied release recorded: first release, drift not checkable"
+    if releases_for(r, env, site, "applied"):
+        ddiffs, dtext = drift_report(r, e, env, site, export, None)
+        if ddiffs and not accept_drift:
+            return False, [dtext, f"{site}: REFUSED — the environment drifted from its last release (I2, D11)"], {}
+        drift_note = "clean" if not ddiffs else f"drift accepted by {accept_drift}"
+    ledger_p = r / "design/slot-ledger.json"
+    if not ledger_p.exists():
+        return False, [f"{site}: REFUSED — design/slot-ledger.json is missing (A2)"], {}
+    coll = slot_collisions(live["settings"], git["settings"], rj(ledger_p).get(site, {}))
+    if coll:
+        return False, [f"SLOT {c['kind']:15} {site}: {c['msg']}" for c in coll] + [f"{site}: REFUSED — column-slot check failed (A2)"], {}
+    live_site = site_data(export)
+    new = payload(git, e, site)
+    missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
+    if missing:
+        return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
+    diffs = flat_diff(live, git)
+    snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
+    return True, msgs, {
+        "site_id": e["sites"][site]["id"], "changes": len(diffs), "classification": classify(diffs),
+        "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
+        "snapshot_updated_time": live_site.get("UpdatedTime"),
+        "checks": {"L-DEP-01_complete_payload": True, "drift_vs_last_release": drift_note, "slot_collisions": "clean"},
+        "payload": new,
+        "rollback": {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site},
+        "raw_diff": md_diff(diffs, labels(git) | labels(live), f"{env}/{site}: live (before) vs git (after)"),
+        "deps": site_deps(git, site, set(e["sites"])),
+    }
+
+
+def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None) -> int:
+    e = env_conf(r, env)
+    if e.get("role") == "prod":
+        print("note: production plans are executed by the customer-side runner (ADR-0003)")
+    results, failed = {}, False
+    for site, path in sorted(exports.items()):
+        if site not in e["sites"]:
+            raise Fail(f"site '{site}' is not in environments.json for {env}")
+        ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift)
+        for m in msgs:
+            print(m)
+        failed |= not ok
+        results[site] = res
+    if failed:
+        print("release plan REFUSED: no files written")
+        return 1
+    order, cyc = order_sites({s: res["deps"] for s, res in results.items()})
+    rel = r / "releases" / release
+    worst = max((res["classification"]["classification"] for res in results.values()), key=SEVERITY.index)
+    per_site = {}
+    for s in order:
+        res = results[s]
+        wj(rel / f"payload-{s}.json", res["payload"])
+        wj(rel / f"rollback-{s}.json", res["rollback"])
+        (rel / f"raw-diff-{s}.md").write_text(res["raw_diff"], encoding="utf-8")
+        per_site[s] = {k: res[k] for k in ("site_id", "changes", "classification", "snapshot_sha256", "snapshot_updated_time", "checks")}
+        per_site[s].update(payload_file=f"payload-{s}.json", rollback_file=f"rollback-{s}.json", depends_on=sorted(res["deps"] & set(results)))
+    plan = {
+        "release": release, "env": env, "status": "planned", "sites": order,
+        "classification": worst, "dependency_cycle": cyc, "per_site": per_site,
+        "steps": [{"op": "updatesite", "site": s, "site_id": per_site[s]["site_id"], "payload_file": per_site[s]["payload_file"],
+                   "expect_updated_time": per_site[s]["snapshot_updated_time"]} for s in order],
+        "rollback": [{"op": "updatesite", "site": s, "site_id": per_site[s]["site_id"], "payload_file": per_site[s]["rollback_file"]}
+                     for s in reversed(order)],
+        "on_failure": "stop; restore every site already touched (including the failing one) from its rollback payload, in reverse order",
+        "preflight": "every site's UpdatedTime must equal expect_updated_time, otherwise nothing is applied",
+    }
+    wj(rel / "plan.json", plan)
+    print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
+          + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
+    return 0
 
 
 # ---------------------------------------------------------------- CLI
@@ -504,9 +620,15 @@ def main(argv=None) -> int:
     s.add_argument("--out")
     s = sp.add_parser("canon")
     s.add_argument("--site", required=True)
+    s = sp.add_parser("release-plan")
+    s.add_argument("--env", required=True)
+    s.add_argument("--release", required=True)
+    s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
+    s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
     s = sp.add_parser("mark-applied")
     s.add_argument("release")
-    s.add_argument("export", help="export of the target site taken right after applying")
+    s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
+    s.add_argument("--export", dest="exports", action="append", metavar="SITE=EXPORT", help="multi-site plan: one per site")
     sp.add_parser("lint")
     sp.add_parser("coverage")
     a = ap.parse_args(argv)
@@ -518,6 +640,35 @@ def main(argv=None) -> int:
         after = canonicalize(before)
         wj(p, after)
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
+        return 0
+
+    if a.cmd == "release-plan":
+        exports = dict(x.split("=", 1) for x in a.export)
+        return release_plan(r, a.env, a.release, exports, a.accept_drift)
+
+    if a.cmd == "mark-applied" and (rj(r / "releases" / a.release / "plan.json").get("sites")):
+        rel = r / "releases" / a.release
+        plan = rj(rel / "plan.json")
+        e = env_conf(r, plan["env"])
+        exports = dict(x.split("=", 1) for x in (a.exports or []))
+        if set(exports) != set(plan["sites"]):
+            print(f"NOT marked as applied: need --export for exactly {plan['sites']}")
+            return 1
+        bad = False
+        for site in plan["sites"]:
+            pl = rj(rel / plan["per_site"][site]["payload_file"])
+            want = logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e)
+            diffs = flat_diff(same_meta(logical(rj(Path(exports[site])), e), want), want)
+            if diffs:
+                bad = True
+                print(md_diff(diffs, labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
+        if bad:
+            print("NOT marked as applied: at least one site does not match its release payload")
+            return 1
+        plan.update(status="applied", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                    post_apply_check="every site: live equals payload (pls mark-applied)")
+        wj(rel / "plan.json", plan)
+        print(f"{a.release} marked as applied to {plan['env']}: {', '.join(plan['sites'])}")
         return 0
 
     if a.cmd == "mark-applied":

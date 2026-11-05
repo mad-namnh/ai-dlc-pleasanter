@@ -5,6 +5,10 @@
 //   await plsRunner.exportSite(siteId)                 → getsite response (save as export JSON)
 //   await plsRunner.apply(siteId, payload)             → updatesite with a COMPLETE payload (I2)
 //   await plsRunner.runTests(siteId, specs, envName)   → results JSON for tests/results/
+//   await plsRunner.applyRelease(plan, files)          → multi-site release (pls release-plan): preflight, ordered apply,
+//                                                        automatic reverse-order restore on failure (A3)
+//   await plsRunner.rollbackRelease(plan, files, sites) → restore the given sites (default: all) in reverse order
+//   files = {"payload-<site>.json": {...}, "rollback-<site>.json": {...}} — content of the release folder
 var plsRunner = (() => {
   const call = async (path, body, method = 'POST') => {
     const r = await fetch(path, {method, headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
@@ -77,5 +81,45 @@ var plsRunner = (() => {
     }
     return {env: envName, site_id: siteId, executed_at: new Date().toISOString(), tests: out};
   };
-  return {exportSite, apply, runTests};
+  const rollbackRelease = async (plan, files, sites) => {
+    const only = sites ? new Set(sites) : null;
+    const log = [];
+    for (const step of plan.rollback) {
+      if (only && !only.has(step.site)) continue;
+      const r = await apply(step.site_id, files[step.payload_file]);
+      log.push(`restore ${step.site} (${step.site_id}) → HTTP ${r.http}`);
+    }
+    return log;
+  };
+
+  const applyRelease = async (plan, files) => {
+    const log = [];
+    for (const step of plan.steps) {           // files present before anything is written
+      if (!files[step.payload_file]) return {status: 'refused', log: [`missing ${step.payload_file}`]};
+    }
+    for (const step of plan.rollback) {
+      if (!files[step.payload_file]) return {status: 'refused', log: [`missing ${step.payload_file}`]};
+    }
+    for (const step of plan.steps) {           // preflight: nobody changed a target since the plan
+      const live = (await exportSite(step.site_id)).Response.Data;
+      if (live.UpdatedTime !== step.expect_updated_time) {
+        return {status: 'refused', log: [...log, `${step.site}: UpdatedTime ${live.UpdatedTime} ≠ plan ${step.expect_updated_time} — re-plan`]};
+      }
+      log.push(`preflight ${step.site} ok`);
+    }
+    const touched = [];
+    for (const step of plan.steps) {
+      touched.push(step.site);                 // a failed updatesite may still have changed the site → restore it too
+      let r;
+      try { r = await apply(step.site_id, files[step.payload_file]); } catch (e) { r = {http: 0, message: String(e)}; }
+      log.push(`apply ${step.site} (${step.site_id}) → HTTP ${r.http}`);
+      if (r.http !== 200) {
+        const restored = await rollbackRelease(plan, files, touched);
+        return {status: 'rolled-back', failed_site: step.site, log: [...log, ...restored]};
+      }
+    }
+    return {status: 'applied-unverified', log: [...log, 'next: export every site and run `pls mark-applied <release> --export site=file …`']};
+  };
+
+  return {exportSite, apply, runTests, applyRelease, rollbackRelease};
 })();

@@ -227,7 +227,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls coverage` | P4 | REQ ↔ config ↔ test gaps | **v0.1** |
 | `pls drift` | P5, P6 | Live vs **last applied release** (D11); reports whether reverting is data-impacting | **v0.2** |
 | `pls slots` | P5, P6 | Column-slot check: live target vs git vs slot ledger (A2, ADR-0002) — collision, slot used outside the ledger (incl. editor-only slots), repurposed label, git slot not allocated | **v0.3** |
-| `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — single site; multi-site ordering not yet |
+| `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — `pls plan` (one site) and `pls release-plan` (several sites: order by `${site:x}` dependencies, per-site snapshot + rollback, reverse-order restore, nothing written if any site fails). Runner `applyRelease`: preflight on `UpdatedTime`, ordered apply, automatic restore on failure; smoke tests still run by hand (`runTests`) |
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 
