@@ -41,6 +41,14 @@ Editor layout: `EditorColumnHash.General` (ordered list). Grid: `GridColumns`. F
 
 `{Id, Name, ColumnFilterHash, ColumnSorterHash, DefaultMode?, …}` — multi-value filters are JSON strings: `"[\"100\", \"150\"]"`. Site notifications can reference a view as their condition (`BeforeCondition`/`AfterCondition` = view Id).
 
+## Client code (`SiteSettings.Scripts[]`, `Styles[]`, `Htmls[]`) — D29
+
+`{Id, Title, Body, All?, New?, Edit?, Index?, Disabled?}`; `Htmls` also `PositionType` (1000, 1010 seen). Unpacked to `scripts/`, `styles/`, `htmls/` with `_index.json`.
+
+## Dashboards (`SiteSettings.DashboardParts[]`) — D30
+
+`{Id, Title, Type, X, Y, Width, Height, SiteId, …}`. `Type` 0 quick access (`QuickAccessSites` JSON text), 1 timeline (`TimeLineSites`, `TimeLineTitle`, `TimeLineBody`, `TimeLineDisplayType`, `TimeLineItemCount`, **`View`**), 3 HTML (`HtmlContent`), 4 calendar (`CalendarSites`, `CalendarSitesData[]`, `CalendarType`, `CalendarTimePeriod`, `CalendarFromTo`, **`View`**), 5 kanban (`KambanSites`, `KambanGroupByX/Y`, `KambanAggregateType`, `KambanValue`, **`View`**).
+
 ## Server scripts (`SiteSettings.ServerScripts[]`)
 
 `{Id, Name, Title, Shared?, BeforeCreate?, BeforeUpdate?, …, Body}`. Shared scripts are prepended to the others — see D7 in `behaviours.md`.

@@ -52,6 +52,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
+import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -730,11 +731,17 @@ def _migration_problems(r: Path, mig: str | None) -> list[str]:
     return out
 
 
-def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None) -> tuple[bool, list, dict]:
+def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None,
+              accept_unverified: str | None = None) -> tuple[bool, list, dict]:
     """All pre-deploy checks for one site. Returns (ok, messages, result)."""
     msgs = []
     live = logical(export, e)
     git = read_tree(r / "config" / site)
+    scope = SC.site_findings(live["settings"] | live["scripts"], git["settings"] | git["scripts"])
+    if scope and not accept_unverified:
+        return False, [f"SCOPE {site}: {x}" for x in scope] + [
+            f"{site}: REFUSED — components without round-trip evidence (ADR-0001); updatesite could change or drop them (D4). "
+            "Probe them on a copy in dev, or pass --accept-unverified <decision record>"], {}
     drift_note = "no applied release recorded: first release, drift not checkable"
     if releases_for(r, env, site, "applied"):
         ddiffs, dtext = drift_report(r, e, env, site, export, None)
@@ -758,7 +765,10 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
         "site_id": e["sites"][site]["id"], "changes": len(diffs), "classification": classify(diffs),
         "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
         "snapshot_updated_time": live_site.get("UpdatedTime"),
-        "checks": {"L-DEP-01_complete_payload": True, "drift_vs_last_release": drift_note, "slot_collisions": "clean"},
+        "checks": {"L-DEP-01_complete_payload": True, "drift_vs_last_release": drift_note, "slot_collisions": "clean",
+                   "scope": "verified" if not scope else {
+                       "accepted_by": accept_unverified, "unverified": scope,
+                       "record_sha256": hashlib.sha256(Path(accept_unverified).read_bytes()).hexdigest()}},
         "payload": new,
         "rollback": {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
                      + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
@@ -769,19 +779,22 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     }
 
 
-def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None) -> int:
+def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None,
+                 accept_unverified: str | None = None) -> int:
     e = env_conf(r, env)
     if (r / "releases" / release / "plan.json").exists():
         raise Fail(f"releases/{release}/plan.json exists — a release id is used once; choose the next id (S3)")
     if accept_drift and not Path(accept_drift).is_file():
         raise Fail(f"--accept-drift must name the drift decision record (file not found: {accept_drift})")
+    if accept_unverified and not Path(accept_unverified).is_file():
+        raise Fail(f"--accept-unverified must name the decision record (file not found: {accept_unverified})")
     if e.get("role") == "prod":
         print("note: production plans are executed by the customer-side runner (ADR-0003)")
     results, failed = {}, False
     for site, path in sorted(exports.items()):
         if site not in e["sites"]:
             raise Fail(f"site '{site}' is not in environments.json for {env}")
-        ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift)
+        ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift, accept_unverified)
         for m in msgs:
             print(m)
         failed |= not ok
@@ -1468,6 +1481,7 @@ def main(argv=None) -> int:
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
     s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+    s.add_argument("--accept-unverified", help="decision record that accepts components without round-trip evidence (ADR-0001)")
     s = sp.add_parser("bootstrap-plan")
     s.add_argument("--env", required=True)
     s.add_argument("--release", required=True)
@@ -1581,7 +1595,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "release-plan":
         exports = dict(x.split("=", 1) for x in a.export)
-        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration)
+        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified)
 
     if a.cmd == "mark-applied" and (rj(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release

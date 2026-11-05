@@ -95,6 +95,7 @@ Skill: `pls-p3-config-builder`.
 5. **If the plan is refused, read the reason:**
    - **drift:** someone changed dev → explain it, ask the person, and record the decision before `--accept-drift`;
    - **slot finding:** go back to the design;
+   - **scope** (`SCOPE … no round-trip evidence`, ADR-0001): the site uses a component never proven to round-trip. Tell the person; it is probed on a copy in dev, or the person writes a decision record for `--accept-unverified`. Never write that record yourself;
    - **data-impacting without a migration:**
      - First check that the sites created by bootstrap have their record `releases/B-*/bootstrap.json`. Without it `pls` does not know they are new, and treats e.g. a new summary as data-impacting. Recover the record; do not reopen G2 for this.
      - Otherwise P2 missed it → back to G2.

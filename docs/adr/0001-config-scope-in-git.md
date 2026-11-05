@@ -37,6 +37,16 @@ The source of truth of a Pleasanter project is configuration stored in the datab
 - Site packages remap structured references; the API does not — D6. Neither handles SiteIds inside scripts — D3.
 - Only 8/15 core components covered so far; round 2 must add 期限付きテーブル (time-limited tables), 計算式 (formulas), プロセス (processes), ステータス制御 (status control), client scripts, permissions.
 
+## Spike results, round 2 — BR3 (2026-11-05)
+
+`spike/round-trip/report-br3-20261105.md`: `Htmls`, `Scripts`, `Styles` and dashboard parts of types 1, 3 and 4 round-trip with 0 differences, raw and through `pls` (D29, D30). Dashboard parts of types 1/4 need `View` (HTTP 500 otherwise). Background server scripts are tenant settings without an API (D31, ADR-0012). The components with evidence are listed in `tools/pls/pls_scope.py`; `release-plan` refuses a site using any other component unless a person accepts it with `--accept-unverified <decision record>`. This puts option B into practice: everything else is either probed first or accepted explicitly.
+
+**Known limits (code review, 2026-11-05):**
+- The check is per **top-level key**. Attributes inside a verified key that were never used on the evidence sites pass unchecked: per-column extended HTML/CSS and regex validation in `Columns`, webhook notifications, calendar/kanban/gantt settings in `Views`, unused flags of `Processes` / `ServerScripts`, `Htmls.PositionType` other than 1000/1010. A second-level allowlist for the risky ones is a follow-up (BR4 lists them per site when a project is adopted).
+- Dashboard parts are checked one level deeper: type, and `View` on types 1/4/5 (HTTP 500 otherwise, D30).
+- One decision record accepts every finding of the release; the plan stores the findings and the record's sha256.
+- The single-site `pls plan` has no scope check; its plans cannot be applied over HTTP (multi-site `release-plan` only).
+
 ## Decision
 
 *(Not decided — waiting for spike round 2)*

@@ -16,24 +16,26 @@ Fill in after steps 3–5. Legend: ✅ round-trips 100% · 🟡 partial (explain
 | 8 | Screens | Grid (GridColumns), filters, sorting | ✓ | ✅ | ✅ | ✅ | |
 | 9 | Screens | Views (ビュー) | | ✅ | ✅ | ✅ | Includes a Crosstab view |
 | 10 | Links | Links between sites, lookups (ルックアップ) | ✓ | ✅ | ✅ | ✅ | Links/Summaries: API keeps original IDs, package remaps (D6) |
-| 11 | Workflow | プロセス (buttons, conditions, actions) | ✓ | ➖ | ➖ | ➖ | |
+| 11 | Workflow | プロセス (buttons, conditions, actions) | ✓ | ✅ | ✅ | ➖ | Slices #1–#3 (D10, D20, D21) |
 | 12 | Workflow | ステータス制御 (status control) | ✓ | ➖ | ➖ | ➖ | |
 | 13 | Automation | 通知 (notifications) | ✓ | ✅ | ✅ | ✅ | Sample uses mail to `[Manager]`; webhooks not tried |
 | 14 | Automation | リマインダー (reminders) | | ✅ | ✅ | ✅ | |
 | 15 | Code | サーバースクリプト (server scripts) | ✓ | ✅ | ✅ | ✅ | Includes shared scripts. SiteIds inside strings not remapped (D3); plain-text secret found (D5) |
-| 16 | Code | スクリプト (client scripts) | ✓ | ➖ | ➖ | ➖ | |
-| 17 | Code | スタイル (styles) | | ➖ | ➖ | ➖ | |
-| 18 | Code | HTML (if used) | | ➖ | ➖ | ➖ | |
+| 16 | Code | スクリプト (client scripts) | ✓ | ✅ | ✅ | ➖ | BR3 2026-11-05 (`report-br3-20261105.md`), D29 |
+| 17 | Code | スタイル (styles) | | ✅ | ✅ | ➖ | BR3, D29 |
+| 18 | Code | HTML (if used) | | ✅ | ✅ | ➖ | BR3, D29 (PositionType 1000/1010) |
 | 19 | Code | 拡張SQL (extended SQL) | | ➖ | ➖ | ➖ | May be server-side files |
-| 20 | Permissions | Site permissions | ✓ | ➖ | ➖ | ➖ | References user/group IDs |
+| 20 | Permissions | Site permissions | ✓ | ✅ | ✅ | ➖ | References user/group IDs; slices #2–#3 (D15, ADR-0006) |
 | 21 | Permissions | Record and column permissions | ✓ | ➖ | ➖ | ➖ | |
 | 22 | Other | CSV export/import settings (エクスポート設定) | | ➖ | ➖ | ➖ | |
 | 23 | Other | Aggregations, charts, カレンダー, ガントチャート, カンバン | | 🟡 | 🟡 | 🟡 | Aggregations + Summaries (cross-site 集計) ✅; other modes not tried |
 | 24 | Other | Search, 一括更新 (bulk update) | | ➖ | ➖ | ➖ | |
 | 25 | Outside sites | Users / groups / 組織 (organizations) | | ➖ | ➖ | ➖ | Possibly out of scope (ADR-0001) |
 | 26 | Outside sites | `Parameters/` folder on the server | | ➖ | ➖ | ➖ | Managed as files (customer IT) |
-| 27 | Outside sites | Tenant settings | | ➖ | ➖ | ➖ | |
+| 27 | Outside sites | Tenant settings | | ❌ | ❌ | ➖ | No tenant API (BR3 probe: 404); background server scripts live here (D31, ADR-0012) |
 | 28 | Outside sites | Built-in MCP (`McpServer.json`) | | ➖ | ➖ | ➖ | D1 |
+
+| 29 | Other | Dashboards (ダッシュボード) parts | | 🟡 | 🟡 | ➖ | BR3: types 1 timeline, 3 HTML, 4 calendar ✅ (D30); 0 quick access, 5 kanban ➖ |
 
 ## Summary
 

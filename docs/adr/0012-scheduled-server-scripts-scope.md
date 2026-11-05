@@ -1,6 +1,6 @@
 # ADR-0012: Scope of scheduled (background) server scripts
 
-- **Status:** Proposed (2026-11-05) — waiting for the probe in the open questions
+- **Status:** Proposed (2026-11-05) — probe done (BR3): no API → option B recommended
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** ADR-0001 (configuration scope, option B), ADR-0010 (job safety), D3, D7; plan Step 4c
@@ -16,9 +16,9 @@ The KB has no entry about scheduled scripts. Where they are stored, how they are
 
 ## Open questions
 
-- [ ] Where are scheduled server scripts stored and configured on 1.5.x (tenant settings, a dedicated table, files)? — *read-only probe on dev*.
-- [ ] Is there an API to read them? To write them? — *probe*.
-- [ ] How is the schedule expressed, and is it per environment? Do they run on dev today? — *probe + project team*.
+- [x] Where are scheduled server scripts stored and configured on 1.5.x? — **Tenant settings**, tenant management → サーバスクリプト (manual; D31).
+- [x] Is there an API to read them? To write them? — **No.** None documented; read-only probe of `/api/tenants/get`, `/api/tenants/1/get`, `/api/tenants/gettenant`, `/api/items/1/gettenant` → 404 (BR3, 2026-11-05).
+- [ ] How is the schedule expressed, and is it per environment? Do they run on dev today? — Schedule: 毎時 (5-minute steps) / 毎日 / 毎週 / 毎月 / 1回だけ + タイムゾーン. Per environment only from **1.5.7.0** (`BackgroundService.json` / `Service.json`). Whether they run on the candidate's dev: *project team*.
 - [ ] Does the ~10 s server-script timeout (KB fact 8) also apply to scheduled scripts? — *probe*.
 - [ ] Do the scripts contain SiteIds or other environment-specific values (D3)? — *inventory of the project's scripts*.
 
