@@ -20,9 +20,11 @@ Commands:
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
                                                 whether reverting the drift would be data-impacting
   classify <export.json> --env E --site S       config-only / data-impacting / permission-impacting
+  slots    <export.json> --env E --site S       column-slot check: live target vs git vs slot ledger (A2); also run by plan
   coverage                                      requirements ↔ config ↔ passing tests
   plan     <export.json> --env E --site S --release R [--accept-drift DECISION]
                                                 deploy plan with complete payload + rollback; refuses on drift
+                                                and on column-slot collisions
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
 """
 from __future__ import annotations
@@ -364,6 +366,49 @@ def lint(r: Path) -> list[dict]:
     return issues
 
 
+# ---------------------------------------------------------------- slot collisions (A2, ADR-0002)
+
+SLOT_RX = re.compile(r"^(Class|Num|Date|Description|Check|Attachments)[A-Z0-9]\w*$")
+
+
+def slots_in_use(settings: dict) -> dict:
+    """Column slots a site uses: defined in Columns, or placed on the editor, grid or filters.
+    Pleasanter stores only non-default column attributes (D8), so a slot the customer enabled
+    by just adding it to the editor appears in EditorColumnHash without a Columns entry."""
+    used = {c["ColumnName"]: c.get("LabelText", "") for c in settings.get("Columns", []) if SLOT_RX.match(c.get("ColumnName", ""))}
+    placed = [settings.get("GridColumns") or [], settings.get("FilterColumns") or []]
+    placed += [v for v in (settings.get("EditorColumnHash") or {}).values() if isinstance(v, list)]
+    for names in placed:
+        for n in names:
+            if isinstance(n, str) and SLOT_RX.match(n):
+                used.setdefault(n, "")
+    return used
+
+
+def slot_collisions(live: dict, git: dict, ledger_site: dict) -> list[dict]:
+    """Pre-deploy check: live target vs git vs ledger. Any finding blocks the plan.
+    - live uses a slot the ledger does not know  → someone (usually the customer) took it outside the ledger;
+      if git also defines it, the deploy would overwrite their column and its data (collision)
+    - live label of a ledger slot differs from the ledger label → the slot was repurposed on the target
+    - git defines a slot the ledger does not know → allocation skipped (P2 must record it)"""
+    out = []
+    lv, gv = slots_in_use(live), slots_in_use(git)
+    for col in sorted(lv):
+        if col not in ledger_site:
+            clash = col in gv
+            out.append({"slot": col, "kind": "collision" if clash else "unledgered-live",
+                        "msg": (f"{col} is used on the target (label '{lv[col]}') but not in the slot ledger"
+                                + (f"; git also defines it (label '{gv[col]}') — deploying would overwrite it" if clash
+                                   else "; deploying would drop it — record it in the ledger (zone: customer) and fold it into git, or remove it in its own release"))})
+        else:
+            want = ledger_site[col].get("label", "")
+            if lv[col] and want and lv[col] != want:
+                out.append({"slot": col, "kind": "repurposed", "msg": f"{col} is labelled '{lv[col]}' on the target but '{want}' in the ledger"})
+    for col in sorted(set(gv) - set(ledger_site) - set(lv)):
+        out.append({"slot": col, "kind": "unledgered-git", "msg": f"git defines {col} but the slot ledger does not allocate it (record it in P2)"})
+    return out
+
+
 # ---------------------------------------------------------------- coverage (I8)
 
 def coverage(r: Path) -> dict:
@@ -443,7 +488,7 @@ def drift_report(r: Path, e: dict, env: str, site: str, export: Any, explicit: s
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="pls")
     sp = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("unpack", "diff", "drift", "classify", "plan"):
+    for c in ("unpack", "diff", "drift", "classify", "plan", "slots"):
         s = sp.add_parser(c)
         s.add_argument("export")
         s.add_argument("--env", required=True)
@@ -487,8 +532,7 @@ def main(argv=None) -> int:
             print(md_diff(diffs, labels(want), f"{plan['env']}/{plan['site']}: live after apply vs release payload"))
             print("NOT marked as applied: the environment does not match the release payload")
             return 1
-        import datetime
-        plan.update(status="applied", applied_at=datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+        plan.update(status="applied", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                     post_apply_check="live equals payload (pls mark-applied)")
         wj(rel / "plan.json", plan)
         print(f"{a.release} marked as applied to {plan['env']}/{plan['site']}")
@@ -539,6 +583,14 @@ def main(argv=None) -> int:
         print(json.dumps(classify(diffs), ensure_ascii=False, indent=2))
         return 0
 
+    if a.cmd == "slots":
+        led = rj(r / "design/slot-ledger.json").get(a.site, {})
+        coll = slot_collisions(live["settings"], git["settings"], led)
+        for c in coll:
+            print(f"SLOT {c['kind']:15} {c['msg']}")
+        print(f"{a.env}/{a.site}: {len(coll)} slot issue(s)")
+        return 1 if coll else 0
+
     if a.cmd == "plan":
         if e.get("role") == "prod":
             print("note: production plans are executed by the customer-side runner (ADR-0003)")
@@ -552,6 +604,16 @@ def main(argv=None) -> int:
                       "Resolve the drift, or pass --accept-drift <decision record>.")
                 return 1
             drift_note = "clean" if not ddiffs else f"drift accepted by {a.accept_drift}"
+        ledger_p = r / "design/slot-ledger.json"
+        if not ledger_p.exists():
+            print("plan REFUSED: design/slot-ledger.json is missing — the slot-collision check cannot run (A2)")
+            return 1
+        coll = slot_collisions(live["settings"], git["settings"], rj(ledger_p).get(a.site, {}))
+        if coll:
+            for c in coll:
+                print(f"SLOT {c['kind']:15} {c['msg']}")
+            print("plan REFUSED: column-slot check failed (A2, ADR-0002). Resolve in the ledger / git first.")
+            return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
         missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
@@ -562,7 +624,7 @@ def main(argv=None) -> int:
             "status": "planned",
             "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
             "checks": {"L-DEP-01_complete_payload": not missing, "keys_missing_from_payload": missing,
-                       "drift_vs_last_release": drift_note},
+                       "drift_vs_last_release": drift_note, "slot_collisions": "clean"},
             "classification": classify(diffs),
             "steps": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "payload.json"}],
             "rollback": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "rollback.json"}],

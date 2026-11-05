@@ -226,7 +226,8 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004) | **v0.1** |
 | `pls coverage` | P4 | REQ ↔ config ↔ test gaps | **v0.1** |
 | `pls drift` | P5, P6 | Live vs **last applied release** (D11); reports whether reverting is data-impacting | **v0.2** |
-| `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift** | **v0.2** — single site; multi-site ordering not yet |
+| `pls slots` | P5, P6 | Column-slot check: live target vs git vs slot ledger (A2, ADR-0002) — collision, slot used outside the ledger (incl. editor-only slots), repurposed label, git slot not allocated | **v0.3** |
+| `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — single site; multi-site ordering not yet |
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 
@@ -238,7 +239,8 @@ One file, `traceability.json`, links the chain in both directions:
 | L-REF-01 | D3 | No hard-coded SiteIds in script bodies |
 | L-SCR-01 | D7 | No top-level `const`/`let` in shared server scripts |
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
-| L-SLOT-01 | A2 | Column slots match the slot ledger; no collisions |
+| L-SLOT-01 | A2 | Column slots in git match the slot ledger |
+| L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
 

@@ -118,6 +118,7 @@ class PlsTest(unittest.TestCase):
         self.unpack_dev()
         stg_before = self.r / "stg-before.json"
         stg_before.write_text(json.dumps(export(201, 202, "http://stg.internal")), encoding="utf-8")
+        self._ledger({"ClassA": "No", "ClassB": "", "ClassC": "new in git"})
         # first release: nothing applied yet → plan allowed
         self.assertEqual(pls.main(["plan", str(stg_before), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
         # mark-applied refuses when live != payload
@@ -144,6 +145,61 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2"]), 1)
         self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2",
                                    "--accept-drift", "ops/drift/decision.md"]), 0)
+
+    def _ledger(self, slots):
+        (self.r / "design").mkdir(exist_ok=True)
+        (self.r / "design/slot-ledger.json").write_text(json.dumps(
+            {"a": {k: {"label": v, "status": "allocated", "zone": "madlab"} for k, v in slots.items()}}), encoding="utf-8")
+
+    def _stg_live(self, extra_cols=(), editor=None):
+        ex = export(201, 202, "http://stg.internal", extra_cols=extra_cols)
+        if editor is not None:
+            ex["Response"]["Data"]["SiteSettings"]["EditorColumnHash"] = {"General": editor}
+        p = self.r / "stg-live-slots.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        return p
+
+    def test_slots_clean(self):
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        self.assertEqual(pls.slot_collisions(*self._models(self._stg_live())), [])
+        self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
+
+    def _models(self, live_path):
+        e = ENVS["envs"]["stg"]
+        live = pls.logical(json.loads(live_path.read_text(encoding="utf-8")), e)
+        git = pls.read_tree(self.r / "config/a")
+        led = json.loads((self.r / "design/slot-ledger.json").read_text(encoding="utf-8"))["a"]
+        return live["settings"], git["settings"], led
+
+    def test_slots_collision_blocks_plan(self):
+        # customer added NumD in the UI on stg; git also defines NumD → deploying would overwrite it (A2)
+        self.unpack_dev()
+        p = self.r / "config/a/site.json"
+        site = json.loads(p.read_text(encoding="utf-8"))
+        site["Columns"].append({"ColumnName": "NumD", "LabelText": "git use"})
+        p.write_text(json.dumps(site), encoding="utf-8")
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        live = self._stg_live(extra_cols=[{"ColumnName": "NumD", "LabelText": "顧客の項目"}])
+        kinds = {c["kind"] for c in pls.slot_collisions(*self._models(live))}
+        self.assertEqual(kinds, {"collision"})
+        self.assertEqual(pls.main(["plan", str(live), "--env", "stg", "--site", "a", "--release", "R1"]), 1)
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+
+    def test_slots_editor_only_and_repurposed(self):
+        # NumE enabled only by placing it on the editor (no Columns entry, D8); ClassA relabelled on the target
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        live = self._stg_live(editor=["ClassA", "ClassB", "NumE"])
+        ex = json.loads(live.read_text(encoding="utf-8"))
+        [c for c in ex["Response"]["Data"]["SiteSettings"]["Columns"] if c["ColumnName"] == "ClassA"][0]["LabelText"] = "別用途"
+        live.write_text(json.dumps(ex), encoding="utf-8")
+        found = {(c["slot"], c["kind"]) for c in pls.slot_collisions(*self._models(live))}
+        self.assertEqual(found, {("NumE", "unledgered-live"), ("ClassA", "repurposed")})
+
+    def test_slots_missing_ledger_refuses_plan(self):
+        self.unpack_dev()
+        self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a", "--release", "R1"]), 1)
 
     def test_last_applied_release_compares_instants_not_strings(self):
         # Escaped in slice 1.5: R-01 applied_at "…T09:19:30+09:00" (00:19 UTC) sorted after
