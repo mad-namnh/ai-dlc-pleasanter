@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """pls — minimal, deterministic toolchain for AI-DLC Pleasanter projects (architecture §7.1).
 
-pls 0.6. File commands work offline. Transport to Pleasanter is the HTTP client (pls_http.py,
+pls 0.7. File commands work offline. Transport to Pleasanter is the HTTP client (pls_http.py,
 ADR-0008: export / apply / bootstrap / test / backup, writes only to role dev/stg with the local
 allow_write opt-in, never prod - I3). The browser runner (browser/pls-runner.js) is the fallback.
 Projects call it through their launcher `python pls.py` (created by `pls init`).
@@ -297,7 +297,7 @@ def write_tree(model: dict, out: Path) -> None:
         for it in items:
             name = it.get("Name") or f"script-{it.get('Id')}"
             (out / folder).mkdir(parents=True, exist_ok=True)
-            (out / folder / f"{name}{ext}").write_text(it.get("Body", ""), encoding="utf-8")
+            (out / folder / f"{name}{ext}").write_text(it.get("Body", ""), encoding="utf-8", newline="")   # keep CRLF (S7)
             index.append({k: v for k, v in it.items() if k != "Body"} | {"File": f"{name}{ext}"})
         wj(out / folder / "_index.json", index)
 
@@ -313,7 +313,8 @@ def read_tree(d: Path) -> dict:
             for it in rj(idx):
                 it = dict(it)
                 f = it.pop("File")
-                it["Body"] = (d / folder / f).read_text(encoding="utf-8")
+                with open(d / folder / f, encoding="utf-8", newline="") as fh:     # keep CRLF as stored (S7)
+                    it["Body"] = fh.read()
                 items.append(it)
         scripts[kind] = items
     pf = d / "permissions.json"
@@ -446,8 +447,18 @@ def lint(r: Path) -> list[dict]:
         if not site_dir.is_dir():
             continue
         site = site_dir.name
+        if not (site_dir / "site.json").exists():
+            continue      # new site designed in P2 (meta.json only) — unpacked after bootstrap in P3 (S5)
         m = read_tree(site_dir)
         blob = json.dumps(m, ensure_ascii=False)
+        managed = set(e_all.get("managed_sites") or [])
+        for kind_, name_ in sorted(set(REF_RE.findall(blob))):     # L-REF-02: every reference resolves (S5, B2)
+            for env_name, ec in e_all["envs"].items():
+                known = {"site": set(ec.get("sites") or {}) | managed, "principal": set(ec.get("principals") or {}),
+                         "env": set(ec.get("values") or {})}[kind_]
+                if name_ not in known:
+                    issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
+                                   f"({'principals' if kind_ == 'principal' else 'sites/managed_sites' if kind_ == 'site' else 'values'} in environments.json)"})
         for name, rx in SECRET_RES.items():
             if rx.search(blob):
                 issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
@@ -582,12 +593,17 @@ def coverage(r: Path) -> dict:
 
 # ---------------------------------------------------------------- releases and drift baseline (S2, S3, D11)
 
+APPLIED = ("applied", "applied-differs")   # applied-differs: live differs from the payload (D8) — baseline = live-<site>.json (S2)
+
+
 def releases_for(r: Path, env: str, site: str, status: str | None = None) -> list[tuple[Path, dict]]:
+    """status "applied" matches every applied state (APPLIED)."""
     out = []
     for p in sorted((r / "releases").glob("*/plan.json")) if (r / "releases").exists() else []:
         plan = rj(p)
         in_plan = plan.get("site") == site or site in (plan.get("sites") or [])
-        if plan.get("env") == env and in_plan and (status is None or plan.get("status") == status):
+        st = plan.get("status")
+        if plan.get("env") == env and in_plan and (status is None or st == status or (status == "applied" and st in APPLIED)):
             out.append((p.parent, plan))
     return sorted(out, key=lambda x: (_applied_key(x[1].get("applied_at")), x[1]["release"]))
 
@@ -613,6 +629,9 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
             return read_tree(r / "config" / site), "git HEAD (no applied release recorded for this env/site)"
         rel_dir, rel_plan = applied[-1]
         src = rel_dir / ((rel_plan.get("per_site") or {}).get(site, {}).get("payload_file") or "payload.json")
+        live_f = rel_dir / f"live-{site}.json"
+        if rel_plan.get("status") == "applied-differs" and live_f.exists():
+            src = live_f       # what the environment really holds after that release (S2)
     pl = rj(src)
     return logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
 
@@ -727,7 +746,9 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
         "snapshot_updated_time": live_site.get("UpdatedTime"),
         "checks": {"L-DEP-01_complete_payload": True, "drift_vs_last_release": drift_note, "slot_collisions": "clean"},
         "payload": new,
-        "rollback": {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site},
+        "rollback": {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
+                     + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
+                     if k in live_site},
         "raw_diff": md_diff(diffs, labels(git) | labels(live), f"{env}/{site}: live (before) vs git (after)"),
         "deps": site_deps(git, site, set(e["sites"])),
     }
@@ -735,6 +756,10 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
 
 def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None) -> int:
     e = env_conf(r, env)
+    if (r / "releases" / release / "plan.json").exists():
+        raise Fail(f"releases/{release}/plan.json exists — a release id is used once; choose the next id (S3)")
+    if accept_drift and not Path(accept_drift).is_file():
+        raise Fail(f"--accept-drift must name the drift decision record (file not found: {accept_drift})")
     if e.get("role") == "prod":
         print("note: production plans are executed by the customer-side runner (ADR-0003)")
     results, failed = {}, False
@@ -827,7 +852,7 @@ def bootstrap_plan(r: Path, env: str, release: str) -> int:
         print(f"{env}: every managed site already has an id — nothing to bootstrap")
         return 0
     plan = {"release": release, "env": env, "status": "planned", "parent_id": parent, "steps": steps,
-            "next": f"runner bootstrapSites(plan) → pls bind --env {env} --release {release} --created SITE=ID …",
+            "next": f"pls bootstrap {release} (HTTP; binds the ids) — or runner bootstrapSites + pls bind --env {env} --release {release} --created SITE=ID …",
             "undo": "a person deletes the created sites in Pleasanter (agents never delete); then remove their ids"}
     wj(r / "releases" / release / "bootstrap.json", plan)
     print(f"bootstrap plan written to releases/{release}/bootstrap.json — create {', '.join(s['site'] for s in steps)} under {parent}")
@@ -1049,7 +1074,11 @@ def http_cmd(r: Path, a) -> int:
                 try:
                     c = H.Client(conn["url"], H.resolve_key(conn, k))
                     st, js, _ = c.call(f"/api/items/{sid}/getsite")
-                    print(f"{a.env} key '{k}': getsite {sid} → HTTP {st}" + (f" ({js['Response']['Data'].get('Title')})" if st == 200 and js else ""))
+                    note = (f" ({js['Response']['Data'].get('Title')})" if st == 200 and js else
+                            " — key valid, this user has no access to that site (expected for restricted roles)" if st in (403, 404) else
+                            " — key REJECTED" if st == 401 else " — unexpected")
+                    print(f"{a.env} key '{k}': getsite {sid} → HTTP {st}{note}")
+                    bad += st not in (200, 403, 404)
                 except H.TransportError as ex:
                     bad += 1
                     print(f"{a.env} key '{k}': {ex}")
@@ -1100,6 +1129,13 @@ def http_cmd(r: Path, a) -> int:
             bp = r / "releases" / a.release / "bootstrap.json"
             plan = rj(bp)
             e = env_conf(r, plan["env"])
+            if plan.get("status") == "created":
+                raise H.TransportError(f"{a.release} was already created ({plan.get('created')}) — never create twice (S1)")
+            done = set(plan.get("created") or {}) | {s for s, v in e["sites"].items() if v.get("id")}
+            plan = dict(plan, steps=[s for s in plan["steps"] if s["site"] not in done])
+            if not plan["steps"]:
+                print(f"{a.release}: every site already has an id — nothing to create")
+                return 0
             _, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
             if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
@@ -1300,7 +1336,16 @@ def main(argv=None) -> int:
                 bad = True
                 print(md_diff(diffs, labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
         if bad:
-            print("NOT marked as applied: at least one site does not match its release payload")
+            # The release WAS applied; Pleasanter stored some values differently (D8). Record that state as the
+            # baseline so the fold-back release (P3 step 6) is not refused as drift (S2).
+            for site in plan["sites"]:
+                d = site_data(rj(Path(exports[site])))
+                wj(rel / f"live-{site}.json", {k: d[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in d})
+            plan.update(status="applied-differs", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                        post_apply_check="live differs from the payload; live-<site>.json is the baseline — fold the "
+                                         "differences into config/ and plan a follow-up release")
+            wj(rel / "plan.json", plan)
+            print(f"{a.release}: APPLIED WITH DIFFERENCES — fold them into config/ (P3 step 6) and plan the next release")
             return 1
         plan.update(status="applied", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                     post_apply_check="every site: live equals payload (pls mark-applied)")

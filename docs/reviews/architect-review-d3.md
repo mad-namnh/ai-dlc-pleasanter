@@ -49,3 +49,21 @@ Also confirmed: the write guards hold, the release order is right, and a summary
 - **Not verified:** real Pleasanter, the browser runner, a Windows console.
 
 **Token cost:** acceptable. All skills, references and `CLAUDE.md` together are about 80 KB, roughly 20–25k tokens. The larger risk is the agent improvising around S2, S8 and B3, and a permission prompt on every command (S9).
+
+## Resolution (2026-11-05, D3b)
+
+| ID | Resolution |
+|---|---|
+| B1 | Decided by Nam: P5 on dev = record only. plan.md, lifecycle, P5 and gates now agree |
+| B2 | Decided by Nam: roles prepared before the demo (`demo/roles.json` in D4). P2 uses only roles in `principals`; G2 shows the roles; lint L-REF-02; `http-check` treats 403/404 as a valid key without access and 401 as a bad key |
+| B3 | Decided by Nam: KB `references/skeletons.md` (createsite result, verified built-in columns); `new-sites.md` and lifecycle no longer ask for a probe write before G2 |
+| S1 | `bootstrap` refuses a release that is already `created`; a `partial` one creates only the missing sites |
+| S2 | `mark-applied` with differences → status `applied-differs` + `live-<site>.json`, used as the drift baseline |
+| S3 | `release-plan` refuses an existing release id; `--accept-drift` must name an existing file |
+| S4 | Rollback snapshot includes `InheritPermission`/`Permissions` when the payload changes them; a failing restore is logged and the others continue |
+| S5 | lint skips meta-only sites; new rule L-REF-02 (every `${site/principal/env:x}` defined for every environment) |
+| S7 | Script files are read and written with `newline=""`; CRLF bodies round-trip |
+| S6, S8, S9, S10, N1–N6 | Open — S6/S8/S9/S10 in D6, before D7 |
+
+Unit tests: 53 python (7 new) + 6 node, all pass.
+

@@ -496,5 +496,35 @@ class PlsTest(unittest.TestCase):
             self.assertFalse(pls.config_path_exists(self.r, ref), ref)
 
 
+    def test_release_id_is_used_once_and_drift_decision_must_exist(self):                 # S3
+        exp = self.unpack_dev()
+        (self.r / "design").mkdir(exist_ok=True)
+        (self.r / "design/slot-ledger.json").write_text(json.dumps({"a": {}}), encoding="utf-8")
+        (self.r / "releases/R-X").mkdir(parents=True)
+        (self.r / "releases/R-X/plan.json").write_text(json.dumps({"status": "applied"}), encoding="utf-8")
+        with self.assertRaises(pls.Fail):
+            pls.release_plan(self.r, "dev", "R-X", {"a": str(exp)}, None)
+        self.assertEqual(json.loads((self.r / "releases/R-X/plan.json").read_text())["status"], "applied")
+        with self.assertRaises(pls.Fail):
+            pls.release_plan(self.r, "dev", "R-Y", {"a": str(exp)}, "no-such-decision.md")
+
+    def test_lint_skips_meta_only_sites_and_flags_unresolved_references(self):           # S5
+        self.unpack_dev()
+        (self.r / "config/newsite").mkdir()
+        (self.r / "config/newsite/meta.json").write_text(json.dumps({"ReferenceType": "Issues"}), encoding="utf-8")
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        site.setdefault("Processes", []).append({"Id": 9, "Name": "p", "Groups": ["${principal:nobody}"]})
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        rules = [i for i in pls.lint(self.r) if i["rule"] == "L-REF-02"]
+        self.assertTrue(rules and "nobody" in rules[0]["msg"], rules)
+
+    def test_script_bodies_keep_crlf(self):                                               # S7
+        exp = self.r / "dev.json"
+        exp.write_text(json.dumps(export(101, 102, "http://dev.internal", scripts=[
+            {"Id": 1, "Name": "s1", "Body": "var a = 1;\r\nvar b = 2;\r\n", "BeforeCreate": True}])), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"]), 0)
+        self.assertEqual(pls.main(["diff", str(exp), "--env", "dev", "--site", "a"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

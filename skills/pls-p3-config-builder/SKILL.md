@@ -32,7 +32,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
 
    Fix what they report; do not silence a rule.
 5. **Deploy to dev** with the commands in `pls-x-lifecycle` P3 step 3: export → `release-plan` → the person runs `pls apply`. Release ids are `R-YYYYMMDD-NN-dev`.
-6. **Round trip.** `pls apply` ends with `mark-applied`. If it reports differences, Pleasanter stored something differently (D8: dropped defaults, added fields):
+6. **Round trip.** `pls apply` ends with `mark-applied`. If it reports differences, the release is recorded as `applied-differs`, and the live state (`live-<site>.json`) becomes the drift baseline. Pleasanter stored something differently (D8: dropped defaults, added fields):
    - Copy the live value into `config/`. The difference table shows the path and the live value.
    - If the difference is a default Pleasanter always drops or adds, propose it as a `canonical-defaults.json` entry for the framework (I9).
    - Commit, plan the next dev release and apply again. Repeat until 0 differences.

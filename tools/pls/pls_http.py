@@ -182,7 +182,10 @@ def rollback(client: Client, plan: dict, files: dict, sites: list | None = None)
     for step in plan["rollback"]:
         if sites is not None and step["site"] not in sites:
             continue
-        st, _ = client.apply(step["site_id"], files[step["payload_file"]])
+        try:                                            # one failing restore must not stop the others (S4)
+            st, _ = client.apply(step["site_id"], files[step["payload_file"]])
+        except TransportError as ex:
+            st = f"error {ex}"
         out.append(f"restore {step['site']} ({step['site_id']}) → HTTP {st}")
     return out
 

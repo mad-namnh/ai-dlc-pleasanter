@@ -4,7 +4,7 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
 
 | Skill | Phase | Version | Status |
 |---|---|---|---|
-| `pls-kb-pleasanter` | all (knowledge base) | 0.7 | 0.7: D21–D26 (equipment demo PRB-001, ADR-0007). D12–D20 from dev probes; facts 11–13 (process buttons for read-only users, summaries, removed definitions); rule: a probe is evidence only for the configuration it reproduces (slice #2, S2-1) |
+| `pls-kb-pleasanter` | all (knowledge base) | 0.8 | 0.8: `references/skeletons.md` (new-site skeletons, verified built-in columns; B3).  0.7: D21–D26 (equipment demo PRB-001, ADR-0007). D12–D20 from dev probes; facts 11–13 (process buttons for read-only users, summaries, removed definitions); rule: a probe is evidence only for the configuration it reproduces (slice #2, S2-1) |
 | `pls-p1-requirements-analyst` | P1 | 0.3 | 0.2 passed eval case 001. 0.3 **passed eval case 002** run 1 (2026-11-05; header contamination noted, input fixed) |
 | `pls-p2-solution-designer` | P2 | 0.5 | 0.3 **failed eval case 002** run 1 (2026-11-05): design-changing probe scheduled after G2. 0.4: such probes are G2 prerequisites, otherwise take the safe branch. 0.4 **passed eval case 002** run 2 (2026-11-05): access control on the process as the safe branch, probe as G2 prerequisite. 0.5: new sites (`references/new-sites.md`, ADR-0007) — not yet evaluated |
 | `pls-p3-config-builder` | P3 | 0.1 | D2: design → `config/` (layout and references in `references/config-layout.md`), canon/lint/coverage loop, dev deploy until round trip 0. Case 001 run 1 pass (2026-11-05) |

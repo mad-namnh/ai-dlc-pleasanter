@@ -21,6 +21,7 @@ Every entry here was **observed on a real environment** (version and evidence gi
 | Site configuration API (getsite / createsite / updatesite / copysitepackage), record API, process execution via API | `references/api.md` |
 | SiteSettings schema facts (columns, processes, data changes, notifications, views) | `references/schema.md` |
 | Behaviours that change designs (limits, pitfalls, defaults) | `references/behaviours.md` |
+| What a new site looks like after `createsite` (Results / Issues), built-in columns verified | `references/skeletons.md` |
 
 ## Facts to remember
 

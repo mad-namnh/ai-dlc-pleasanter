@@ -44,7 +44,7 @@ traceability.json
 - [ ] Slots allocated; no slot reuse with existing data.
 - [ ] Classification stated; data-impacting → migration + rollback described.
 - [ ] Permission-impacting → for each role, what it can see **and press** (process buttons, D19/D20) is stated, and a test with a user of that role is planned for P4 (TD-11).
-- [ ] Principal IDs (permissions, process access control, notification recipients) are `${principal:x}` references, never raw IDs.
+- [ ] Principal IDs (permissions, process access control, notification recipients) are `${principal:x}` references, never raw IDs. Every role used is already in `environments.json` `principals` (prepared at setup); `pls lint` shows no L-REF-02.
 - [ ] Configuration paths in `traceability.json` use stable keys (`Name`, `ColumnName`, view `Id`).
 - [ ] New sites: logical name, `ReferenceType` with reason, title per environment, relations, permissions, release order; built-in columns only from a skeleton export (`references/new-sites.md`).
 

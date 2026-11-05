@@ -60,11 +60,11 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 
 ### P2 Design → G2
 - Skill: `pls-p2-solution-designer`. For a new app, also its `references/new-sites.md` (ADR-0007).
-- Probes that can change the design run on dev **before** G2. Only probe sites `zz_probe_*` under the environment's `parent_id` are written.
+- Behaviour the design depends on comes from the KB (new sites: `references/skeletons.md`). A gap is designed around (the safe branch), or carried as an open point that P3's dev round trip confirms. If a probe is unavoidable, it is an open point at G2 for the person; `pls` has no command that writes probe sites, and you do not call the API directly.
 - A new app also gets these outputs:
   - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
-  - `principals` per role, filled in by the person from their environment.
+  - roles only from `envs.<env>.principals`. Roles, groups, users and keys are prepared at setup; in the demo they come from `demo/roles.json`. A design that needs a role not listed there is an open point for the person before G2. `pls lint` (L-REF-02) must show every `${principal:x}` and `${site:x}` defined.
 - `traceability.json` gets REQ → design ids and the config paths that P3 will create (P2 skill, step 8).
 - **Stop at G2.**
 
@@ -86,7 +86,7 @@ Skill: `pls-p3-config-builder`.
    1. `pls export --env dev --site <s>` for each site.
    2. `pls release-plan --env dev --release R-YYYYMMDD-NN-dev --export <s>=<export> …`
    3. The person runs `pls apply R-YYYYMMDD-NN-dev`, or allows `--yes`. This applies, exports again and runs `mark-applied`.
-4. **If `mark-applied` reports differences after the first apply:** Pleasanter canonicalised something (D8).
+4. **If `mark-applied` reports differences** (status `applied-differs`, files `live-<site>.json`): Pleasanter canonicalised something (D8). The live state becomes the drift baseline, so the follow-up release is not refused.
    - Fold the live value back into `config/`. If it is a default, `pls canon` may already know it; otherwise edit `config/`.
    - Commit, and plan the next dev release (…-NN+1-dev) until the round trip shows 0 differences.
 5. **If the plan is refused, read the reason:**
@@ -115,7 +115,7 @@ Skill: `pls-p4-test-writer`.
 ### P5 Release → G4
 Skill: `pls-p5-release-manager`.
 
-**Target = dev (release target `dev` in the project profile).** The app is already on dev from P3/P4. P5 makes it a release:
+**Target = dev (release target `dev` in the project profile): record only (decision B1).** P3/P4 deploy to dev while building; P5 does not apply again. It makes the tested dev state the release:
 1. `pls export` each site, then `pls drift --env dev --site <s> <export>`. It must show 0 differences from the last applied dev release, which means nothing changed after the tests.
 2. Write the release record: `diff-report.md` (Japanese business summary + raw changes since the previous released state, or since the skeleton for a new app) and `approvals.md`.
 3. **Stop at G4.** It is approval to treat this dev state as released.

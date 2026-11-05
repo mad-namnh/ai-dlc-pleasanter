@@ -27,6 +27,8 @@ class Fake:
         }
         self.records, self.next_id, self.calls = {}, 1000, []
         self.fail_update_on = None
+        self.drop_on_save = None
+        self.fail_restore_on = None
 
     def handle(self, path, body):
         who = KEYS.get(body.get("ApiKey"))
@@ -46,6 +48,9 @@ class Fake:
                 return 500, {"Message": "boom"}
             s = self.sites[iid]
             s.update({k: body[k] for k in ("Title", "ReferenceType", "SiteSettings")})
+            s.update({k: body[k] for k in ("InheritPermission", "Permissions") if k in body})
+            if self.drop_on_save:                        # Pleasanter canonicalises on save (D8)
+                s["SiteSettings"] = {k: v for k, v in s["SiteSettings"].items() if k != self.drop_on_save}
             s["UpdatedTime"] = f"t{len(self.calls)}"
             return 200, {"Message": "updated"}
         if act == "createsite":
@@ -299,6 +304,71 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "loans", "--out", "z.json"]), 0)
         res = json.loads((self.r / "z.json").read_text(encoding="utf-8"))
         self.assertEqual(res["tests"][0]["status"], "pass", res)
+
+
+    # ---------------------------------------------------------------- D3b (architecture review S1–S4, B2)
+
+    def test_bootstrap_twice_is_refused_and_partial_creates_only_the_rest(self):          # S1
+        d = self.r / "releases/B-2"
+        d.mkdir(parents=True)
+        envs = json.loads((self.r / "environments.json").read_text())
+        envs["envs"]["dev"]["sites"].update({"x1": {"title": "X1"}, "x2": {"title": "X2"}})
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        steps = [{"op": "createsite", "site": s, "parent_id": FOLDER, "payload": {"Title": s, "ReferenceType": "Results", "SiteSettings": {}}}
+                 for s in ("x1", "x2")]
+        (d / "bootstrap.json").write_text(json.dumps({"release": "B-2", "env": "dev", "parent_id": FOLDER, "steps": steps,
+                                                      "status": "partial", "created": {"x1": 4711}}), encoding="utf-8")
+        envs["envs"]["dev"]["sites"]["x1"]["id"] = 4711
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        n = len(self.fake.sites)
+        self.assertEqual(pls.main(["bootstrap", "B-2", "--yes"]), 0)
+        self.assertEqual(len(self.fake.sites), n + 1)                                     # only x2 created
+        self.assertEqual(json.loads((d / "bootstrap.json").read_text())["status"], "created")
+        self.assertEqual(pls.main(["bootstrap", "B-2", "--yes"]), 2)                       # never twice
+        self.assertEqual(len(self.fake.sites), n + 1)
+
+    def test_apply_with_canonicalisation_differences_becomes_the_baseline(self):        # S2
+        plan, d = self.plan()
+        for s in ("equipment", "loans"):
+            plan["per_site"][s]["payload_file"] = f"payload-{s}.json"
+            (d / f"payload-{s}.json").write_text(json.dumps({"Title": f"new {s}", "ReferenceType": "Results",
+                                                             "SiteSettings": {"X": 1, "Dflt": True}}), encoding="utf-8")
+        (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        self.fake.drop_on_save = "Dflt"
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
+        p2 = json.loads((d / "plan.json").read_text())
+        self.assertEqual(p2["status"], "applied-differs")
+        self.assertTrue((d / "live-loans.json").exists())
+        e = pls.env_conf(self.r, "dev")
+        base, label = pls.baseline(self.r, e, "dev", "loans", None)
+        self.assertIn("live-loans.json", label)
+        self.assertNotIn("Dflt", base["settings"])                                        # fold-back release is not drift
+        self.assertEqual(pls.new_sites(self.r, "dev"), set())
+
+    def test_restore_restores_permissions_and_survives_errors(self):                    # S4
+        self.fake.sites[EQ].update(InheritPermission=EQ, Permissions=["User,1,511"])
+        files = {"payload-equipment.json": {"Title": "n", "ReferenceType": "Results", "SiteSettings": {}, "InheritPermission": FOLDER, "Permissions": []},
+                 "rollback-equipment.json": {"Title": "o", "ReferenceType": "Results", "SiteSettings": {}, "InheritPermission": EQ, "Permissions": ["User,1,511"]},
+                 "payload-loans.json": {"Title": "n", "ReferenceType": "Issues", "SiteSettings": {}},
+                 "rollback-loans.json": {"Title": "o", "ReferenceType": "Issues", "SiteSettings": {}}}
+        plan, _ = self.plan()
+        self.fake.fail_update_on = LO
+        res = H.apply_release(H.Client(self.url, "K-ADMIN"), plan, files)
+        self.assertEqual(res["status"], "rolled-back")
+        self.assertEqual(self.fake.sites[EQ]["Permissions"], ["User,1,511"])
+        self.assertEqual(self.fake.sites[EQ]["InheritPermission"], EQ)
+        broken = H.Client("http://127.0.0.1:9", "K-ADMIN", timeout=1)
+        out = H.rollback(broken, plan, files)                                             # errors are logged, not raised
+        self.assertEqual(len(out), 2)
+        self.assertIn("error", out[0])
+
+    def test_http_check_accepts_a_restricted_key_without_access(self):                  # B2
+        envs = json.loads((self.r / "environments.json").read_text())
+        envs["envs"]["dev"]["sites"] = {"loans": {"id": LO, "title": "dev_L"}}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)                     # staff → 404 = valid key
+        (self.r / ".pls/staff.key").write_text("K-WRONG", encoding="utf-8")
+        self.assertEqual(pls.main(["http-check", "--env", "dev"]), 1)                     # 401 = bad key
 
 
 if __name__ == "__main__":
