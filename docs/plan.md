@@ -57,7 +57,40 @@ Then:
 5. First skills/agents, only for what the pilot needs — next: skills v0.3 from slice #2 findings (S2-1, S2-4)
 6. Slice #2 ✅ (2026-11-05): multi-site release, migrations M1/M2, permissions + process ACL across environments; R-20261105-05 on stg
 
-## Step 5 — Real pilot & metrics ← NEXT after skills v0.3 and the customer round
+## Step 4b — Demo readiness ← NEXT (review: `docs/reviews/demo-readiness.md`)
+
+**Goal:** another person clones the framework, creates a project from a natural-language spec, sets one connection config, and the agent carries the app through P1–P6 to stg. A human approves at G1–G4. The run must use few tokens.
+
+**Definition of done:** a **demo dry run** passes. The runner is a person or agent who did not build the framework, working with Claude Code on a machine that can reach Pleasanter. They go from a clean clone to a stg release with round trip 0 and smoke tests passing, using only:
+- the repositories;
+- `docs/setup.md`;
+- the spec.
+
+Measure tokens and wall time per phase, and record them in `demo/results/`.
+
+### Work items (in order)
+
+| # | Item | Deliverables | Acceptance |
+|---|---|---|---|
+| D1 | **Lifecycle runbook** (review R2-1, R2-2, R3-5) | `templates/project/CLAUDE.md`.<br>Skill `pls-x-lifecycle`: phase order P1→P6, gate stops (the agent stops and asks; it never approves), where gate decisions are written, the exact `pls` command per step, error handling (refused plan, failed apply → automatic restore), and token rules (read `pls` summaries, never whole payload, rollback or export files; no base64 when HTTP works). | A fresh agent given only the project and a spec reaches G1 and stops correctly. After "approve G1" it continues to G2, and so on. |
+| D2 | **Skills P3–P5** (R2-1, R2-3, R2-5) | `pls-p3-config-builder`: design → `config/` edits using KB `schema.md`; canonical-form fold-back; lint/coverage loop.<br>`pls-p4-test-writer` + `references/test-spec.md`: the format of `ops`, `as_key`, `expectHttp`, `spec.vars`, `$var` and `list`; acceptance criteria → tests; role tests; G3 evidence template.<br>`pls-p5-release-manager`: `release-plan` → diff report (Japanese) → `apply` → `mark-applied` → smoke; templates for `diff-report.md`, `g3-verification.md`, `approvals.md`.<br>P6 as a runbook step: drift baseline after release. | Each skill has an eval case built from slice #3 (equipment) and graded by its rubric. No case answer may appear in a skill. |
+| D3 | **Project scaffold** (R3-1, R3-2) | `pls init <dir> --framework <path>` (or `templates/project/` + copy script) creates:<br>• `CLAUDE.md`, `.gitignore`, `environments.json` with `dev`/`stg` placeholders (`parent_id`, empty `sites`, `principals` per role);<br>• `connections.example.json`, empty ledger and traceability, the `requirements/`, `design/`, `config/`, `tests/`, `releases/` and `ops/` folders;<br>• skills copied and `framework.lock` written.<br>Framework path read from `framework.lock` (or env `PLS_HOME`) instead of a fixed `../`. `pls skills check` compares the project copy with the lock. | Unit tests; `pls init` then `pls lint` passes on the empty project. |
+| D4 | **Setup guide + demo package** (R1, R3-3, R3-4) | `docs/setup.md`:<br>• prerequisites (Python 3.10+, Claude Code on a machine that can reach Pleasanter, Pleasanter 1.5.x);<br>• one parent folder per environment;<br>• groups and users per role, API keys in environment variables;<br>• `connections.json`, `http-check`.<br>`demo/`: spec (equipment-loan request, Japanese), scenario script (what to say at each gate, expected stops, expected duration), the list of roles the spec needs, and a reset note (delete the demo folder in the UI). | A person follows `setup.md` to a green `http-check` without asking anyone. |
+| D5 | **Real HTTP rehearsal** (R2-4) | Nam's terminal on dev, in a new demo folder: `init` → `bootstrap` → `release-plan` → `apply` → `test` (both roles) → `mark-applied`. Fix whatever breaks. | Recorded in `demo/results/`; apply and bootstrap proven over HTTP. |
+| D6 | **Clean-up** (R3-6) | README status and layout updated.<br>Framework `CLAUDE.md` rules updated for `pls` (no spike-era paths).<br>`spike/`, `patterns/` and `evals/results/` moved under `archive/`, or clearly marked non-core.<br>`HANDOFF.md` reduced to current state + next step. | A newcomer reading README → setup → demo finds no stale statement. |
+| D7 | **Demo dry run** | Run the definition of done; record tokens, time and human corrections per phase. | Pass → demo ready. |
+
+### Decisions needed from Nam before D4/D5
+
+- **Demo environment:** MADLAB dev with a new parent folder for dev and one for stg, or one folder for both.
+- **stg in the demo:** run to stg, or stop at dev with the release rehearsal.
+- **Who does the dry run (D7):** a colleague, or a fresh agent session.
+
+### Deferred (not needed for the demo)
+
+Migrations over HTTP, reviewer agents, CI, Playwright smoke, prod / customer-side deploy package (ADR-0003), mail (TD-10), P6 on permission drift.
+
+## Step 5 — Real pilot & metrics (after the demo)
 
 Metrics:
 - Rate of AI changes correct on the first attempt
@@ -88,3 +121,4 @@ Metrics:
 | 2026-11-05 | Step 4 items 1–4 done in `pls` v0.3: slot-collision check, multi-site release plan + automatic restore, migration gate (ADR-0004 accepted), site permissions in git (ADR-0006) |
 | 2026-11-05 | Slice #2 (カテゴリ split, 経理 read, 合計対応時間) released to stg as R-20261105-05; B4 redesigned after T-015 (process access control, D20); test groups 372/373 kept until prod groups exist |
 | 2026-11-05 | Stage = test/demo to shape architecture, design and process; customer questions, prod environment, real groups and mail deferred to the prod stage |
+| 2026-11-05 | Feature work paused; demo readiness first (review `docs/reviews/demo-readiness.md`, plan Step 4b D1–D7) |

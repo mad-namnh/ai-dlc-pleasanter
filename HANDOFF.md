@@ -59,7 +59,11 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 
 Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6 node tests. The agent sandbox cannot reach Pleasanter over HTTP (proxy 403); agents use the built-in browser runner, people use `pls` over HTTP.
 
-## Next steps (in order)
+## Current focus (2026-11-05, Nam)
+
+**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, starting with D1, the lifecycle runbook. Before D4/D5, ask Nam about the demo environment, whether the demo goes to stg, and who does the dry run.
+
+## Next steps (in order) — before the pause
 
 1. ✅ Skills 0.3 / KB 0.6 from the slice #2 findings (commit c02bd12); project pin upgraded.
 2. **Eval case 002** (P1, P2) with fresh agents — run 1 done (2026-11-05, `evals/results/*/2026-11-05-case002.md`):
