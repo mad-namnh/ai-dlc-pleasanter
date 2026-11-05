@@ -87,3 +87,4 @@ Metrics:
 | 2026-11-05 | Slice 1.5: accepted stg drift 「緊急」 carried P6→P1→P5 with skills v0.2; R-20261105-02 record-only release; `pls` fix: last applied release ordered by instant (I9, regression test added) |
 | 2026-11-05 | Step 4 items 1–4 done in `pls` v0.3: slot-collision check, multi-site release plan + automatic restore, migration gate (ADR-0004 accepted), site permissions in git (ADR-0006) |
 | 2026-11-05 | Slice #2 (カテゴリ split, 経理 read, 合計対応時間) released to stg as R-20261105-05; B4 redesigned after T-015 (process access control, D20); test groups 372/373 kept until prod groups exist |
+| 2026-11-05 | Stage = test/demo to shape architecture, design and process; customer questions, prod environment, real groups and mail deferred to the prod stage |

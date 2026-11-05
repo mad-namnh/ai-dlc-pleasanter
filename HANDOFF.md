@@ -1,5 +1,7 @@
 # Handoff — state as of 2026-11-05 (evening, after slice #2) JST
 
+> Next session may run on another Claude account: everything needed is in the two repositories; nothing lives only in the chat.
+
 Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 
 ## What this is
@@ -41,15 +43,24 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 - Skills v0.2 (P1, P2) passed eval case 001. They were used for slice #2.
 - Slice #1 and slice 1.5 are done (see the reports and the decision log in `docs/plan.md`).
 
+## Stage (decided by Nam, 2026-11-05)
+
+**Test / demo stage.** The goal now is to shape the architecture, design and process. It is not to deliver to a customer. Therefore:
+- Customer questions (Q1–Q24, O7), the prod environment and the real groups (O3) are **prod-stage items**. They are deferred and do not block anything. Keep using the `[assumed]` defaults.
+- The test principals (10061, 372, 373) stay as they are.
+- Mail stays deferred (TD-10).
+
 ## Next steps (in order)
 
-1. ✅ Skills 0.3 / KB 0.6 from the slice #2 findings (commit c02bd12), and the project pin was upgraded. **Next:** run eval case 002 (P1, P2) with fresh agents, 3 runs each.
-2. **Customer round:** send Q8–Q24 and O7 (M2 changes 更新日時 and 更新者). Get the real groups for prod (O3), then add `prod` to `environments.json`.
-3. **First real migration volume** (plan Step 4 item 3): M1 and M2 touched 0 records on stg, so rehearse on a copy of real data.
-4. **Evals:** automate grading; run case 001 again on 0.3 to check for regressions.
-5. Step 5 (real pilot and metrics) — choose the pilot project.
-
-Mail stays deferred (TD-10). The escaped defect below waits for it.
+1. ✅ Skills 0.3 / KB 0.6 from the slice #2 findings (commit c02bd12); project pin upgraded.
+2. **Eval case 002** (P1, P2) with fresh agents. Start with 1 run each; run 3 each only if the result is unclear (token cost).
+3. **Architecture / process gaps worth a demo slice:**
+   - P6 operate on slice #2: a drift on permissions, and on the process ACL.
+   - Transport ADR-0003: the manual base64 transfer is the most token-heavy step. Decide whether to automate it.
+   - A migration on a larger data copy (plan Step 4 item 3).
+   - Line-level script diff (S6).
+4. Update `docs/architecture.md` (v0.3) with what slices #1–#2 proved: multi-site release, migration gate, principals, and role tests.
+5. Prod-stage items (customer round, prod environment, real groups, mail) — later.
 
 ## Escaped defect found by the eval (I9)
 
