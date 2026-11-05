@@ -62,6 +62,15 @@ SECRET_RES = {
 }
 
 
+# Output is UTF-8 on every console: a Windows console with cp932 cannot encode "—" and labels in other
+# scripts, which made pls (and its tests) fail before printing (TD-12).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
+
 class Fail(Exception):
     pass
 
