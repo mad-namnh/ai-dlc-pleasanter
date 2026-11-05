@@ -46,7 +46,7 @@ def load_connection(root: Path, env: str) -> dict:
     f = connections_file(root)
     if not f.exists():
         raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL "
-                             "(keys go in environment variables, see README)")
+                             "(keys go in environment variables, see docs/setup.md in ai-dlc-pleasanter)")
     try:
         allc = json.loads(f.read_text(encoding="utf-8-sig"))   # Windows PowerShell 5 writes a BOM
     except json.JSONDecodeError as ex:

@@ -1,0 +1,25 @@
+{
+  "_doc": "Roles of the demo app (decision B2: prepared before the demo). `pls init --roles demo/roles.json` writes one principal placeholder and one key per role; fill in the ids in environments.json and set the key variables (docs/setup.md). P2 may use only these roles.",
+  "roles": {
+    "admin": {
+      "principal": "User",
+      "description": "The person running the demo: manages the app's sites (bootstrap, apply, export). Use your own Pleasanter user; it needs site-management rights on the demo folder.",
+      "key_env": "PLS_DEV_ADMIN_KEY",
+      "default_key": true
+    },
+    "somu": {
+      "principal": "Group",
+      "group_name": "zz_demo_総務",
+      "description": "総務部: registers equipment and loans, marks loans as returned.",
+      "test_user": "zz_demo_somu",
+      "key_env": "PLS_DEV_SOMU_KEY"
+    },
+    "staff": {
+      "principal": "Group",
+      "group_name": "zz_demo_社員",
+      "description": "一般社員: may only view the equipment register.",
+      "test_user": "zz_demo_staff",
+      "key_env": "PLS_DEV_STAFF_KEY"
+    }
+  }
+}

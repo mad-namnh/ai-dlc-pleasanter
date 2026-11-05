@@ -2,7 +2,9 @@
 
 MADLAB's AI-DLC (AI-Driven Development Lifecycle) framework for **Pleasanter (プリザンター)** projects.
 
-**Start here: [`docs/architecture.md`](docs/architecture.md)** — the lifecycle frame (P1 requirements → P6 operate, gates G1–G4, invariants, components).
+**To run it:** [`docs/setup.md`](docs/setup.md) (prepare Pleasanter, `pls init`, connect), then the demo in [`demo/README.md`](demo/README.md).
+
+**To understand it:** [`docs/architecture.md`](docs/architecture.md) — the lifecycle frame (P1 requirements → P6 operate, gates G1–G4, invariants, components).
 
 Goal: bring the model "source of truth in git → AI works through hooks → verification & human approval (G1–G4) → failures fed back as rules" into a low-code environment, where the **source of truth is configuration** (SiteSettings, scripts, permissions, …) rather than source code.
 

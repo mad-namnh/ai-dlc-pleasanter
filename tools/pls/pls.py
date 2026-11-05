@@ -443,6 +443,12 @@ def lint(r: Path) -> list[dict]:
     all_ids = {str(s["id"]) for e in e_all["envs"].values() for s in e["sites"].values() if s.get("id")}
     ledger = rj(r / "design/slot-ledger.json") if (r / "design/slot-ledger.json").exists() else None
     decisions = "\n".join(p.read_text(encoding="utf-8") for p in (r / "design").rglob("*.md")) if (r / "design").exists() else ""
+    for env_name, ec in e_all["envs"].items():                   # L-ENV-01: setup not finished
+        for n, v in (ec.get("principals") or {}).items():
+            if "<" in str(v):
+                issues.append({"rule": "L-ENV-01", "site": "-", "msg": f"envs.{env_name}.principals.{n} = {v!r}: fill in the id (docs/setup.md)"})
+        if ec.get("parent_id") == 0:                              # template value, never a real folder
+            issues.append({"rule": "L-ENV-01", "site": "-", "msg": f"envs.{env_name}.parent_id: set the folder id for the app (docs/setup.md)"})
     for site_dir in sorted((r / "config").iterdir()):
         if not site_dir.is_dir():
             continue
@@ -998,7 +1004,30 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     return problems
 
 
-def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK) -> None:
+def apply_roles(target: Path, roles_file: Path) -> list[str]:
+    """roles.json → principals placeholders in environments.json, one key per role in connections.example.json
+    and design/roles.json (the roles P2 may use, decision B2). Returns the roles."""
+    roles = rj(roles_file)["roles"]
+    (target / "design").mkdir(parents=True, exist_ok=True)
+    wj(target / "design" / "roles.json", rj(roles_file))
+    ev = rj(target / "environments.json")
+    for env in ev["envs"].values():
+        env["principals"] = {n: f"{r_['principal']},<{'user' if r_['principal'] == 'User' else 'group'} id of {r_.get('group_name') or n}>"
+                             for n, r_ in roles.items()}
+    wj(target / "environments.json", ev)
+    cx = target / "connections.example.json"
+    c = rj(cx)
+    for env_name, conn in c.items():
+        if env_name.startswith("_"):
+            continue
+        conn["keys"] = {n: f"env:{r_['key_env'].replace('DEV', env_name.upper())}" for n, r_ in roles.items() if r_.get("key_env")}
+        conn["default_key"] = next((n for n, r_ in roles.items() if r_.get("default_key")), next(iter(conn["keys"]), "admin"))
+    wj(cx, c)
+    return list(roles)
+
+
+def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK,
+                 roles: Path | None = None) -> None:
     if target.exists() and any(target.iterdir()):
         raise Fail(f"{target} exists and is not empty - pls init only creates new projects")
     tpl = fw / "templates" / "project"
@@ -1021,6 +1050,8 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
+    if roles:
+        apply_roles(target, roles)
     sync_skills(target, fw)
 
 
@@ -1277,12 +1308,13 @@ def main(argv=None) -> int:
     s.add_argument("--stage", choices=["demo", "project"], default="demo")
     s.add_argument("--target", choices=["dev", "stg", "prod"], default="dev", help="release target of the project")
     s.add_argument("--approver", help="name of the person who approves the gates (demo stage)")
+    s.add_argument("--roles", help="roles.json (e.g. demo/roles.json): principals placeholders + one key per role")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     a = ap.parse_args(argv)
     if a.cmd == "init":
         target = Path(a.dir).resolve()
-        init_project(target, a.stage, a.target, a.approver)
+        init_project(target, a.stage, a.target, a.approver, roles=Path(a.roles).resolve() if a.roles else None)
         print(f"created {target}\nnext:\n  cd {target}\n  git init\n"
               "  copy connections.example.json to .pls/connections.json, set url; put API keys in environment variables\n"
               "  environments.json: envs.dev.parent_id (folder for the app) and principals per role\n"

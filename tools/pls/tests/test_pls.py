@@ -460,7 +460,12 @@ class PlsTest(unittest.TestCase):
         self.assertIn("| Approvers | Nam (all gates) |", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
         self.assertTrue((proj / ".claude/skills/pls-x-lifecycle/SKILL.md").exists())
         out = subprocess.run([sys.executable, "pls.py", "lint"], cwd=proj, capture_output=True, text=True)
-        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)          # launcher finds the framework
+        self.assertIn("L-ENV-01", out.stdout, out.stderr)                    # launcher runs; setup not finished yet
+        ev = json.loads((proj / "environments.json").read_text(encoding="utf-8"))
+        ev["envs"]["dev"]["parent_id"] = 500
+        (proj / "environments.json").write_text(json.dumps(ev), encoding="utf-8")
+        out = subprocess.run([sys.executable, "pls.py", "lint"], cwd=proj, capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertIn("0 issue(s)", out.stdout)
         os.chdir(proj)
         self.assertEqual(pls.main(["skills", "check"]), 0)
@@ -524,6 +529,25 @@ class PlsTest(unittest.TestCase):
             {"Id": 1, "Name": "s1", "Body": "var a = 1;\r\nvar b = 2;\r\n", "BeforeCreate": True}])), encoding="utf-8")
         self.assertEqual(pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"]), 0)
         self.assertEqual(pls.main(["diff", str(exp), "--env", "dev", "--site", "a"]), 0)
+
+
+    def test_init_with_roles_prepares_principals_and_keys(self):                          # D4, B2
+        roles = self.r / "roles.json"
+        roles.write_text(json.dumps({"roles": {
+            "admin": {"principal": "User", "key_env": "PLS_DEV_ADMIN_KEY", "default_key": True},
+            "somu": {"principal": "Group", "group_name": "zz_demo_総務", "key_env": "PLS_DEV_SOMU_KEY"},
+            "staff": {"principal": "Group", "group_name": "zz_demo_社員", "key_env": "PLS_DEV_STAFF_KEY"}}}, ensure_ascii=False), encoding="utf-8")
+        proj = self.r / "app"
+        pls.init_project(proj, "demo", "dev", "Nam", roles=roles)
+        ev = json.loads((proj / "environments.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(ev["envs"]["dev"]["principals"]), {"admin", "somu", "staff"})
+        cx = json.loads((proj / "connections.example.json").read_text(encoding="utf-8"))
+        self.assertEqual(cx["dev"]["keys"]["somu"], "env:PLS_DEV_SOMU_KEY")
+        self.assertEqual(cx["dev"]["default_key"], "admin")
+        self.assertTrue((proj / "design/roles.json").exists())
+        os.chdir(proj)
+        msgs = [i["msg"] for i in pls.lint(proj) if i["rule"] == "L-ENV-01"]
+        self.assertEqual(len(msgs), 4)                                                    # 3 principals + parent_id
 
 
 if __name__ == "__main__":
