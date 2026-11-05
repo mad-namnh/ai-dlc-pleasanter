@@ -145,6 +145,17 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2",
                                    "--accept-drift", "ops/drift/decision.md"]), 0)
 
+    def test_last_applied_release_compares_instants_not_strings(self):
+        # Escaped in slice 1.5: R-01 applied_at "…T09:19:30+09:00" (00:19 UTC) sorted after
+        # R-02 "…T01:48:06+00:00" as strings, so drift kept using the older release as baseline.
+        for rel, ts in (("R-01", "2026-11-05T09:19:30+09:00"), ("R-02", "2026-11-05T01:48:06+00:00")):
+            d = self.r / "releases" / rel
+            d.mkdir(parents=True)
+            (d / "plan.json").write_text(json.dumps({"release": rel, "env": "stg", "site": "a",
+                                                     "status": "applied", "applied_at": ts}), encoding="utf-8")
+        got = [p["release"] for _, p in pls.releases_for(self.r, "stg", "a", "applied")]
+        self.assertEqual(got, ["R-01", "R-02"])
+
     def test_classify(self):
         d = [{"path": "settings.Columns[ClassB]", "kind": "removed", "before": {}, "after": None}]
         self.assertEqual(pls.classify(d)["classification"], "data-impacting")

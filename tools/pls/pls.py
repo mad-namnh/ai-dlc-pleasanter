@@ -33,6 +33,7 @@ import hashlib
 import json
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -392,7 +393,18 @@ def releases_for(r: Path, env: str, site: str, status: str | None = None) -> lis
         plan = rj(p)
         if plan.get("env") == env and plan.get("site") == site and (status is None or plan.get("status") == status):
             out.append((p.parent, plan))
-    return sorted(out, key=lambda x: (x[1].get("applied_at") or "", x[1]["release"]))
+    return sorted(out, key=lambda x: (_applied_key(x[1].get("applied_at")), x[1]["release"]))
+
+
+def _applied_key(ts: str | None) -> float:
+    """Sort key for applied_at. Timestamps carry different UTC offsets (+09:00 written by hand, +00:00 by
+    mark-applied), so they must be compared as instants, not as strings. Missing/naive -> oldest/UTC."""
+    if not ts:
+        return float("-inf")
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
 
 
 def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tuple[dict, str]:

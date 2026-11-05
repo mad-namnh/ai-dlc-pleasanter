@@ -83,3 +83,4 @@ Metrics:
 | 2026-11-05 | Skills v0.2: slice answers removed from skills (eval leakage); eval case 001 passed for P1 and P2 with fresh agents |
 | 2026-11-05 | AI gateway destroyed on AWS dev (`terraform destroy`, 13 resources) while parked; redeploy with `terraform apply` |
 | 2026-11-05 | Mail deferred (TD-10): no mail sink, no mail tests, duplicate-mail defect left unfixed until mail is needed |
+| 2026-11-05 | Slice 1.5: accepted stg drift 「緊急」 carried P6→P1→P5 with skills v0.2; R-20261105-02 record-only release; `pls` fix: last applied release ordered by instant (I9, regression test added) |
