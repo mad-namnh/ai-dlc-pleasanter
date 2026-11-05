@@ -61,7 +61,7 @@ Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6
 
 ## Current focus (2026-11-05, Nam)
 
-**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, starting with D1, the lifecycle runbook. Before D4/D5, ask Nam about the demo environment, whether the demo goes to stg, and who does the dry run.
+**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, starting with D1, the lifecycle runbook. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
 
 ## Next steps (in order) — before the pause
 

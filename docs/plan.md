@@ -59,9 +59,9 @@ Then:
 
 ## Step 4b — Demo readiness ← NEXT (review: `docs/reviews/demo-readiness.md`)
 
-**Goal:** another person clones the framework, creates a project from a natural-language spec, sets one connection config, and the agent carries the app through P1–P6 to stg. A human approves at G1–G4. The run must use few tokens.
+**Goal:** another person clones the framework, creates a project from a natural-language spec and sets one connection config. The agent then carries the app through the lifecycle to **dev**, with a human approving at the gates. The run must use few tokens.
 
-**Definition of done:** a **demo dry run** passes. The runner is a person or agent who did not build the framework, working with Claude Code on a machine that can reach Pleasanter. They go from a clean clone to a stg release with round trip 0 and smoke tests passing, using only:
+**Definition of done:** a **demo dry run** passes. The runner is someone who did not build the framework, working with Claude Code on a machine that can reach Pleasanter. They go from a clean clone to a **dev release** with round trip 0 and tests passing, using only:
 - the repositories;
 - `docs/setup.md`;
 - the spec.
@@ -78,13 +78,17 @@ Measure tokens and wall time per phase, and record them in `demo/results/`.
 | D4 | **Setup guide + demo package** (R1, R3-3, R3-4) | `docs/setup.md`:<br>• prerequisites (Python 3.10+, Claude Code on a machine that can reach Pleasanter, Pleasanter 1.5.x);<br>• one parent folder per environment;<br>• groups and users per role, API keys in environment variables;<br>• `connections.json`, `http-check`.<br>`demo/`: spec (equipment-loan request, Japanese), scenario script (what to say at each gate, expected stops, expected duration), the list of roles the spec needs, and a reset note (delete the demo folder in the UI). | A person follows `setup.md` to a green `http-check` without asking anyone. |
 | D5 | **Real HTTP rehearsal** (R2-4) | Nam's terminal on dev, in a new demo folder: `init` → `bootstrap` → `release-plan` → `apply` → `test` (both roles) → `mark-applied`. Fix whatever breaks. | Recorded in `demo/results/`; apply and bootstrap proven over HTTP. |
 | D6 | **Clean-up** (R3-6) | README status and layout updated.<br>Framework `CLAUDE.md` rules updated for `pls` (no spike-era paths).<br>`spike/`, `patterns/` and `evals/results/` moved under `archive/`, or clearly marked non-core.<br>`HANDOFF.md` reduced to current state + next step. | A newcomer reading README → setup → demo finds no stale statement. |
-| D7 | **Demo dry run** | Run the definition of done; record tokens, time and human corrections per phase. | Pass → demo ready. |
+| D7 | **Demo dry run — fresh agent session** | Clean clone → setup → spec → P1…P6 on dev, with Nam answering the gates. Record tokens, time and human corrections per phase in `demo/results/`. | Pass; fixes folded back into D1–D6. |
+| D8 | **Team acceptance run** | A team member runs the demo alone from `docs/setup.md` + `demo/`, then gives feedback (where they got stuck, what was unclear). | They reach the dev release without help → demo ready. |
 
-### Decisions needed from Nam before D4/D5
+### Decisions (Nam, 2026-11-05)
 
-- **Demo environment:** MADLAB dev with a new parent folder for dev and one for stg, or one folder for both.
-- **stg in the demo:** run to stg, or stop at dev with the release rehearsal.
-- **Who does the dry run (D7):** a colleague, or a fresh agent session.
+- **Demo target = dev only.** No stg in the demo.
+  - P5 still runs, against dev, through the same release path: `release-plan` → diff report → G4 for that dev release → `apply` → `mark-applied` → tests. P6 = drift baseline on dev.
+  - stg stays supported by the tools but is out of the demo.
+  - `demo/` and `templates/project/` declare only `dev`: one parent folder on MADLAB dev.
+- **Dry run (D7) = a fresh agent session** (Claude Code, local, network path to dev), started from a clean clone.
+- **Final acceptance (D8) = a team member who did not build the framework.** They run the demo from `docs/setup.md` + `demo/`. The framework is built for the team, so this is the real definition of done.
 
 ### Deferred (not needed for the demo)
 
