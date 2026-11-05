@@ -278,5 +278,28 @@ class HttpTest(unittest.TestCase):
             c.export_site(EQ)
 
 
+    def test_tests_refused_without_allow_write(self):                  # TD-14b
+        c = json.loads((self.r / ".pls/connections.json").read_text())
+        c["dev"]["allow_write"] = False
+        (self.r / ".pls/connections.json").write_text(json.dumps(c), encoding="utf-8")
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-1", "steps": [{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}]}]), encoding="utf-8")
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 2)
+        self.assertEqual(self.fake.records, {})
+
+    def test_unfilled_fixture_is_refused_before_sending(self):          # TD-14c
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-2", "vars": {"e": "<item>"}, "steps": [
+            {"op": "get", "record": "$e", "expect": {}}]}]), encoding="utf-8")
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 2)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_exec_as_a_role_that_cannot_read_the_site(self):           # TD-14d: process ids read with the default key
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-3", "as_key": "staff", "steps": [
+            {"op": "create", "as_key": "admin", "site": "${site:loans}", "save": "l", "data": {}},
+            {"op": "exec", "record": "$l", "process": "return", "expectHttp": 404}]}]), encoding="utf-8")
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "loans", "--out", "z.json"]), 0)
+        res = json.loads((self.r / "z.json").read_text(encoding="utf-8"))
+        self.assertEqual(res["tests"][0]["status"], "pass", res)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -248,7 +248,8 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
         log: list[str] = []
         status = "pass"
         try:
-            site = c.export_site(spec.get("run_on") or site_id)["Response"]["Data"]
+            # configuration (process ids) is read with the default key: the role under test may not see the site (TD-14d)
+            site = clients(None).export_site(spec.get("run_on") or site_id)["Response"]["Data"]
             procs = {p["Name"]: p for p in site["SiteSettings"].get("Processes") or []}
             spec_client = c
             for st in spec["steps"]:

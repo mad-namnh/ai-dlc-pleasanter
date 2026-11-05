@@ -1,0 +1,11 @@
+{
+  "_doc": "Copy to .pls/connections.json (gitignored) and set the URL. Keys are never written here: 'env:NAME' reads an environment variable, 'file:NAME' reads a file next to connections.json (inside .pls/). Add one key per role the tests use (names must match as_key in tests/api/*.json). allow_write is your local opt-in for writes (dev/stg only, never prod). See ai-dlc-pleasanter docs/setup.md and docs/adr/0008.",
+  "dev": {
+    "url": "https://<pleasanter-dev-host>",
+    "keys": {
+      "admin": "env:PLS_DEV_ADMIN_KEY"
+    },
+    "default_key": "admin",
+    "allow_write": true
+  }
+}

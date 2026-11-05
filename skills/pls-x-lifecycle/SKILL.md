@@ -10,7 +10,7 @@ You are the orchestrator. You move the project through the phases in order. You 
 - You do the work in each phase and explain it.
 - A person approves at the gates.
 
-`pls` below means `python <framework>/tools/pls/pls.py` (`python3` where `python` is not Python 3), run from the project root. `<framework>` is the framework path in `.claude/framework.lock`.
+`pls` below means `python pls.py`, run from the project root (`python3` where `python` is not Python 3). The launcher `pls.py` runs the framework's tool from the path in `.claude/framework.lock`, or from env `PLS_HOME`. `pls skills check` shows whether the project's skills match the lock.
 
 ## 1. Find where the project is
 
@@ -62,7 +62,7 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 - Skill: `pls-p2-solution-designer`. For a new app, also its `references/new-sites.md` (ADR-0007).
 - Probes that can change the design run on dev **before** G2. Only probe sites `zz_probe_*` under the environment's `parent_id` are written.
 - A new app also gets these outputs:
-  - `environments.json` `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
+  - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
   - `principals` per role, filled in by the person from their environment.
 - `traceability.json` gets REQ → design ids and the config paths that P3 will create (P2 skill, step 8).
@@ -100,7 +100,7 @@ Skill: `pls-p3-config-builder`.
 Skill: `pls-p4-test-writer`.
 
 - Write `tests/api/*.json` from the acceptance criteria. Each restricted role gets tests run with that role's key (`as_key`).
-- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so run them only on dev (and stg smoke tests after G4). `pls test` does not check `allow_write` yet (TD-14).
+- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so `pls test` needs `allow_write: true`; run them only on dev (and stg smoke tests after G4).
 - On failure, find the cause before changing anything:
   - **build defect** → back to P3, then redeploy;
   - **design defect** → back to P2/G2;

@@ -57,11 +57,11 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 2. Optional: Nam re-runs `pls test tests/api/equipment.json --env dev --site loans` from `pls-demo-equipment` (HTTP transport) — expected all pass / pass-api-only.
 3. Then continue with step 4 below (architecture gaps) or step 5 (architecture.md v0.3). Multi-user HTTP role tests are deferred (demo stage).
 
-Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6 node tests. The agent sandbox cannot reach Pleasanter over HTTP (proxy 403); agents use the built-in browser runner, people use `pls` over HTTP.
+Tools: `pls` 0.6 (HTTP transport + browser runner fallback; `init`, `skills`), 46 python tests + 6 node tests. The agent sandbox cannot reach Pleasanter over HTTP (proxy 403); agents use the built-in browser runner, people use `pls` over HTTP.
 
 ## Current focus (2026-11-05, Nam)
 
-**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, D1 is done (lifecycle skill + project CLAUDE.md template). D2 is done: skills P3, P4 and P5 0.1. Tool gaps are in TD-14 ((b)–(d) are needed before D7). Next is D3: `pls init` + project scaffold. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
+**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, D1 is done (lifecycle skill + project CLAUDE.md template). D2 is done: skills P3, P4 and P5 0.1. Tool gaps are in TD-14 ((b)–(d) are needed before D7). D3 is done: `pls init`, launcher, `skills check|sync`, and TD-14 (a)–(d) fixed (pls 0.6). Next is D4: `docs/setup.md` + the `demo/` package. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
 
 ## Next steps (in order) — before the pause
 

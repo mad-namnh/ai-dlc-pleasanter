@@ -1,0 +1,8 @@
+.pls/
+
+# Test credentials for dev (generated, never committed)
+tests/seed/
+
+# Migration backups hold business data (I7) — never committed; keep the folder only
+migrations/*/backup/*
+!migrations/*/backup/.keep

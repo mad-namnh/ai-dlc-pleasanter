@@ -23,7 +23,7 @@ A file holds a JSON **list of tests**:
 | `id`, `reqs`, `title` | test id, the requirements it proves, a label |
 | `as_key` | **key name** in `.pls/connections.json` (e.g. `admin`, `staff`). This is not a principal name; ask which user each key belongs to. The key is used for every step (default: the connection's `default_key`). `pls test` refuses to run if two roles resolve to the same key |
 | `run_on` | site whose configuration is read for `exec` (process ids) and `siteConfig`; default is the `--site` of the command |
-| `vars` | fixtures. A value starting with `<` is a placeholder that `--var name=value` must fill. Steps add more with `save`. Dates relative to today (overdue tests) are passed as `--var`. A placeholder left unfilled is dropped silently today (TD-14), so list the needed `--var`s in the spec `title` or the hand-over message |
+| `vars` | fixtures. A value starting with `<` is a placeholder that `--var name=value` must fill. Steps add more with `save`. Dates relative to today (overdue tests) are passed as `--var`. `pls test` refuses to run while a placeholder is unfilled; list the needed `--var`s in the hand-over message |
 
 ## Steps
 
@@ -34,7 +34,7 @@ Every step has `op`. A step may set its own `as_key`, for example to create a fi
 | `create` | `site`, `data`, `save` (variable name) | stores the new record id in `$<save>`; with `expectHttp` it expects a refusal instead (no id saved) |
 | `get` | `record` (`"$e"`), `expect` {path: value} | each path of the record equals the value; or `expectHttp` (e.g. 404 = not visible to this role) |
 | `update` / `delete` | `record`, `data` (update) | HTTP 200, or `expectHttp` |
-| `exec` | `record`, `process` (process `Name`), `data`? | runs the process through the API (D10: display condition enforced → 400 outside it); `expectHttp`. The process id is read from the site with the **spec's** key. For a role that cannot read the site, use `update` with `data: {"ProcessId": <Id from config>}` instead (TD-14) |
+| `exec` | `record`, `process` (process `Name`), `data`? | runs the process through the API (D10: display condition enforced → 400 outside it); `expectHttp`. The process id is read from the site configuration with the default key, so a role that cannot see the site gets its real refusal (404/403) |
 | `list` | `site`, `view` (e.g. `{"ColumnFilterHash": {...}}`, `{"Overdue": true}`), `contains` / `excludes` (lists of `$var`) | record ids in or out of the filtered list; or `expectHttp` |
 | `siteConfig` | `expect` {path in SiteSettings: value} | configuration check for screen-only behaviour; a value `{"contains": "text"}` checks a substring. Columns are addressed by position (`Columns.3.…`), so also assert `Columns.3.ColumnName` (TD-14) |
 | `editPage` | `record`, `button`, `present` | button shown or not on the edit screen — **browser runner only**; over HTTP it is skipped and the test becomes `pass-api-only` |

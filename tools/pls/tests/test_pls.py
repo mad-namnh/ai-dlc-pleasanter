@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -446,6 +447,53 @@ class PlsTest(unittest.TestCase):
         (d2 / "plan.json").write_text(json.dumps({"release": "R-1", "env": "dev", "sites": ["a"], "status": "applied",
                                                   "applied_at": "2026-11-05T10:00:00+09:00"}), encoding="utf-8")
         self.assertEqual(pls.new_sites(self.r, "dev"), set())
+
+
+    # ---------------------------------------------------------------- D3: init, launcher, skills, coverage paths
+
+    def test_init_creates_a_working_project(self):
+        proj = self.r / "newapp"
+        self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam"]), 0)
+        for f in ("CLAUDE.md", "pls.py", "environments.json", ".gitignore", "connections.example.json",
+                  "design/slot-ledger.json", "traceability.json", "requirements/index.md", ".claude/framework.lock"):
+            self.assertTrue((proj / f).exists(), f)
+        self.assertIn("| Approvers | Nam (all gates) |", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
+        self.assertTrue((proj / ".claude/skills/pls-x-lifecycle/SKILL.md").exists())
+        out = subprocess.run([sys.executable, "pls.py", "lint"], cwd=proj, capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)          # launcher finds the framework
+        self.assertIn("0 issue(s)", out.stdout)
+        os.chdir(proj)
+        self.assertEqual(pls.main(["skills", "check"]), 0)
+        with self.assertRaises(pls.Fail):                                     # never over an existing project
+            pls.init_project(proj, "demo", "dev", None)
+
+    def test_skills_check_finds_edited_and_outdated_copies(self):
+        fw = self.r / "fw"
+        (fw / "skills/pls-a").mkdir(parents=True)
+        (fw / "skills/pls-a/SKILL.md").write_text("v1", encoding="utf-8")
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.1 | x |\n", encoding="utf-8")
+        proj = self.r / "p"
+        (proj / ".claude").mkdir(parents=True)
+        (proj / ".claude/framework.lock").write_text("{}", encoding="utf-8")
+        lock = pls.sync_skills(proj, fw)
+        self.assertEqual(lock["skills"]["pls-a"]["version"], "0.1")
+        self.assertEqual(pls.skills_check(proj, fw), [])
+        (fw / "skills/pls-a/SKILL.md").write_text("v2", encoding="utf-8")
+        self.assertIn("newer", pls.skills_check(proj, fw)[0])
+        (proj / ".claude/skills/pls-a/SKILL.md").write_text("local edit", encoding="utf-8")
+        self.assertIn("edited", pls.skills_check(proj, fw)[0])
+
+    def test_coverage_checks_the_element_not_only_the_file(self):
+        (self.r / "config/a").mkdir(parents=True)
+        (self.r / "config/a/site.json").write_text(json.dumps(
+            {"Columns": [{"ColumnName": "ClassA"}], "Processes": [{"Name": "ret"}], "Views": [{"Id": 2}]}), encoding="utf-8")
+        ok = ["config/a/site.json#Columns[ClassA]", "config/a/site.json#Processes[ret]", "config/a/site.json#Views[2]",
+              "config/a/site.json#Columns", "config/a/site.json"]
+        for ref in ok:
+            self.assertTrue(pls.config_path_exists(self.r, ref), ref)
+        for ref in ["config/a/site.json#Columns[ClassB]", "config/a/site.json#Processes[x]", "config/a/site.json#Summaries",
+                    "config/b/site.json"]:
+            self.assertFalse(pls.config_path_exists(self.r, ref), ref)
 
 
 if __name__ == "__main__":

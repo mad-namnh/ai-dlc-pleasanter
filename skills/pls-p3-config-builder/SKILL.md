@@ -42,7 +42,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
 ## Checklist before P4
 
 - [ ] Every design element is in config; nothing in config lacks a design element.
-- [ ] `pls lint` 0 issues; `pls coverage` shows no config gaps. Coverage only checks that the file in each path exists, not the `#…` part (TD-14), so check each `traceability.json` path against `site.json` yourself.
+- [ ] `pls lint` 0 issues; `pls coverage` shows no config gaps. Coverage checks that each `traceability.json` path exists, down to the element (`#Columns[ClassA]`, `#Processes[<Name>]`, `#Views[<Id>]`).
 - [ ] No numeric site, user or group IDs anywhere in `config/`. `pack` refuses raw principal IDs, and L-REF-01 flags site IDs in scripts. Check links and summaries yourself.
 - [ ] dev round trip 0 differences after the last apply.
 - [ ] Every server script is backed by a written reason in the design.

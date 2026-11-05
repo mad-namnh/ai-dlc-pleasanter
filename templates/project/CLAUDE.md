@@ -1,6 +1,6 @@
 # CLAUDE.md — Pleasanter project (AI-DLC)
 
-This repository holds one Pleasanter app built with the AI-DLC framework `ai-dlc-pleasanter`. The framework path and version are in `.claude/framework.lock`.
+This repository holds one Pleasanter app built with the AI-DLC framework `ai-dlc-pleasanter` (created by `pls init`). Run the tool as `python pls.py <command>` from this folder. The launcher finds the framework through `.claude/framework.lock`, or through env `PLS_HOME`.
 
 ## Start of every session
 

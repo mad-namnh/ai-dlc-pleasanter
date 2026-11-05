@@ -1,0 +1,14 @@
+{
+  "managed_sites": [],
+  "envs": {
+    "dev": {
+      "role": "dev",
+      "parent_id": 0,
+      "principals": {
+        "admin": "User,1"
+      },
+      "sites": {},
+      "values": {}
+    }
+  }
+}

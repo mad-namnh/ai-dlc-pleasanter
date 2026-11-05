@@ -264,6 +264,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |
 | `pls http-check` | all | Check connection, key and role of an environment | **0.5** |
 | `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback |
+| `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework | **0.6** |
 | `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
 | `pls validate` | P3, P4 | JSON schema (derived from real exports) | Not built |
