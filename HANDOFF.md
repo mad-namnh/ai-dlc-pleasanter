@@ -1,4 +1,4 @@
-# Handoff — state as of 2026-11-05 14:45 JST (after slice #3 and ADR-0008)
+# Handoff — state as of 2026-11-05 17:30 JST (after the D5 demo run)
 
 > Next session may run on another Claude account: everything needed is in the two repositories; nothing lives only in the chat.
 
@@ -16,9 +16,10 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 
 | Repo | Role |
 |---|---|
-| `ai-dlc-pleasanter` | Framework: architecture **v0.3**, ADRs 0001–0008, `tools/pls` 0.5, `skills/` (KB 0.7, P1 0.3, P2 0.5), `evals/` (cases 001–002), `patterns/ai-gateway` (parked) |
+| `ai-dlc-pleasanter` | Framework: architecture **v0.3**, ADRs 0001–0008, `tools/pls` 0.7, `skills/` (KB 0.9, P1 0.3, P2 0.5, P3 0.1, P4 0.2, P5 0.1, lifecycle 0.1), `evals/` (cases 001–002), `patterns/ai-gateway` (parked). Remote: `https://github.com/mad-namnh/ai-dlc-pleasanter` (`main`) |
 | `pls-demo-inquiry` | First project repository: slices #1, 1.5 and #2. All of them are merged to `main`; no other branches. |
 | `pls-demo-equipment` | Second project repository: slice #3, a new app (equipment loans) created by the framework (dev 44628/44629, stg 44671/44672) |
+| `demo-equipment` | D5 demo run (2026-11-05), created by `pls init`: equipment loans from `demo/spec.md`, dev 44709/44710 under AI-DLC-DEMO (44708), release `R-20261105-01-dev`, G1–G4 approved by Nam. **Local only, never pushed** (demo project) |
 
 `_to_delete/` folders are leftovers (the agent shell cannot delete files); safe to delete.
 
@@ -61,7 +62,7 @@ Tools: `pls` 0.7 (HTTP transport + browser runner fallback; `setup`, `init`, `pr
 
 ## Current focus (2026-11-05, Nam)
 
-**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, D1 is done (lifecycle skill + project CLAUDE.md template). D2 is done: skills P3, P4 and P5 0.1. Tool gaps are in TD-14 ((b)–(d) are needed before D7). D3 is done: `pls init`, launcher, `skills check|sync`, and TD-14 (a)–(d) fixed (pls 0.6). An independent architecture review after D3 gave GO with conditions (`docs/reviews/architect-review-d3.md`). D3b is done: B1–B3 are in the skills and KB; S1–S5 and S7 are fixed in `pls` 0.7 (53 + 6 tests). D4 is done and simplified: `pls setup` (once: URL, folder link, hidden key, login; groups found by name; profile in `~/.pls/profiles/`) + `pls init <name>` (ready project + first commit). Nam created folder AI-DLC-DEMO (44708) and groups zz_demo_総務 (374) / zz_demo_社員 (375). Permissions are a design step (P2 1b → `design/roles.json`; after G2 the groups are created and `pls principals` binds them). **Next is D5**: Nam runs `pls setup` and `pls init demo-equipment`, then the demo script. S6 and S8–S10 come in D6, before D7. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
+**Feature work is paused. Demo readiness comes first.** Review: `docs/reviews/demo-readiness.md` (verdict: not ready). Plan: `docs/plan.md` Step 4b, items D1–D7, D1 is done (lifecycle skill + project CLAUDE.md template). D2 is done: skills P3, P4 and P5 0.1. Tool gaps are in TD-14 ((b)–(d) are needed before D7). D3 is done: `pls init`, launcher, `skills check|sync`, and TD-14 (a)–(d) fixed (pls 0.6). An independent architecture review after D3 gave GO with conditions (`docs/reviews/architect-review-d3.md`). D3b is done: B1–B3 are in the skills and KB; S1–S5 and S7 are fixed in `pls` 0.7 (53 + 6 tests). D4 is done and simplified: `pls setup` (once: URL, folder link, hidden key, login; groups found by name; profile in `~/.pls/profiles/`) + `pls init <name>` (ready project + first commit). Nam created folder AI-DLC-DEMO (44708) and groups zz_demo_総務 (374) / zz_demo_社員 (375). Permissions are a design step (P2 1b → `design/roles.json`; after G2 the groups are created and `pls principals` binds them). **D5 is done (2026-11-05)**: `pls init demo-equipment` + the demo script ran end to end on dev (P1→G4, 10/10 API tests, round trip and drift 0). Findings: (1) G2 groups must be created with exactly the names in `design/roles.json` — in the run the existing `zz_demo_*` groups were used instead; (2) KB 0.9 D28 `[[Users*]]`; (3) `siteConfig` does not substitute `$vars` (TD-14h, test-spec 0.2); (4) REQ-008 (permission only) has no API test while role tests are deferred — accepted at G3 on config + manual screen check; (5) `pls` tests read files without `encoding` and failed on a cp932 console — fixed. Test records deleted from dev. Presenter guide: `demo/lifecycle-and-demo-guide.html`. S6 and S8–S10 come in D6, before D7. Decided: the demo stops at **dev** (no stg); D7 is a fresh agent session; D8, a team member running it alone, is the real acceptance.
 
 ## Next steps (in order) — before the pause
 

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-DLC Lifecycle Guide</title>
+<style>
+:root {
+  --bg: #f7f7f5; --surface: #ffffff; --surface-2: #f0efeb; --text: #1d1d1b; --muted: #5f5e5a;
+  --border: #dddcd6; --accent: #1f6f5c; --accent-soft: #e2f1ec;
+  --gate: #b4531a; --gate-soft: #fbeadf; --tool: #3557a6; --tool-soft: #e5ebf8;
+  --person: #7a3e9d; --person-soft: #f1e6f7; --warn: #9a6a00; --warn-soft: #fbf1d6;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --surface: #1f1f1d; --surface-2: #2a2a27; --text: #ecebe6; --muted: #a8a7a0;
+    --border: #3a3a36; --accent: #5cc3a5; --accent-soft: #173a31;
+    --gate: #f08a4b; --gate-soft: #42261a; --tool: #8aa8ec; --tool-soft: #1f2a45;
+    --person: #c99be3; --person-soft: #352442; --warn: #e3b443; --warn-soft: #3a2f12;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #161615; --surface: #1f1f1d; --surface-2: #2a2a27; --text: #ecebe6; --muted: #a8a7a0;
+  --border: #3a3a36; --accent: #5cc3a5; --accent-soft: #173a31;
+  --gate: #f08a4b; --gate-soft: #42261a; --tool: #8aa8ec; --tool-soft: #1f2a45;
+  --person: #c99be3; --person-soft: #352442; --warn: #e3b443; --warn-soft: #3a2f12;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 { font-size: 20px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--border); }
+h3 { font-size: 16px; margin: 0 0 6px; }
+p { margin: 0 0 10px; }
+.lede { color: var(--muted); max-width: 70ch; }
+code { overflow-wrap: anywhere; font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; }
+nav a { color: var(--accent); text-decoration: none; font-size: 14px; padding: 4px 10px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+nav a:hover { border-color: var(--accent); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin: 8px 0 12px; }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+  margin-right: 6px; vertical-align: -2px; background: var(--c); }
+.diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; overflow-x: auto; }
+.diagram svg { display: block; min-width: 820px; width: 100%; height: auto; }
+svg text { font-family: inherit; fill: var(--text); }
+svg .muted { fill: var(--muted); }
+
+.invariants { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 10px; }
+.inv { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.inv b { color: var(--accent); margin-right: 6px; font-family: var(--mono); }
+
+.phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.card .tag { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); margin-bottom: 6px; }
+.card .tag.gate { background: var(--gate-soft); color: var(--gate); }
+.card dl { display: grid; grid-template-columns: 74px 1fr; gap: 4px 10px; margin: 8px 0 0; font-size: 14px; }
+.card dt { color: var(--muted); }
+.card dd { margin: 0; }
+.stop { margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--gate); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-weight: 600; font-size: 13px; }
+tr:last-child td { border-bottom: 0; }
+.tablewrap { overflow-x: auto; border-radius: 12px; }
+.tablewrap table { min-width: 640px; }
+
+.steps { list-style: none; padding: 0; margin: 0; counter-reset: s; }
+.steps > li { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px 14px 60px; margin-bottom: 12px; }
+.steps > li::before { counter-increment: s; content: counter(s); position: absolute; left: 16px; top: 14px;
+  width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--surface);
+  display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.steps .row { display: grid; grid-template-columns: 110px 1fr; gap: 4px 12px; font-size: 14px; margin-top: 6px; }
+.steps .row .k { color: var(--muted); }
+.say { background: var(--person-soft); border-left: 3px solid var(--person); padding: 6px 10px; border-radius: 6px; font-style: italic; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.pill.gate { background: var(--gate-soft); color: var(--gate); }
+.pill.nogate { background: var(--surface-2); color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 4px 0; }
+.check input { margin-top: 4px; accent-color: var(--accent); }
+
+.note { background: var(--warn-soft); border: 1px solid var(--border); border-left: 3px solid var(--warn);
+  border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) {
+  h1 { font-size: 23px; }
+  .steps > li { padding-left: 16px; padding-top: 54px; }
+  .steps .row { grid-template-columns: 1fr; }
+  .card dl { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>AI-DLC for Pleasanter — lifecycle and demo guide</h1>
+  <p class="lede">How the framework takes a natural-language request to a released Pleasanter app: who does what in each phase, where a person must approve, and the script for running the equipment-loan demo. Verified end to end on dev on 2026-11-05 (release <code>R-20261105-01-dev</code>).</p>
+  <nav>
+    <a href="#flow">Lifecycle diagram</a><a href="#invariants">Invariants</a><a href="#phases">Phases</a>
+    <a href="#gates">Gates</a><a href="#setup">Before the demo</a><a href="#script">Demo script</a>
+    <a href="#offscript">Off script</a><a href="#reset">Reset</a>
+  </nav>
+
+  <h2 id="flow">1. Lifecycle diagram</h2>
+  <div class="legend">
+    <span style="--c: var(--accent)">Phase (agent works, using a skill)</span>
+    <span style="--c: var(--gate)">Gate (a person approves)</span>
+    <span style="--c: var(--tool)">pls (deterministic tool)</span>
+    <span style="--c: var(--person)">Person acts in Pleasanter / terminal</span>
+  </div>
+  <div class="diagram" role="img" aria-label="Lifecycle: P1 requirements, G1, P2 design, G2, P3 build, P4 verify, G3, P5 release, G4, P6 operate, with feedback loops from P4 and P6.">
+    <svg viewBox="0 0 1000 380" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/>
+        </marker>
+      </defs>
+      <!-- spec input -->
+      <text x="20" y="34" font-size="12" class="muted">Customer request (mail, any language)</text>
+      <path d="M60 42 V78" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#ah)"/>
+
+      <!-- main row: phases (rect) and gates (diamond) -->
+      <g font-size="13" font-weight="600" text-anchor="middle">
+        <rect x="16" y="84" width="88" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="60" y="108">P1</text><text x="60" y="126" font-weight="400" font-size="12">Requirements</text>
+
+        <polygon points="140,112 160,92 180,112 160,132" fill="var(--gate-soft)" stroke="var(--gate)"/>
+        <text x="160" y="116" font-size="12">G1</text>
+
+        <rect x="196" y="84" width="88" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="240" y="108">P2</text><text x="240" y="126" font-weight="400" font-size="12">Design</text>
+
+        <polygon points="320,112 340,92 360,112 340,132" fill="var(--gate-soft)" stroke="var(--gate)"/>
+        <text x="340" y="116" font-size="12">G2</text>
+
+        <rect x="376" y="84" width="88" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="420" y="108">P3</text><text x="420" y="126" font-weight="400" font-size="12">Build → dev</text>
+
+        <rect x="500" y="84" width="88" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="544" y="108">P4</text><text x="544" y="126" font-weight="400" font-size="12">Verify</text>
+
+        <polygon points="624,112 644,92 664,112 644,132" fill="var(--gate-soft)" stroke="var(--gate)"/>
+        <text x="644" y="116" font-size="12">G3</text>
+
+        <rect x="680" y="84" width="88" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="724" y="108">P5</text><text x="724" y="126" font-weight="400" font-size="12">Release</text>
+
+        <polygon points="804,112 824,92 844,112 824,132" fill="var(--gate-soft)" stroke="var(--gate)"/>
+        <text x="824" y="116" font-size="12">G4</text>
+
+        <rect x="880" y="84" width="104" height="56" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="932" y="108">P6</text><text x="932" y="126" font-weight="400" font-size="12">Operate</text>
+      </g>
+      <g stroke="var(--muted)" stroke-width="1.5" fill="none" marker-end="url(#ah)">
+        <path d="M104 112 H138"/><path d="M180 112 H194"/><path d="M284 112 H318"/><path d="M360 112 H374"/>
+        <path d="M464 112 H498"/><path d="M588 112 H622"/><path d="M664 112 H678"/><path d="M768 112 H802"/>
+        <path d="M844 112 H878"/>
+      </g>
+
+      <!-- person actions above -->
+      <g font-size="11.5">
+        <rect x="364" y="20" width="160" height="40" rx="8" fill="var(--person-soft)" stroke="var(--person)"/>
+        <text x="444" y="37" text-anchor="middle">Create the groups</text>
+        <text x="444" y="52" text-anchor="middle" class="muted">from design/roles.json</text>
+        <path d="M400 60 V82" stroke="var(--person)" stroke-width="1.5" marker-end="url(#ah)"/>
+      </g>
+
+      <!-- pls lane -->
+      <g font-size="11.5" text-anchor="middle">
+        <rect x="366" y="170" width="108" height="62" rx="8" fill="var(--tool-soft)" stroke="var(--tool)"/>
+        <text x="420" y="188">principals</text><text x="420" y="203">bootstrap · apply</text><text x="420" y="218">canon · lint</text>
+        <rect x="500" y="170" width="88" height="62" rx="8" fill="var(--tool-soft)" stroke="var(--tool)"/>
+        <text x="544" y="188">test</text><text x="544" y="203">coverage</text><text x="544" y="218">lint</text>
+        <rect x="670" y="170" width="108" height="62" rx="8" fill="var(--tool-soft)" stroke="var(--tool)"/>
+        <text x="724" y="188">export</text><text x="724" y="203">drift = 0</text><text x="724" y="218">stg: release-plan</text>
+        <rect x="880" y="170" width="104" height="62" rx="8" fill="var(--tool-soft)" stroke="var(--tool)"/>
+        <text x="932" y="188">drift</text><text x="932" y="203">classify</text><text x="932" y="218">baseline</text>
+      </g>
+      <g stroke="var(--tool)" stroke-width="1" stroke-dasharray="3 3">
+        <path d="M420 140 V170"/><path d="M544 140 V170"/><path d="M724 140 V170"/><path d="M932 140 V170"/>
+      </g>
+      <text x="92" y="205" font-size="12" class="muted">pls decides</text>
+      <text x="92" y="220" font-size="12" class="muted">(diffs, checks, plans)</text>
+
+      <!-- feedback loops -->
+      <g fill="none" stroke-width="1.5" marker-end="url(#ah)">
+        <path d="M544 232 V262 H240 V142" stroke="var(--gate)" stroke-dasharray="5 4"/>
+        <path d="M516 232 V250 H450 V234" stroke="var(--accent)" stroke-dasharray="5 4"/>
+        <path d="M932 232 V320 H60 V142" stroke="var(--muted)" stroke-dasharray="5 4"/>
+      </g>
+      <g font-size="11.5">
+        <text x="250" y="278">P4 failure: design defect → back to P2 / G2 (requirement defect → P1 / G1)</text>
+        <text x="556" y="250" class="muted">build defect → P3, redeploy</text>
+        <text x="70" y="336">P6: accepted drift or a new request → change request back to P1</text>
+        <text x="70" y="354" class="muted">Escaped defect or wrong KB entry → framework rule / KB / skill change (I9)</text>
+      </g>
+    </svg>
+  </div>
+
+  <h2 id="invariants">2. Invariants that hold in every phase</h2>
+  <div class="invariants">
+    <div class="inv"><b>I1</b>Git is the desired state; Pleasanter is the runtime.</div>
+    <div class="inv"><b>I2</b>A deploy sends the complete configuration, after a drift check.</div>
+    <div class="inv"><b>I3</b>AI has no path to production and holds no production keys.</div>
+    <div class="inv"><b>I4</b>People approve at G1–G4; AI never approves its own work.</div>
+    <div class="inv"><b>I5</b>Standard settings before code; a server script needs a written reason.</div>
+    <div class="inv"><b>I6</b>pls decides (diff, classify, coverage); AI explains.</div>
+    <div class="inv"><b>I7</b>No secrets and no business data in git.</div>
+    <div class="inv"><b>I8</b>Every requirement traces to config and tests, and back.</div>
+    <div class="inv"><b>I9</b>Every escaped defect becomes a rule, check, KB entry or skill change.</div>
+  </div>
+
+  <h2 id="phases">3. Phases — what goes in, what runs, what comes out</h2>
+  <div class="phases">
+    <div class="card"><span class="tag">P1 · Requirements</span>
+      <h3>Request → testable requirements</h3>
+      <dl><dt>Skill</dt><dd><code>pls-p1-requirements-analyst</code></dd>
+      <dt>Input</dt><dd>The request, saved verbatim in <code>requirements/sources/</code></dd>
+      <dt>Does</dt><dd>EARS requirements (one <i>shall</i> each), acceptance criteria, derived requirements from impact, questions for the customer in Japanese with <code>[assumed]</code> defaults</dd>
+      <dt>Output</dt><dd><code>REQ-*.md</code>, <code>requirements/index.md</code></dd></dl>
+      <div class="stop">Stops at G1</div></div>
+
+    <div class="card"><span class="tag">P2 · Design</span>
+      <h3>Simplest Pleasanter mechanism per requirement</h3>
+      <dl><dt>Skill</dt><dd><code>pls-p2-solution-designer</code> + KB <code>pls-kb-pleasanter</code></dd>
+      <dt>Does</dt><dd>Sites and type (Results / Issues), columns and slots, statuses, views, processes, summaries; ladder rung per element; <b>permission design</b> (roles → groups → matrix); impact analysis; classification</dd>
+      <dt>Output</dt><dd><code>DES-*.md</code>, <code>design/roles.json</code>, <code>slot-ledger.json</code>, <code>traceability.json</code>, <code>environments.json</code></dd></dl>
+      <div class="stop">Stops at G2</div></div>
+
+    <div class="card"><span class="tag">P3 · Build</span>
+      <h3>Config in git, deployed to dev</h3>
+      <dl><dt>Skill</dt><dd><code>pls-p3-config-builder</code></dd>
+      <dt>pls</dt><dd><code>principals</code> → <code>bootstrap-plan</code> / <code>bootstrap</code> → <code>export</code> / <code>unpack</code> → edit <code>config/</code> → <code>canon</code>, <code>lint</code>, <code>coverage</code> → <code>release-plan</code> → <code>apply</code></dd>
+      <dt>Done when</dt><dd>Round trip shows <b>0 differences</b>; otherwise fold the live value back and apply again</dd></dl>
+      <div class="stop" style="color:var(--muted)">No gate</div></div>
+
+    <div class="card"><span class="tag">P4 · Verify</span>
+      <h3>Acceptance criteria proven on dev</h3>
+      <dl><dt>Skill</dt><dd><code>pls-p4-test-writer</code></dd>
+      <dt>Does</dt><dd>API test specs (<code>tests/api/*.json</code>), negative paths, config checks for screen-only rules; role tests per profile (<code>deferred</code> in the demo); triage every failure to P1/P2/P3/KB</dd>
+      <dt>pls</dt><dd><code>test</code>, <code>coverage</code>, <code>lint</code></dd>
+      <dt>Output</dt><dd><code>releases/&lt;release&gt;/g3-verification.md</code></dd></dl>
+      <div class="stop">Stops at G3</div></div>
+
+    <div class="card"><span class="tag">P5 · Release</span>
+      <h3>Make the tested state official</h3>
+      <dl><dt>Skill</dt><dd><code>pls-p5-release-manager</code></dd>
+      <dt>dev</dt><dd>Record only: export → <code>drift</code> = 0 since the tests</dd>
+      <dt>stg</dt><dd><code>release-plan</code> → person runs <code>apply</code> → smoke tests</dd>
+      <dt>prod</dt><dd>Package only; the customer applies it</dd>
+      <dt>Output</dt><dd><code>diff-report.md</code> (Japanese summary), <code>approvals.md</code></dd></dl>
+      <div class="stop">Stops at G4</div></div>
+
+    <div class="card"><span class="tag">P6 · Operate</span>
+      <h3>Keep git and Pleasanter in step</h3>
+      <dl><dt>pls</dt><dd><code>drift</code>, <code>classify</code></dd>
+      <dt>Does</dt><dd>Records the baseline in <code>ops/drift/</code>; later drift is explained, classified, and accepted (→ change request to P1) or reverted</dd></dl>
+      <div class="stop" style="color:var(--muted)">No gate</div></div>
+  </div>
+
+  <h2 id="gates">4. Gates — what the approver sees</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Gate</th><th>Evidence presented</th><th>Decision recorded in</th></tr>
+    <tr><td><b>G1</b> requirements</td><td>REQ table (ID, title, type, derived?); open questions with <code>[assumed]</code> defaults; out-of-scope items. In stage <code>demo</code>: approve with the assumed defaults</td><td><code>Status</code> line of each REQ; <code>requirements/index.md</code></td></tr>
+    <tr><td><b>G2</b> design</td><td>Design table (element → setting → REQ, rung); rejected alternatives; classification; permission matrix and the groups to create; open points</td><td><code>Status</code> line of <code>DES-*.md</code></td></tr>
+    <tr><td><b>G3</b> verification</td><td>Round trip 0, lint 0, coverage, test results, role tests or their deferral, manual screen checks</td><td><code>g3-verification.md</code></td></tr>
+    <tr><td><b>G4</b> release</td><td>Drift 0 (dev) or accepted plan (stg); Japanese diff report: user-visible changes, data and permission impact, order, rollback, open items</td><td><code>approvals.md</code>; REQs marked released; drift baseline</td></tr>
+  </table></div>
+  <p class="note" style="margin-top:12px">"Looks good, continue" counts as approval. Silence does not. The agent writes the decision only after the person states it, with name and date. <code>pls apply</code> and <code>pls bootstrap</code> need the person: they run the command, or they allow <code>--yes</code> for a named target.</p>
+
+  <h2 id="setup">5. Before the demo</h2>
+  <div class="two">
+    <div class="card"><h3>Once per machine</h3>
+      <label class="check"><input type="checkbox"> Pleasanter dev: a folder for the apps (e.g. <code>AI-DLC-DEMO</code>) and an API key for your user</label>
+      <label class="check"><input type="checkbox"> <code>python ai-dlc-pleasanter/tools/pls/pls.py setup</code> — URL, folder URL, key (hidden), login id</label>
+      <label class="check"><input type="checkbox"> Python 3.10+, git, Claude Code on a machine that reaches Pleasanter</label>
+    </div>
+    <div class="card"><h3>Per demo run</h3>
+      <label class="check"><input type="checkbox"> <code>pls.py init demo-equipment --approver "&lt;name&gt;"</code></label>
+      <label class="check"><input type="checkbox"> <code>cd demo-equipment</code> → <code>python pls.py http-check --env dev</code> is green</label>
+      <label class="check"><input type="checkbox"> Open Claude Code in the project folder</label>
+      <label class="check"><input type="checkbox"> Open the Pleasanter demo folder in a browser tab (still empty)</label>
+      <label class="check"><input type="checkbox"> Have <code>demo/spec.md</code> ready to paste</label>
+    </div>
+  </div>
+
+  <h2 id="script">6. Demo script</h2>
+  <p class="lede">Say the line to Claude Code (any language), then show the listed file or screen. Plan about an hour with discussion at each gate.</p>
+  <ol class="steps">
+    <li><h3>Start — P1 requirements <span class="pill gate">stops at G1</span></h3>
+      <div class="row"><span class="k">You say</span><span class="say">Build the app for this customer request. You may use --yes for dev in this session. + paste the mail from spec.md</span></div>
+      <div class="row"><span class="k">Agent does</span><span>Finds where the project stands; saves the mail; writes REQ-001…008 with acceptance criteria and 12 questions (Japanese) with <code>[assumed]</code> defaults</span></div>
+      <div class="row"><span class="k">Show</span><span><code>requirements/index.md</code> — the REQ table and the questions; point out the assumptions</span></div></li>
+
+    <li><h3>Approve G1 — P2 design <span class="pill gate">stops at G2</span></h3>
+      <div class="row"><span class="k">You say</span><span class="say">G1 approved with all assumptions, continue</span></div>
+      <div class="row"><span class="k">Agent does</span><span>Two sites (<code>equipment</code> Results, <code>loans</code> Issues), 返却 process, conditional count summary, overdue view, permission matrix and <code>design/roles.json</code>; rungs 1–2 only</span></div>
+      <div class="row"><span class="k">Show</span><span><code>design/decisions/DES-001-….md</code> — design table, permission matrix, rejected alternatives, open points</span></div></li>
+
+    <li><h3>Approve G2, create groups — P3 build <span class="pill nogate">no gate</span></h3>
+      <div class="row"><span class="k">You do</span><span>Create the groups named in <code>design/roles.json</code> in Pleasanter, <b>with exactly those names</b> (no members needed)</span></div>
+      <div class="row"><span class="k">You say</span><span class="say">G2 approved, groups created, continue</span></div>
+      <div class="row"><span class="k">Agent does</span><span><code>principals</code> binds the groups → <code>bootstrap</code> creates the two sites → export / unpack → builds <code>config/</code> → canon / lint → <code>release-plan</code> → <code>apply --yes</code> → round trip 0</span></div>
+      <div class="row"><span class="k">Show</span><span>Refresh the Pleasanter folder: 備品台帳 and 貸出管理 appear and are configured. <code>git log --oneline</code>: one commit per step</span></div></li>
+
+    <li><h3>P4 verify <span class="pill gate">stops at G3</span></h3>
+      <div class="row"><span class="k">Agent does</span><span>Writes and runs T-001…T-010 on dev; checks 社員 restrictions in config (role tests deferred); coverage; writes <code>g3-verification.md</code> and asks for manual screen checks</span></div>
+      <div class="row"><span class="k">You do</span><span>Screen check: as 社員 the register is read-only and 貸出管理 is hidden; as 総務 返却 shows only on 貸出中 loans. Open a loan, press 返却 — the register count drops back to 0</span></div>
+      <div class="row"><span class="k">Show</span><span>Test summary and coverage; the 返却 button live</span></div></li>
+
+    <li><h3>Approve G3 — P5 release <span class="pill gate">stops at G4</span></h3>
+      <div class="row"><span class="k">You say</span><span class="say">G3 approved, screen checks done, continue</span></div>
+      <div class="row"><span class="k">Agent does</span><span>Export → drift 0 since the tests → <code>diff-report.md</code> (Japanese customer summary) → <code>approvals.md</code></span></div>
+      <div class="row"><span class="k">Show</span><span><code>releases/&lt;release&gt;/diff-report.md</code>, top part</span></div></li>
+
+    <li><h3>Approve G4 — done <span class="pill nogate">P6 baseline</span></h3>
+      <div class="row"><span class="k">You say</span><span class="say">G4 approved, continue</span></div>
+      <div class="row"><span class="k">Agent does</span><span>Records G4, marks REQs released, writes <code>ops/drift/&lt;date&gt;-dev-baseline.md</code>, commits</span></div>
+      <div class="row"><span class="k">Show</span><span><code>requirements/index.md</code> (released), the baseline file, <code>git log --oneline</code></span></div></li>
+
+    <li><h3>Optional epilogue — P6 drift <span class="pill nogate">no gate</span></h3>
+      <div class="row"><span class="k">You do</span><span>Change something in the Pleasanter UI, e.g. add a choice to 種別</span></div>
+      <div class="row"><span class="k">You say</span><span class="say">Check dev for drift.</span></div>
+      <div class="row"><span class="k">Agent does</span><span>Finds the change, classifies it, asks: accept as a change request (→ P1) or revert</span></div></li>
+  </ol>
+
+  <h2 id="offscript">7. If something goes off script</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Situation</th><th>What to do</th></tr>
+    <tr><td>The agent asks a question at a gate</td><td>Answer it. "Approve with changes: …" is fine.</td></tr>
+    <tr><td><code>pls principals</code> reports a group MISSING</td><td>The group name in Pleasanter must match <code>design/roles.json</code> exactly. Create it with that name, or tell the agent which existing group to use (it updates <code>roles.json</code> and the DES). <i>Seen in the verified round: existing <code>zz_demo_*</code> groups were used instead.</i></td></tr>
+    <tr><td>A test fails in P4</td><td>Let the agent triage: build → P3, design → P2/G2, requirement → P1/G1, KB wrong → framework. A test may only be changed with a written reason. <i>Seen: T-007 compared a <code>$var</code> in <code>siteConfig</code>, which the runner does not substitute (TD-14h).</i></td></tr>
+    <tr><td>Coverage shows a GAP for a role-only requirement</td><td>With role tests <code>deferred</code>, permission-only requirements (e.g. REQ-008) cannot have an API test. The approver decides at G3: accept on configuration + drift 0 + manual screen check.</td></tr>
+    <tr><td><code>pls</code> refuses a plan (drift, slots, migration)</td><td>The agent explains and asks. Do not tell it to bypass the refusal.</td></tr>
+    <tr><td>Connection errors</td><td><code>python pls.py http-check --env dev</code>, then the troubleshooting table in <code>docs/setup.md</code>.</td></tr>
+  </table></div>
+
+  <h2 id="reset">8. Reset for the next run</h2>
+  <div class="two">
+    <div class="card"><h3>Pleasanter</h3>
+      <p>Delete the demo folder's contents (the two sites), or create a new folder and use its id as <code>parent_id</code>. Test records start with 「テスト」 if you only want to clear data.</p></div>
+    <div class="card"><h3>Local</h3>
+      <p>Delete the project folder and run <code>pls init</code> again. The demo project stays local; only the framework repo is pushed.</p></div>
+  </div>
+
+  <footer>Sources: <code>demo/README.md</code>, <code>docs/architecture.md</code>, <code>docs/setup.md</code>, skills <code>pls-x-lifecycle</code> and <code>pls-p1</code>…<code>pls-p5</code>; verified run: project <code>demo-equipment</code>, 2026-11-05.</footer>
+</main>
+</body>
+</html>

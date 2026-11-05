@@ -182,7 +182,7 @@ class HttpTest(unittest.TestCase):
 
     def test_apply_release_ok_and_rollback_on_failure(self):
         plan, d = self.plan()
-        files = {f.name: json.loads(f.read_text()) for f in d.glob("*-*.json")}
+        files = {f.name: json.loads(f.read_text(encoding="utf-8")) for f in d.glob("*-*.json")}
         c = H.Client(self.url, "K-ADMIN")
         self.fake.fail_update_on = LO
         res = H.apply_release(c, plan, files)
@@ -198,7 +198,7 @@ class HttpTest(unittest.TestCase):
     def test_apply_refused_when_live_changed(self):
         plan, d = self.plan()
         self.fake.sites[LO]["UpdatedTime"] = "someone-else"
-        files = {f.name: json.loads(f.read_text()) for f in d.glob("*-*.json")}
+        files = {f.name: json.loads(f.read_text(encoding="utf-8")) for f in d.glob("*-*.json")}
         res = H.apply_release(H.Client(self.url, "K-ADMIN"), plan, files)
         self.assertEqual(res["status"], "refused")
         self.assertEqual(self.fake.sites[EQ]["Title"], "eq")                   # nothing written
@@ -224,13 +224,13 @@ class HttpTest(unittest.TestCase):
     def test_bootstrap_creates_and_binds(self):
         d = self.r / "releases/B-1"
         d.mkdir(parents=True)
-        envs = json.loads((self.r / "environments.json").read_text())
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["envs"]["dev"]["sites"]["extra"] = {"title": "dev_X"}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         (d / "bootstrap.json").write_text(json.dumps({"release": "B-1", "env": "dev", "parent_id": FOLDER, "steps": [
             {"op": "createsite", "site": "extra", "parent_id": FOLDER, "payload": {"Title": "dev_X", "ReferenceType": "Results", "SiteSettings": {}}}]}), encoding="utf-8")
         self.assertEqual(pls.main(["bootstrap", "B-1", "--yes"]), 0)
-        self.assertTrue(json.loads((self.r / "environments.json").read_text())["envs"]["dev"]["sites"]["extra"]["id"])
+        self.assertTrue(json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"]["dev"]["sites"]["extra"]["id"])
 
     def test_role_tests_use_each_roles_key(self):
         specs = [
@@ -290,7 +290,7 @@ class HttpTest(unittest.TestCase):
 
 
     def test_tests_refused_without_allow_write(self):                  # TD-14b
-        c = json.loads((self.r / ".pls/connections.json").read_text())
+        c = json.loads((self.r / ".pls/connections.json").read_text(encoding="utf-8"))
         c["dev"]["allow_write"] = False
         (self.r / ".pls/connections.json").write_text(json.dumps(c), encoding="utf-8")
         (self.r / "s.json").write_text(json.dumps([{"id": "T-1", "steps": [{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}]}]), encoding="utf-8")
@@ -317,7 +317,7 @@ class HttpTest(unittest.TestCase):
     def test_bootstrap_twice_is_refused_and_partial_creates_only_the_rest(self):          # S1
         d = self.r / "releases/B-2"
         d.mkdir(parents=True)
-        envs = json.loads((self.r / "environments.json").read_text())
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["envs"]["dev"]["sites"].update({"x1": {"title": "X1"}, "x2": {"title": "X2"}})
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         steps = [{"op": "createsite", "site": s, "parent_id": FOLDER, "payload": {"Title": s, "ReferenceType": "Results", "SiteSettings": {}}}
@@ -329,7 +329,7 @@ class HttpTest(unittest.TestCase):
         n = len(self.fake.sites)
         self.assertEqual(pls.main(["bootstrap", "B-2", "--yes"]), 0)
         self.assertEqual(len(self.fake.sites), n + 1)                                     # only x2 created
-        self.assertEqual(json.loads((d / "bootstrap.json").read_text())["status"], "created")
+        self.assertEqual(json.loads((d / "bootstrap.json").read_text(encoding="utf-8"))["status"], "created")
         self.assertEqual(pls.main(["bootstrap", "B-2", "--yes"]), 2)                       # never twice
         self.assertEqual(len(self.fake.sites), n + 1)
 
@@ -342,7 +342,7 @@ class HttpTest(unittest.TestCase):
         (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
         self.fake.drop_on_save = "Dflt"
         self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
-        p2 = json.loads((d / "plan.json").read_text())
+        p2 = json.loads((d / "plan.json").read_text(encoding="utf-8"))
         self.assertEqual(p2["status"], "applied-differs")
         self.assertTrue((d / "live-loans.json").exists())
         e = pls.env_conf(self.r, "dev")
@@ -369,7 +369,7 @@ class HttpTest(unittest.TestCase):
         self.assertIn("error", out[0])
 
     def test_http_check_accepts_a_restricted_key_without_access(self):                  # B2
-        envs = json.loads((self.r / "environments.json").read_text())
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["envs"]["dev"]["sites"] = {"loans": {"id": LO, "title": "dev_L"}}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)                     # staff → 404 = valid key

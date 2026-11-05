@@ -63,7 +63,7 @@ class PlsTest(unittest.TestCase):
     def test_pack_dev_reproduces_export(self):
         exp = self.unpack_dev()
         p = pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["dev"], "a")
-        self.assertEqual(p["SiteSettings"], json.loads(exp.read_text())["Response"]["Data"]["SiteSettings"])
+        self.assertEqual(p["SiteSettings"], json.loads(exp.read_text(encoding="utf-8"))["Response"]["Data"]["SiteSettings"])
 
     def test_drift_detects_ui_change(self):
         self.unpack_dev()
@@ -143,7 +143,7 @@ class PlsTest(unittest.TestCase):
         edited = self.r / "stg-edited.json"
         edited.write_text(json.dumps(self._stg_export_from_payload("R1", add_choice)), encoding="utf-8")
         self.assertEqual(pls.main(["drift", str(edited), "--env", "stg", "--site", "a"]), 1)
-        diffs, text = pls.drift_report(self.r, ENVS["envs"]["stg"], "stg", "a", json.loads(edited.read_text()), None)
+        diffs, text = pls.drift_report(self.r, ENVS["envs"]["stg"], "stg", "a", json.loads(edited.read_text(encoding="utf-8")), None)
         self.assertIn("Reverting this drift would be: data-impacting", text)
         self.assertEqual(pls.main(["plan", str(edited), "--env", "stg", "--site", "a", "--release", "R2"]), 1)
         # planning over the accepted drift would remove the customer's choice → data-impacting → migration required
@@ -342,7 +342,7 @@ class PlsTest(unittest.TestCase):
         pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"])
         live = self.r / "stg-perm.json"
         live.write_text(json.dumps(self._with_perms(export(201, 202, "http://stg.internal"), 201, ["Group,7,31"])), encoding="utf-8")
-        diffs = pls.flat_diff(pls.same_meta(pls.logical(json.loads(live.read_text()), envs["envs"]["stg"]), pls.read_tree(self.r / "config/a")),
+        diffs = pls.flat_diff(pls.same_meta(pls.logical(json.loads(live.read_text(encoding="utf-8")), envs["envs"]["stg"]), pls.read_tree(self.r / "config/a")),
                               pls.read_tree(self.r / "config/a"))
         self.assertEqual(pls.classify(diffs)["classification"], "permission-impacting")
 
@@ -511,7 +511,7 @@ class PlsTest(unittest.TestCase):
         (self.r / "releases/R-X/plan.json").write_text(json.dumps({"status": "applied"}), encoding="utf-8")
         with self.assertRaises(pls.Fail):
             pls.release_plan(self.r, "dev", "R-X", {"a": str(exp)}, None)
-        self.assertEqual(json.loads((self.r / "releases/R-X/plan.json").read_text())["status"], "applied")
+        self.assertEqual(json.loads((self.r / "releases/R-X/plan.json").read_text(encoding="utf-8"))["status"], "applied")
         with self.assertRaises(pls.Fail):
             pls.release_plan(self.r, "dev", "R-Y", {"a": str(exp)}, "no-such-decision.md")
 

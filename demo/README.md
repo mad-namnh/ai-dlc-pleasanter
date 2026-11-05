@@ -11,6 +11,7 @@ Target: **dev only**. P5 records the tested dev state as the release (decision B
 | Input | [`spec.md`](spec.md): a mail from a fictional 総務部, in Japanese |
 | Result | Two sites (equipment register, loans) with a 返却 button, an overdue list, a 貸出中 count and role permissions. API tests on dev; 社員 restrictions checked in the configuration (role tests deferred). Release records are in git. |
 | Setup | Once per machine: [`docs/setup.md`](../docs/setup.md) → `pls setup`. Per demo: one `pls init` |
+| Visual guide | [`lifecycle-and-demo-guide.html`](lifecycle-and-demo-guide.html): the same script with a lifecycle diagram, phase cards and gates (open it in a browser) |
 | Time and tokens | Measured in the dry run (`demo/results/`). Plan for about an hour with discussion at each gate. |
 
 ## Before the audience arrives
