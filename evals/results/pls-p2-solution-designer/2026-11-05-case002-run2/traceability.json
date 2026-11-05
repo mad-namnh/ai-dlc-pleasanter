@@ -1,0 +1,158 @@
+{
+  "REQ-001": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate]",
+      "config/inquiries/site.json#Columns[DateC]",
+      "config/inquiries/site.json#Columns[Status].ChoicesText"
+    ],
+    "tests": [
+      "T-001"
+    ]
+  },
+  "REQ-002": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate].View"
+    ],
+    "tests": [
+      "T-002",
+      "T-003",
+      "T-004",
+      "T-008"
+    ]
+  },
+  "REQ-003": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate].Notifications"
+    ],
+    "tests": [
+      "T-005"
+    ]
+  },
+  "REQ-004": {
+    "design": [
+      "DES-001"
+    ],
+    "config": [
+      "config/inquiries/site.json#Views[2]"
+    ],
+    "tests": [
+      "T-006"
+    ]
+  },
+  "REQ-005": {
+    "design": [
+      "DES-002"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[ClassE].ChoicesText"
+    ],
+    "tests": [
+      "T-007",
+      "T-008"
+    ]
+  },
+  "REQ-007": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[ClassD].ChoicesText"
+    ],
+    "tests": []
+  },
+  "REQ-008": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[ClassD].ChoicesText",
+      "migrations/M-1-category-split/"
+    ],
+    "tests": []
+  },
+  "REQ-009": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[ClassF].ChoicesText",
+      "config/inquiries/server-scripts/ai1.js"
+    ],
+    "tests": []
+  },
+  "REQ-010": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/permissions.json",
+      "environments.json#principals[keiri]"
+    ],
+    "tests": []
+  },
+  "REQ-011": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/responses/permissions.json",
+      "config/inquiries/permissions.json"
+    ],
+    "tests": []
+  },
+  "REQ-012": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/permissions.json",
+      "config/responses/permissions.json",
+      "config/inquiries/site.json#Processes[escalate].Groups",
+      "config/inquiries/site.json#Processes[escalate].Users"
+    ],
+    "tests": []
+  },
+  "REQ-013": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/responses/site.json#Columns[NumA]"
+    ],
+    "tests": []
+  },
+  "REQ-014": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/inquiries/site.json#Columns[NumB]",
+      "config/inquiries/site.json#EditorColumnHash.General",
+      "config/inquiries/site.json#GridColumns",
+      "config/inquiries/site.json#FilterColumns",
+      "config/responses/site.json#Summaries[2]",
+      "migrations/M-2-total-response-time/"
+    ],
+    "tests": []
+  },
+  "REQ-015": {
+    "design": [
+      "DES-003"
+    ],
+    "config": [
+      "config/responses/site.json#Summaries[1]",
+      "config/responses/site.json#Columns[ClassA]",
+      "config/responses/site.json#Links[ClassA]"
+    ],
+    "tests": []
+  }
+}

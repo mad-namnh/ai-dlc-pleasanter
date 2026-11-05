@@ -4,7 +4,7 @@ Run against a scratch project holding the configuration **before** R-20261105-05
 
 ## Request (customer mail, Japanese)
 
-Verbatim: `pls-demo-inquiry/requirements/sources/2026-11-05-customer-mail-category-accounting-time.md`. It asks for three things:
+Verbatim: the `## Mail (verbatim)` section **only** of `pls-demo-inquiry/requirements/sources/2026-11-05-customer-mail-category-accounting-time.md`. Do not pass the file header: it names the requirements slice #2 derived (contaminated run 1 on 2026-11-05). It asks for three things:
 - split カテゴリ 契約・請求;
 - give 経理チーム read access to inquiries and their 対応履歴;
 - record 対応時間 per 対応履歴 and show a total per inquiry.

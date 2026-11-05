@@ -53,7 +53,11 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 ## Next steps (in order)
 
 1. ✅ Skills 0.3 / KB 0.6 from the slice #2 findings (commit c02bd12); project pin upgraded.
-2. **Eval case 002** (P1, P2) with fresh agents. Start with 1 run each; run 3 each only if the result is unclear (token cost).
+2. **Eval case 002** (P1, P2) with fresh agents — run 1 done (2026-11-05, `evals/results/*/2026-11-05-case002.md`):
+   - P1 0.3: **PASS** (the input leaked the slice #2 REQ count through the source file header; `input.md` fixed).
+   - P2 0.3: **FAIL** on one item: the probe for process buttons of a read-only role was composed correctly but scheduled after G2, and the design kept the expected (wrong) branch. Fixed in **P2 0.4** (design-changing probes are G2 prerequisites, otherwise take the safe branch).
+   - Run 2 with 0.4: **PASS** (`evals/results/pls-p2-solution-designer/2026-11-05-case002.md`). `pls-demo-inquiry` pinned to P2 0.4.
+   - Follow-ups: `pls classify` classifies process access control (`Processes[].Groups/Users/Depts`) as config-only — should be permission-impacting (tool gap); watch whether design-changing probes on verified behaviour (PRB-3 type) are treated as G2 prerequisites in the next case.
 3. **Architecture / process gaps worth a demo slice:**
    - P6 operate on slice #2: a drift on permissions, and on the process ACL.
    - Transport ADR-0003: the manual base64 transfer is the most token-heavy step. Decide whether to automate it.
