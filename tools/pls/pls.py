@@ -575,7 +575,14 @@ SEVERITY = ["config-only", "permission-impacting", "data-impacting"]
 MIGRATION_FILES = ("migration.json", "backup", "dry-run.md")
 
 
-def migration_problems(r: Path, mig: str | None) -> list[str]:
+def migration_problems(r: Path, migs: Any) -> list[str]:
+    """Accepts one folder or a list (a release may carry several migrations)."""
+    if isinstance(migs, (list, tuple)):
+        return [p for m in migs for p in _migration_problems(r, m)] if migs else _migration_problems(r, None)
+    return _migration_problems(r, migs)
+
+
+def _migration_problems(r: Path, mig: str | None) -> list[str]:
     """Data-impacting gate (ADR-0004): a migration folder with the conversion (migration.json: site, keys,
     bulkupsert data or mapping), the backup of the affected records taken before (folder `backup/`,
     exported with the runner's backupRecords) and the log of a dry run on a copy (dry-run.md)."""
@@ -701,7 +708,7 @@ def main(argv=None) -> int:
         if c == "plan":
             s.add_argument("--release", required=True)
             s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-            s.add_argument("--migration", help="migration folder required for data-impacting changes (ADR-0004)")
+            s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
     s = sp.add_parser("pack")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -713,7 +720,7 @@ def main(argv=None) -> int:
     s.add_argument("--release", required=True)
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-    s.add_argument("--migration", help="migration folder required for data-impacting changes (ADR-0004)")
+    s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
     s = sp.add_parser("mark-applied")
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
