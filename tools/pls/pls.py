@@ -15,7 +15,7 @@ Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SLOT-01, L-LAD-01, L-CAN-01)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -55,6 +55,7 @@ import pls_version as PV                                    # noqa: E402 — Ple
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
+import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -133,21 +134,20 @@ def id_maps(e: dict) -> tuple[dict, dict]:
     return ids, vals
 
 
-def to_refs(obj: Any, ids: dict, vals: dict, key: str = "") -> Any:
-    """Replace env-specific values with ${site:x} / ${env:x} references."""
+def to_refs(obj: Any, ids: dict, vals: dict, key: str = "", literal: dict | None = None) -> Any:
+    """Replace env-specific values with ${site:x} / ${env:x} references. `literal`: numbers a person decided to keep
+    (only ever given for the script bodies of one site, BR7)."""
     if isinstance(obj, dict):
-        return {k: to_refs(v, ids, vals, k) for k, v in obj.items()}
+        return {k: to_refs(v, ids, vals, k, literal) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [to_refs(v, ids, vals, key) for v in obj]
+        return [to_refs(v, ids, vals, key, literal) for v in obj]
     if isinstance(obj, int) and not isinstance(obj, bool) and key.endswith("SiteId") and str(obj) in ids:
         return "${site:%s}" % ids[str(obj)]
     if isinstance(obj, str):
         s = obj
         for v, name in sorted(vals.items(), key=lambda x: -len(x[0])):
             s = s.replace(v, "${env:%s}" % name)
-        for i, name in ids.items():
-            s = re.sub(r"(?<!\d)%s(?!\d)" % re.escape(i), "${site:%s}" % name, s)
-        return s
+        return SX.replace_ids(s, ids, literal)   # decimals never; recorded literals of this site's scripts (BR7)
     return obj
 
 
@@ -225,11 +225,10 @@ def logical(export: Any, e: dict) -> dict:
     for kind in SCRIPT_KINDS:
         scripts[kind] = ss.pop(kind, None) or []
     model = {
-        "meta": {k: d.get(k) for k in META_FIELDS if k in d},
-        "settings": ss,
-        "scripts": scripts,
+        "meta": to_refs({k: d.get(k) for k in META_FIELDS if k in d}, ids, vals),
+        "settings": to_refs(ss, ids, vals),
+        "scripts": to_refs(scripts, ids, vals, literal=SX.for_site(ids.get(str(d.get("SiteId"))))),
     }
-    model = to_refs(model, ids, vals)
     acl_to_refs(model["settings"], e)
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
@@ -489,8 +488,9 @@ def lint(r: Path) -> list[dict]:
             for it in items:
                 body, nm = it.get("Body", ""), it.get("Name")
                 for i in all_ids:
-                    if re.search(r"(?<!\d)%s(?!\d)" % i, body):
-                        issues.append({"rule": "L-REF-01", "site": site, "msg": f"{kind}/{nm}: hard-coded SiteId {i}; use ${{site:…}}"})
+                    if SX.literal_left(body, i, SX.for_site(site)):
+                        issues.append({"rule": "L-REF-01", "site": site, "msg": f"{kind}/{nm}: hard-coded SiteId {i}; use ${{site:…}}, "
+                                       "or record it as a literal number (pls refs --keep)"})
                 if kind == "ServerScripts" and it.get("Shared") and re.search(r"(?m)^\s*(const|let)\s+\w", body):
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
@@ -507,6 +507,16 @@ def lint(r: Path) -> list[dict]:
             for x in perms.get("entries") or []:
                 if not str(x).startswith("${principal:"):
                     issues.append({"rule": "L-PERM-01", "site": site, "msg": f"permission entry '{x}' uses an environment-specific principal id; map it in environments.json principals"})
+        code = [(f"{k}/{it.get('Name') or it.get('Title') or it.get('Id')}", it.get("Body") or "", k == "ServerScripts")
+                for k in ("ServerScripts", "Scripts") for it in m["scripts"].get(k) or []]
+        if code and not SX.node_available():                      # L-SCR-02: scripts compile (nothing is run)
+            print(f"warning: {site}: L-SCR-02 skipped — node not found, scripts were not compiled", file=sys.stderr)
+        elif code:
+            try:
+                for err in SX.syntax_errors(code):
+                    issues.append({"rule": "L-SCR-02", "site": site, "msg": f"{err['label']} line {err['line']}: {err['message']}"})
+            except RuntimeError as ex:
+                issues.append({"rule": "L-SCR-02", "site": site, "msg": f"syntax check not run: {ex}"})
         if canonicalize(m["settings"]) != m["settings"]:
             issues.append({"rule": "L-CAN-01", "site": site, "msg": "configuration is not in canonical form; run `pls canon` (D8)"})
         if ledger is not None:
@@ -1070,6 +1080,52 @@ def env_compare(r: Path, site: str, sources: list[str], today: str) -> int:
     for n in notes:
         print(f"  {n}")
     return 1 if by["content"] or by["id-like"] else 0
+
+
+def refs_cmd(r: Path, a) -> int:
+    """List site ids inside the scripts of a site, or keep one as a literal number (a person's decision, BR7)."""
+    e = env_conf(r, a.env)
+    resolve = {k: str(v["id"]) for k, v in e["sites"].items() if v.get("id")}
+    d = r / "config" / a.site
+    model = read_tree(d)
+    if not a.keep:
+        uses = SX.site_refs(model["scripts"], resolve)
+        for u in uses:
+            print(f"{'SUSPICIOUS ' if u['suspicious'] else ''}{u['kind']}/{u['script']} line {u['line']}: "
+                  f"${{site:{u['site']}}} = {u['number']} … `{u['context']}`")
+        print(f"{a.site}: {len(uses)} site reference(s) in scripts, {sum(u['suspicious'] for u in uses)} in a numeric context")
+        return 0
+    if not (a.reason and a.by):
+        raise Fail("--keep needs --reason and --by (the person who decided)")
+    found = [(name, num) for name, num in resolve.items() if re.search(SX.id_pattern(num), a.keep)]
+    if len(found) != 1:
+        raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
+    name, num = found[0]
+    why = SX.check_context(a.keep, num)
+    if why:
+        raise Fail(f"--keep {a.keep!r}: {why}")
+    targets = []
+    for kind, (folder, _ext) in SCRIPT_KINDS.items():
+        idx = d / folder / "_index.json"
+        for entry in rj(idx) if idx.exists() else []:
+            path = d / folder / entry["File"]
+            with open(path, encoding="utf-8", newline="") as fh:     # keep CRLF as stored (S7)
+                body = fh.read()
+            new, n = SX.keep_literal(body, name, num, a.keep, resolve)
+            if n:
+                targets.append((path, new, n))
+    changed = sum(n for _, _, n in targets)
+    if not changed:
+        raise Fail(f"context {a.keep!r} not found around a ${{site:{name}}} in config/{a.site} scripts (copy it from `pls refs`)")
+    f = r / "design" / "refs-literal.json"                  # the decision first: a later unpack applies it anyway
+    doc = rj(f) if f.exists() else {"literal": []}
+    doc["literal"].append({"site": a.site, "number": num, "context": a.keep, "reason": a.reason, "by": a.by,
+                           "date": datetime.now().astimezone().date().isoformat()})
+    wj(f, doc)
+    for path, new, _n in targets:
+        path.write_text(new, encoding="utf-8", newline="")
+    print(f"kept {changed} occurrence(s) of {num} as a literal number in config/{a.site}; decision recorded in design/refs-literal.json")
+    return 0
 
 
 # ---------------------------------------------------------------- new sites (ADR-0007)
@@ -1755,6 +1811,14 @@ def main(argv=None) -> int:
     s.add_argument("--env", required=True)
     s.add_argument("--app", help="application version read on <url>/versions by a logged-in person, e.g. 1.5.2.0")
     s.add_argument("--from-package", help="site package JSON exported from that environment: its AssemblyVersion is recorded (no HTTP)")
+    s = sp.add_parser("refs", help="site ids inside the scripts of a site: list them, or keep one as a literal number")
+    s.add_argument("--site", required=True)
+    s.add_argument("--env", default="dev", help="environment whose ids are shown (default dev)")
+    s.add_argument("--keep", metavar="CONTEXT", help="text around the number, as printed by `pls refs` (number included)")
+    s.add_argument("--reason")
+    s.add_argument("--by", help="the person who decided")
+    s = sp.add_parser("xref", help="which script uses which column and site (ops/xref/<site>.json)")
+    s.add_argument("--site", required=True)
     s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
     s.add_argument("--site", required=True, help="logical site name")
     s.add_argument("--source", action="append", required=True, metavar="ENV=FILE|git", help="first = reference; repeat")
@@ -1804,6 +1868,10 @@ def main(argv=None) -> int:
                   "or fill environments.json and .pls/connections.json by hand")
         return 0
     r = root()
+    try:
+        SX.load_literal(r)
+    except ValueError as ex:
+        raise Fail(str(ex))
     if a.cmd == "skills":
         if a.action == "sync":
             lock = sync_skills(r)
@@ -1833,6 +1901,20 @@ def main(argv=None) -> int:
 
     if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt"):
         return http_cmd(r, a)
+
+    if a.cmd == "refs":
+        return refs_cmd(r, a)
+
+    if a.cmd == "xref":
+        model = read_tree(r / "config" / a.site)
+        data = SX.xref(model["settings"], model["scripts"])
+        out = r / "ops" / "xref" / f"{a.site}.json"
+        wj(out, data)
+        top = sorted(data["columns"].items(), key=lambda x: -len(x[1]["scripts"]))[:10]
+        print(f"{a.site}: {len(data['scripts'])} script(s), {len(data['columns'])} column(s) referenced by scripts → {out.relative_to(r)}")
+        for col, v in top:
+            print(f"  {col:16} {v['label'][:20]:20} used by {len(v['scripts'])} script(s)")
+        return 0
 
     if a.cmd == "env-compare":
         return env_compare(r, a.site, a.source, datetime.now().astimezone().date().isoformat())

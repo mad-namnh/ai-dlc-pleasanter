@@ -108,7 +108,7 @@ def script_id_uses(raw_scripts: dict, ids: dict[str, str]) -> list[str]:
             body = it.get("Body") or ""
             label = it.get("Name") or it.get("Title") or f"Id {it.get('Id')}"
             for sid, name in ids.items():
-                for m in re.finditer(r"(?<!\d)%s(?!\d)" % re.escape(sid), body):
+                for m in re.finditer(r"(?<![\d.])%s(?!\d|\.\d)" % re.escape(sid), body):   # as pls_scripts.id_pattern
                     before = body[:m.start()].rstrip(" ")[-1:]
                     after = body[m.end():].lstrip(" ")[:1]
                     numeric = bool(re.match(r"[\d.,\-]", before or "")) or bool(re.match(r"[\d.]", after or ""))
