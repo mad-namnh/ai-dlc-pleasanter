@@ -78,3 +78,27 @@ test('backupRecords pages through every record', async () => {
   const r = await ctx.plsRunner.backupRecords(9, 2);
   assert.equal(r.count, 5); assert.deepEqual(calls, [0, 2, 4]);
 });
+
+test('runTests: create on another site with $var, update/delete with expected HTTP', async () => {
+  const recs = {}; let next = 100; const calls = [];
+  const fetch = async (path, opts) => {
+    const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/); const body = opts && opts.body ? JSON.parse(opts.body) : {};
+    calls.push(`${op} ${id}`);
+    const res = (status, obj) => ({status, text: async () => JSON.stringify(obj)});
+    if (op === 'getsite') return res(200, {Response: {Data: {SiteSettings: {Processes: []}}}});
+    if (op === 'create') { const nid = next++; recs[nid] = {site: id, ...body}; return res(200, {Id: nid}); }
+    if (op === 'update') return Number(id) === 101 ? res(403, {Message: 'no'}) : res(200, {});
+    if (op === 'delete') return res(200, {});
+    if (op === 'get') return res(200, {Response: {Data: [{ClassHash: recs[id].ClassHash}]}});
+  };
+  const ctx = {fetch, console, DOMParser: class {}}; vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  const out = await ctx.plsRunner.runTests(1, [{id: 'T', steps: [
+    {op: 'create', save: 'p', data: {Title: 'parent'}},
+    {op: 'create', site: 2, save: 'c', data: {ClassHash: {ClassA: '$p'}}},
+    {op: 'get', record: '$c', expect: {'ClassHash.ClassA': '100'}},
+    {op: 'update', record: '$c', data: {NumHash: {NumA: 1}}, expectHttp: 403},
+    {op: 'delete', record: '$p'}]}], 'dev');
+  assert.equal(out.tests[0].status, 'pass', JSON.stringify(out.tests[0].log));
+  assert.ok(calls.includes('create 2'));
+});

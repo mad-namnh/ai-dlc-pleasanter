@@ -41,11 +41,14 @@ var plsRunner = (() => {
     const out = [];
     for (const spec of specs) {
       const vars = {}, log = []; let status = 'pass';
+      // "$name" anywhere in step data → id of the record saved as `name` earlier in this test
+      const subst = v => typeof v === 'string' && /^\$\w+$/.test(v) && v.slice(1) in vars ? String(vars[v.slice(1)])
+        : Array.isArray(v) ? v.map(subst) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
       try {
         for (const st of spec.steps) {
           const rid = st.record ? vars[st.record.replace('$', '')] : null;
           if (st.op === 'create') {
-            const r = await call(`/api/items/${siteId}/create`, st.data);
+            const r = await call(`/api/items/${st.site || siteId}/create`, subst(st.data));
             if (!r.json || !r.json.Id) throw new Error(`create failed: HTTP ${r.http} ${r.text.slice(0, 200)}`);
             vars[st.save] = r.json.Id; log.push(`create → ${r.json.Id}`);
           } else if (st.op === 'exec') {
@@ -54,8 +57,19 @@ var plsRunner = (() => {
             const r = await call(`/api/items/${rid}/update`, {ProcessId: p.Id, ...(st.data || {})});
             log.push(`exec ${st.process}(Id ${p.Id}) → HTTP ${r.http}`);
             if (st.expectHttp && r.http !== st.expectHttp) { status = 'fail'; log.push(`expected HTTP ${st.expectHttp}`); }
+          } else if (st.op === 'update' || st.op === 'delete') {
+            const r = await call(`/api/items/${rid}/${st.op}`, st.op === 'update' ? subst(st.data || {}) : undefined);
+            log.push(`${st.op} ${rid} → HTTP ${r.http}`);
+            const want = st.expectHttp || 200;
+            if (r.http !== want) { status = 'fail'; log.push(`expected HTTP ${want}`); }
           } else if (st.op === 'get') {
             const r = await call(`/api/items/${rid}/get`);
+            if (st.expectHttp) {
+              const ok = r.http === st.expectHttp;
+              log.push(`${ok ? 'ok ' : 'NG '} get ${rid} → HTTP ${r.http} (expected ${st.expectHttp})`);
+              if (!ok) status = 'fail';
+              continue;
+            }
             const rec = r.json.Response.Data[0];
             for (const [path, exp] of Object.entries(st.expect)) {
               const act = getPath(rec, path);
