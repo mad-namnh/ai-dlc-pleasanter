@@ -16,7 +16,7 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 
 | Repo | Role |
 |---|---|
-| `ai-dlc-pleasanter` | Framework: architecture v0.2, ADRs, `tools/pls` v0.3, `skills/` (KB 0.5), `evals/`, `patterns/ai-gateway` (parked) |
+| `ai-dlc-pleasanter` | Framework: architecture **v0.3**, ADRs 0001–0008, `tools/pls` 0.5, `skills/` (KB 0.7, P1 0.3, P2 0.5), `evals/` (cases 001–002), `patterns/ai-gateway` (parked) |
 | `pls-demo-inquiry` | First project repository: slices #1, 1.5 and #2. All of them are merged to `main`; no other branches. |
 | `pls-demo-equipment` | Second project repository: slice #3, a new app (equipment loans) created by the framework (dev 44628/44629, stg 44671/44672) |
 
@@ -53,7 +53,7 @@ Owner: Nam. Discussion is in Vietnamese; **everything in the repos is English** 
 
 ## Start of the next session
 
-1. Check that both repos are committed (`git status` in `ai-dlc-pleasanter`, `pls-demo-equipment`, `pls-demo-inquiry`); the last changes of 2026-11-05 14:40 (pls HTTP fixes, staff spec) may still be uncommitted.
+1. ✅ (2026-11-05) All three repos were checked and committed. The session must have `pls-demo-equipment` connected as a folder as well.
 2. Optional: Nam re-runs `pls test tests/api/equipment.json --env dev --site loans` from `pls-demo-equipment` (HTTP transport) — expected all pass / pass-api-only.
 3. Then continue with step 4 below (architecture gaps) or step 5 (architecture.md v0.3). Multi-user HTTP role tests are deferred (demo stage).
 
@@ -74,7 +74,7 @@ Tools: `pls` 0.5 (HTTP transport + browser runner fallback), 40 python tests + 6
    - Transport ADR-0003: the manual base64 transfer is the most token-heavy step. Decide whether to automate it.
    - A migration on a larger data copy (plan Step 4 item 3).
    - Line-level script diff (S6).
-5. Update `docs/architecture.md` (v0.3) with what slices #1–#2 proved: multi-site release, migration gate, principals, and role tests.
+5. ✅ `docs/architecture.md` v0.3: slices #1–#3, the transport, phase statuses and next steps (§9). Step 4 = architecture §9 items 1–5.
 6. Prod-stage items (customer round, prod environment, real groups, mail) — later.
 
 ## Escaped defect found by the eval (I9)

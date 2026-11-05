@@ -1,6 +1,6 @@
 # CLAUDE.md — rules for agents working in ai-dlc-pleasanter
 
-Current phase: **architecture v0.1 adopted; next is vertical slice #1 through P1–P6**. Framework skills/agents/hooks are not built yet.
+Current phase: **test / demo stage, architecture v0.3** (after slices #1–#3). Skills P1/P2 + KB are built; tools `pls` 0.5. See `HANDOFF.md` for the next step.
 
 **Read `docs/architecture.md` first.** Every skill, agent, hook, check or tool you build must map to a phase (P1–P6), an artifact or an invariant (I1–I9) defined there. If it does not fit, propose an ADR instead of building it. Customer-application solutions go to `patterns/`, not into the framework core.
 

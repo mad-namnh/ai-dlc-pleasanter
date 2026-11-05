@@ -1,6 +1,6 @@
 # AI-DLC for Pleasanter — Architecture
 
-Version 0.2 (2026-11-05) — updated after vertical slice #1 (`docs/slices/slice-01-report.md`). This document is the frame of the framework. Every skill, agent, hook, check and tool must map to a phase, an artifact or an invariant described here. If something does not fit, change this document first (via an ADR) — do not build around it.
+Version 0.3 (2026-11-05) — updated after vertical slices #1–#3 (`docs/slices/slice-0{1,2,3}-report.md`). Stage: **test / demo** — the framework is being shaped on MADLAB dev with role-played customers; prod-stage items (customer questions, prod environment, real groups, mail) are deferred. This document is the frame of the framework. Every skill, agent, hook, check and tool must map to a phase, an artifact or an invariant described here. If something does not fit, change this document first (via an ADR) — do not build around it.
 
 ## 1. Purpose and scope
 
@@ -42,7 +42,7 @@ These rules hold in every phase. Each one is enforced by a deterministic check o
 
 ### 3.2 Project repository layout (target)
 
-v0.1 uses JSON for machine-read files (stdlib only). Reference implementation: the `pls-demo-inquiry` project repository from slice #1.
+Machine-read files are JSON (stdlib only). Reference implementations: `pls-demo-inquiry` (changes to existing sites: slices #1, 1.5, #2) and `pls-demo-equipment` (a new app: slice #3).
 
 ```
 <customer>-<system>/
@@ -66,14 +66,22 @@ v0.1 uses JSON for machine-read files (stdlib only). Reference implementation: t
 │     └─ permissions.json         # optional (ADR-0006): inherit + entries with ${principal:x}
 ├─ environments.json              # dev/stg/prod: base URL, role, logical name → SiteId map, ${env:} values, principals
 ├─ secrets.catalog.json           # secret NAMES per environment, owner — no values (I7)
+├─ connections.example.json       # template for the operator's .pls/connections.json (ADR-0008, no keys)
+├─ .pls/                          # gitignored: operator connections + key files, exports, bundles
+├─ migrations/
+│  └─ M<n>-<slug>/                # migration.json (site, keys, rollback), dry-run.md, backup/ (gitignored, I7)
 ├─ tests/
 │  ├─ api/                        # behaviour tests through the Pleasanter API
 │  ├─ permissions/                # permission matrix tests (users × operations)
-│  └─ smoke/                      # few Playwright flows
+│  ├─ smoke/                      # few Playwright flows
+│  ├─ results/                    # test results per environment and run
+│  └─ seed/                       # gitignored: test-user credentials for dev
 ├─ traceability.json              # REQ ↔ design element ↔ config path ↔ test (I8)
 ├─ releases/
 │  └─ R-YYYYMMDD-NN/
 │     ├─ plan.json                # deploy plan: ordered steps, snapshot refs, rollback
+│     ├─ payload-<site>.json      # complete SiteSettings per site (I2); rollback-<site>.json = snapshot
+│     ├─ g3-verification.md       # G3 evidence
 │     ├─ diff-report.md           # business-language diff (AI) + raw diff (code)
 │     ├─ checks.json              # results of every automated check
 │     └─ approvals.md             # G3/G4 approvers, date, scope
@@ -87,8 +95,10 @@ v0.1 uses JSON for machine-read files (stdlib only). Reference implementation: t
 | Environment | Who writes | How | Role in config |
 |---|---|---|---|
 | local / dev (MADLAB) | Engineers and AI agents | `pls deploy` with write guard | `role: dev`, `allow_write: true` |
-| stg (customer or MADLAB) | Pipeline only, after G3 | Deploy package | `role: stg` — tooling refuses direct writes |
-| prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — unreachable from MADLAB |
+| stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) or the browser runner `applyRelease` | `role: stg` — no ad-hoc writes; every write is a planned release |
+| prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — never written by `pls` HTTP; unreachable from MADLAB |
+
+**Transport (ADR-0008).** People and workstation agents call the Pleasanter API directly with `pls` (keys from environment variables or key files under `.pls/`, never in git or chat). The cloud agent sandbox has no network path to Pleasanter, so agents fall back to the browser runner (`tools/pls/browser/pls-runner.js`) in a logged-in tab, moving exports and payloads as gzip + base64 with SHA-256 checks.
 
 ## 4. Lifecycle overview
 
@@ -104,7 +114,9 @@ v0.1 uses JSON for machine-read files (stdlib only). Reference implementation: t
 | G1 | Requirements are right and complete enough to design | Customer business owner + MADLAB PM | `requirements/REQ-*.md` in approved state; open questions closed or accepted |
 | G2 | Design is the simplest that meets the requirements; data/permission impact understood | MADLAB tech lead | Design docs, slot ledger, ladder reasons, impact classification |
 | G3 | Build is correct and safe | MADLAB tech lead | All checks green, coverage 100% of in-scope REQs, reviewer-agent findings resolved |
-| G4 | Release may go to production | Customer business owner + operator | Diff report, deploy plan with rollback, drift check clean, data-migration plan if any |
+| G4 | Release may go to the target (stg, then prod) | Customer business owner + operator | Diff report, deploy plan with rollback, drift check clean, data-migration plan if any |
+
+In the demo stage, Nam approves every gate (acting as both MADLAB lead and customer owner). Gate decisions are recorded in `releases/R-*/approvals.md` and in the status lines of REQ/DES files.
 
 ## 5. Phases
 
@@ -121,7 +133,10 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `requirements/REQ-*.md`, `requirements/index.md`, question list.
 - **Checks:** every REQ has EARS form + acceptance criteria; no duplicate IDs; open questions listed.
 - **Gate:** G1.
-- **Status:** not started.
+- **Status:** **used in slices #1–#3.** Skill 0.3 passed eval cases 001 and 002. Lessons:
+  - one `shall` per REQ;
+  - derived requirements only protect existing behaviour;
+  - check whether an existing column already covers the request (slice #2: 作業時間).
 
 ### P2 — Design (設計)
 
@@ -133,9 +148,13 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Classifies the change: config-only / data-impacting / permission-impacting (ADR-0004).
   - Generates 設計書 for the customer from the design + configuration.
 - **Outputs:** `design/*`, updated `traceability.json` (REQ → design element).
+- **Probes:** behaviour the design depends on and the KB does not cover is probed on dev **before G2**. A probe counts only for the configuration it reproduces. If a probe cannot run, the design takes the safe branch.
+  - Example of the safe branch: process access control instead of assuming that read-only users cannot see buttons.
+  - Origin: slice #2 T-015, eval case 002.
+- **New sites (ADR-0007):** choose the site type and relations, run a skeleton probe, and allocate slots in zone A.
 - **Checks:** every in-scope REQ has a design element; slot ledger consistent; ladder reasons present for rungs ≥ server script.
 - **Gate:** G2.
-- **Status:** not started.
+- **Status:** **used in slices #1–#3.** Skill 0.5 (0.4 passed eval case 002; 0.5 adds new sites, not yet evaluated). KB `pls-kb-pleasanter` 0.7, entries D7–D27.
 
 ### P3 — Build (実装)
 
@@ -149,7 +168,12 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Canonicalise (slice #1, S1):** Pleasanter adds default fields and drops default-valued fields on save. After the first deploy to dev, export → unpack again so that git holds the canonical form; otherwise drift checks report false positives.
 - **Checks (hooks, on every edit):** pre-tool: block writes to non-dev environments, block secret values; post-tool: schema validation, `pls lint`, reference check.
 - **Gate:** none (continuous); feeds P4.
-- **Status:** **foundation proven** — round-trip of configuration via API is reliable on 1.5.2 (spike round 1: 0 differences, idempotent). Normalize/diff code exists in `spike/round-trip/`. 7 core components still to verify (round 2).
+- **New sites (ADR-0007):** `pls bootstrap-plan` → create skeletons (`pls bootstrap` or runner `bootstrapSites`) → `pls bind` writes the new IDs into `environments.json` → export → unpack → build. After that, the first release is a normal `release-plan`.
+- **Status:** **proven in slices #1–#3.**
+  - The round trip of configuration is reliable on 1.5.2.
+  - The fold-back step for canonicalisation is needed on every first deploy.
+  - Principals are mapped through `${principal:x}`; `pack` refuses raw principal IDs.
+  - No P3 skill yet: the agent edits `config/` by following the design.
 
 ### P4 — Verify (検証)
 
@@ -170,7 +194,13 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   4. Smoke (Playwright, few flows)
   5. Coverage: every in-scope REQ has config and a passing test
 - **Gate:** G3.
-- **Status:** secret scan prototype only (`spike/round-trip/scripts/scan_secrets.py`).
+- **Role tests (TD-11, TD-13):** each restricted role is tested with a user of that role, through the API and, for buttons, the edit screen. Slice #2 T-015 caught a wrong KB entry this way.
+  - Over HTTP, `pls test` picks the key per step (`as_key`).
+  - Over the browser runner, a person switches the login.
+- **Status:** **in use.**
+  - `pls lint` and `pls coverage` run.
+  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`.
+  - Not built: reviewer agents, Playwright smoke, CI.
 
 ### P5 — Release (リリース)
 
@@ -182,7 +212,15 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals).
 - **Checks:** drift clean; plan contains complete SiteSettings only (I2); data-impacting changes have migration + dry-run; post-deploy smoke + round-trip export equals git.
 - **Gate:** G4.
-- **Status:** write guard exists in spike tooling; drift/plan/package not built.
+- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs after the configuration, in the same release window. Bulk updates go through `bulkupsert` with keys.
+- **Status:** **proven on stg in slices #1–#3.** The release sequence:
+  1. `release-plan` checks drift, slots and the migration gate, and orders multi-site releases by dependency.
+  2. `applyRelease` / `pls apply` runs a preflight on `UpdatedTime`, applies in order and restores automatically on failure.
+  3. Migrations run.
+  4. Export → `mark-applied`, which requires a round trip with 0 differences.
+  5. Smoke tests.
+
+  The business-language diff report is written by the agent from the raw diff. Not built: `pls-p5-release-manager` as a separate agent, and the customer-side deploy package (ADR-0003).
 
 ### P6 — Operate (運用)
 
@@ -195,7 +233,11 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `ops/drift/*`, `ops/incidents/*`, framework issues.
 - **Checks:** periodic drift report; incident records reference the rule they produced. Drift resolution always goes through `pls classify` — reverting customer edits can itself be data-impacting (S3).
 - **Gate:** accept/revert decisions by tech lead; customer informed via drift report (B2).
-- **Status:** not started.
+- **Status:** **partly proven.**
+  - `pls drift` compares the live site with the last applied release.
+  - Slice 1.5 carried an accepted drift on stg (優先度 「緊急」) through P6 → P1 → P5.
+  - Slice #3 recorded a drift baseline of 0 on stg.
+  - Not yet exercised: drift on permissions or on a process ACL, scheduled exports, and incident records.
 
 ## 6. Traceability model
 
@@ -219,12 +261,15 @@ One file, `traceability.json`, links the chain in both directions:
 
 | Command | Phase | Purpose | Status |
 |---|---|---|---|
-| `pls export` | P3, P6 | Read site configuration from an environment | Browser runner (`tools/pls/browser/`); proper transport → ADR-0003 (S4) |
+| `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |
+| `pls http-check` | all | Check connection, key and role of an environment | **0.5** |
+| `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback |
+| `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
 | `pls validate` | P3, P4 | JSON schema (derived from real exports) | Not built |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | **v0.1** — L-SEC-01, L-REF-01, L-SCR-01, L-SLOT-01, L-LAD-01 |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
-| `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004) | **v0.1** |
+| `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting | **0.4** |
 | `pls coverage` | P4 | REQ ↔ config ↔ test gaps | **v0.1** |
 | `pls drift` | P5, P6 | Live vs **last applied release** (D11); reports whether reverting is data-impacting | **v0.2** |
 | `pls slots` | P5, P6 | Column-slot check: live target vs git vs slot ledger (A2, ADR-0002) — collision, slot used outside the ledger (incl. editor-only slots), repurposed label, git slot not allocated | **v0.3** |
@@ -264,7 +309,12 @@ Naming: `pls-<phase>-<role>` (`p1`…`p6`, `kb`, `x`) — see `CLAUDE.md`.
 | Hooks: env write guard, secret guard, post-edit lint | hooks | P3–P5 |
 | Evals: sample requirements with expected designs/configs | evals | all |
 
-Built (v0.1, `skills/`): `pls-kb-pleasanter`, `pls-p1-requirements-analyst`, `pls-p2-solution-designer` — each with an eval case in `evals/`. The others are built only when a slice needs them.
+Built (`skills/`):
+- `pls-kb-pleasanter` 0.7;
+- `pls-p1-requirements-analyst` 0.3;
+- `pls-p2-solution-designer` 0.5.
+
+Eval cases 001 (escalation) and 002 (categories, accounting read access, total time) exist for P1 and P2. Results are in `evals/results/`. Grading is still done by hand. Rule: no case answer may appear in a skill. The other assets are built only when a slice needs them.
 
 ### 7.4 Observability
 
@@ -274,17 +324,31 @@ Usage of AI per project and phase (tokens, time, number of human corrections) is
 
 | Phase | Status | What exists |
 |---|---|---|
-| P1 Requirements | 🟡 | Skill `pls-p1-requirements-analyst` v0.1 + eval case 001 |
-| P2 Design | 🟡 | Skill `pls-p2-solution-designer` v0.1 + knowledge base `pls-kb-pleasanter` + eval case 001 |
-| P3 Build | 🟡 | `pls unpack/pack` with logical references; canonicalise-via-dev step proven |
-| P4 Verify | 🟡 | `pls lint` (L-SEC/REF/SCR/SLOT/LAD/CAN/PERM), `pls coverage`, browser test runner (create / exec process / UI button / config checks); effective permission tests per role not yet (TD-11) |
-| P5 Release | 🟡 | `pls plan` / `release-plan` (complete payload, drift + slot checks, multi-site order, rollback, classification, migration gate), runner `applyRelease` (preflight, automatic restore), `backupRecords` / `bulkUpsert`, business diff report |
-| P6 Operate | 🟡 | `pls drift` against the last applied release; revert classification |
+| P1 Requirements | 🟢 demo | Skill 0.3; eval cases 001 and 002 pass; used in slices #1–#3 |
+| P2 Design | 🟢 demo | Skill 0.5; KB 0.7 (D7–D27); probes before G2; new-site design (ADR-0007); eval case 002 passes on 0.4 |
+| P3 Build | 🟢 demo | `pack` / `unpack` / `canon` with `${site:x}` and `${principal:x}`; bootstrap and bind for new sites; no P3 skill |
+| P4 Verify | 🟡 | `lint`, `coverage`, test specs through `pls test` / `runTests`, role tests with test users; no reviewer agents, no CI, no Playwright |
+| P5 Release | 🟢 demo | `release-plan` (drift, slots, migration gate, order, rollback) → `apply` / `applyRelease` → `mark-applied` (round trip 0) → smoke; proven on stg in R-20261105-01, -05 and -E03 |
+| P6 Operate | 🟡 | `pls drift` against the last applied release; one accepted-drift loop (slice 1.5); no scheduled watch and no incident flow yet |
+
+### What the slices proved
+
+| Slice | Kind of change | Proved |
+|---|---|---|
+| #1 | Process + status + column on an existing site | Full P1–P6 cycle; canonicalisation fold-back (S1); drift against the last release (S2) |
+| 1.5 | Customer edit on stg | Drift → accept → P1 → record-only release |
+| #2 | 2 sites, 2 migrations, permissions | Multi-site ordered release with automatic restore; migration gate; permissions and process ACL in git with principals mapped per environment; role tests catch wrong assumptions |
+| #3 | New app (2 new sites) | Skeleton bootstrap + bind (ADR-0007); first release from the canonical skeleton; HTTP transport (ADR-0008) first real run |
 
 ## 9. Next step
 
-Slice #1 is done; gaps S1–S3 are closed in `pls` v0.2; the first skills are extracted. Next: run the eval cases with a fresh agent to validate the skills, then slice #2 on a real customer requirement using the skills for P1–P2.
+The demo-stage gaps, in order of value:
+1. **P6 on a permission/ACL drift.** Simulate a customer change to permissions or to a process ACL on stg, then run classify, accept or revert, and record the result in `ops/drift`.
+2. **Transport (ADR-0003 / ADR-0008):** make HTTP the default where a network path exists, and decide what the customer-side deploy package for prod looks like.
+3. **Migration at volume:** run M1/M2-type migrations on a copy with realistic data. Measure duration and the rollback.
+4. **Line-level script diff (S6).** Then the first reviewer agent, probably the P4 coverage or permission reviewer.
+5. **Evals:** automate grading. Evaluate P2 0.5 on a new-site case.
 
 ## 10. Related decisions
 
-ADR-0001 (scope in git), ADR-0002 (column slots), ADR-0003 (production deploy), ADR-0004 (data-impacting changes), ADR-0005 (secrets). Findings: `docs/review-findings.md`. Deferred work: `docs/tech-debt.md`.
+ADR-0001 (scope in git), ADR-0002 (column slots), ADR-0003 (production deploy, proposed), ADR-0004 (data-impacting changes, accepted), ADR-0005 (secrets, partially accepted), ADR-0006 (site permissions in git, accepted), ADR-0007 (creating new sites, proposed), ADR-0008 (HTTP transport, proposed). Findings: `docs/review-findings.md`. Deferred work: `docs/tech-debt.md`.
