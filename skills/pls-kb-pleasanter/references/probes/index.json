@@ -31,6 +31,14 @@
       ],
       "probes": [
         "D08-canonical-defaults"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D9": {
@@ -45,6 +53,14 @@
       ],
       "probes": [
         "D10-display-condition-enforced"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D11": {
@@ -113,6 +129,14 @@
       ],
       "probes": [
         "D21-process-without-condition"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D22": {
@@ -133,6 +157,14 @@
       ],
       "probes": [
         "D24-overdue-view"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D25": {
@@ -153,6 +185,14 @@
       ],
       "probes": [
         "D27-required-is-screen-only"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D28": {
@@ -161,6 +201,14 @@
       ],
       "probes": [
         "D28-user-choice"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D29": {
@@ -176,6 +224,14 @@
       "probes": [
         "D30-dashboard-part-with-view",
         "D30-dashboard-part-without-view"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D31": {
