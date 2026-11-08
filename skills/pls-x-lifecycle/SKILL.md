@@ -41,7 +41,7 @@ Before doing anything, establish the state from the repository. Do not rely on m
 | `ops/onboarding/*-summary.md`, `ops/adopt/*.md`, `design/as-is/*.md` | Origin `existing`: onboarding done? decisions still open? as-is spec reviewed? |
 | `git status`, `git log -5 --oneline` | uncommitted work from an interrupted session |
 
-Also read the **Project profile** in `CLAUDE.md`: origin, stage, release target and approvers. If it is missing, ask for it once.
+Also read the **Project profile** in `CLAUDE.md`: origin, stage, release target and approvers. If it is missing, ask for it once. If the approver of a gate is not named, ask at that gate who approves it, and add the name to the profile only after the person says it.
 
 `pls http-check --env <e>` prints the recorded Pleasanter version. If it says *not recorded* or *build changed*, run `pls version --env <e>`; when it reports the application version as unknown, ask the person to read it on `<url>/versions` (logged in) and record it with `--app`. Never guess the version (ADR-0009).
 

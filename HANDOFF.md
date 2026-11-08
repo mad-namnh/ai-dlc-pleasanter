@@ -1,8 +1,16 @@
-# Handoff — state as of 2026-11-05 17:30 JST (after the D5 demo run)
+# Handoff — state as of 2026-11-08 (branch `brownfield-adr`; sections below 'Current state' describe 2026-11-05)
 
 > Next session may run on another Claude account: everything needed is in the two repositories; nothing lives only in the chat.
 
 Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
+
+## Current state — 2026-11-08 (read first)
+
+- `main` (= GitHub) is the **demo baseline**; do not commit there unless Nam asks.
+- All brownfield work is on the **local branch `brownfield-adr`** (not pushed): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
+- Tests: 145 Python + 6 node, plus a write-path inventory test (`tools/pls/tests/test_write_guards.py`).
+- Architecture audit after BR9: ready with conditions; fixes on the branch: template `.gitattributes`, docs refreshed, `pls gate` (I4), test/skill clarifications.
+- Next: onboarding of the first real project on dev with `pls init <name> --origin existing --stage project --target stg`; Nam accepts ADR-0009/0010/0011 after that run.
 
 ## What this is
 

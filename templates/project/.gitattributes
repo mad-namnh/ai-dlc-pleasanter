@@ -1,0 +1,5 @@
+# Pleasanter configuration, script bodies and release payloads are stored byte for byte:
+# no line-ending conversion (core.autocrlf), so CRLF in a script stays CRLF and round trips stay at 0 differences.
+config/** -text
+releases/** -text
+migrations/** -text

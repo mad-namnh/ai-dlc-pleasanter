@@ -12,17 +12,17 @@ Goal: bring the model "source of truth in git → AI works through hooks → ver
 
 ## Status
 
+State of branch `brownfield-adr` (2026-11-08). `main` is the demo baseline.
+
 | Item | Status |
 |---|---|
-| Repository skeleton | ✅ Done |
-| Architecture (lifecycle frame) | ✅ v0.1 — `docs/architecture.md` |
-| Architecture review (A1–C5, D1–D7) | ✅ Recorded in `docs/review-findings.md` |
-| ADR 0001–0005 | 🟡 Proposed with open questions; ADR-0005 partially accepted (runtime secrets) |
-| Round-trip spike (B4) | 🟡 Round 1 done on internal dev (1.5.2) — **conditional Go**; round 2 pending (`spike/round-trip/report-20261105.md`) |
-| AI gateway (Bedrock) | ⏸ Parked reference pattern for customer apps — deployed on dev, not framework core (`patterns/ai-gateway/`) |
-| First vertical slice (P1→P6) | ✅ Done — `docs/slices/slice-01-report.md`; project repo `pls-demo-inquiry` |
-| `pls` toolchain | 🟡 v0.2 — `tools/pls/` (unpack, pack, canon, lint, diff, drift, classify, coverage, plan, mark-applied) + browser runner |
-| Skills | 🟡 v0.1 — `pls-kb-pleasanter`, `pls-p1-requirements-analyst`, `pls-p2-solution-designer` (`skills/`, evals in `evals/`) |
+| Architecture (lifecycle P1–P6, gates G1–G4, invariants I1–I9) | ✅ v0.3 — `docs/architecture.md` |
+| ADRs | 0001–0012: 0004, 0006, 0012 accepted; 0005 partly; 0001–0003, 0007–0011 proposed (`docs/adr/README.md`) |
+| Vertical slices | ✅ #1–#3 (`docs/slices/`), demo run D5 (`demo-equipment`, released on dev) |
+| `pls` toolchain | ✅ stdlib Python, HTTP transport — unpack/pack/canon/lint/diff/drift/classify/coverage, release-plan/apply/mark-applied, bootstrap, test, init/setup/skills; brownfield: version, adopt, env-compare, refs, xref, sandbox, harvest, merge-site, kb-verify. 145 Python + 6 node tests, write-path inventory test |
+| Skills | ✅ 12 — KB, P1–P5, lifecycle (routes new / existing apps), onboarding, spec-recovery, script-engineer, maintenance-triage; evals in `evals/` |
+| Brownfield readiness (plan Step 4c) | 🟡 BR1–BR9 built and run on MADLAB dev; waiting for the first real project (onboarding) |
+| AI gateway (Bedrock) | ⏸ Parked reference pattern (`patterns/ai-gateway/`), not framework core |
 
 ## Environment constraints (agreed)
 
@@ -63,7 +63,7 @@ ai-dlc-pleasanter/
    └─ data/                # (gitignored) exported data — NEVER commit
 ```
 
-The `cli/`, `skills/`, `agents/`, `hooks/` and `test-harness/` directories are **intentionally not created yet**; they depend on the spike results and ADRs.
+Projects are created with `pls init` (new app, or `--origin existing` to take over an app that already runs); the visual guide is `demo/lifecycle-and-demo-guide.html`.
 
 ## Getting started
 

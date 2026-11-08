@@ -1668,7 +1668,7 @@ def _git_first_commit(target: Path) -> str:
 def _client(r: Path, env: str, key: str | None = None):
     import pls_http as H
     conn = H.load_connection(r, env)
-    return H, conn, H.Client(conn["url"], H.resolve_key(conn, key))
+    return H, conn, H.Client(conn["url"], H.resolve_key(conn, key), timeout=H.conn_timeout(conn))
 
 
 def _confirm(release: str, yes: bool, what: str) -> bool:
@@ -1711,7 +1711,7 @@ def http_cmd(r: Path, a) -> int:
                 seen.setdefault(v, k)
             for k in (a.key or sorted(conn.get("keys") or {})):
                 try:
-                    c = H.Client(conn["url"], H.resolve_key(conn, k))
+                    c = H.Client(conn["url"], H.resolve_key(conn, k), timeout=H.conn_timeout(conn))
                     st, js, _ = c.call(f"/api/items/{sid}/getsite")
                     note = (f" ({js['Response']['Data'].get('Title')})" if st == 200 and js else
                             " — key valid, this user has no access to that site (expected for restricted roles)" if st in (403, 404) else
@@ -1832,7 +1832,7 @@ def http_cmd(r: Path, a) -> int:
             def clients(role):
                 k = role or conn.get("default_key") or "admin"
                 if k not in cache:
-                    cache[k] = H.Client(conn["url"], H.resolve_key(conn, k))
+                    cache[k] = H.Client(conn["url"], H.resolve_key(conn, k), timeout=H.conn_timeout(conn))
                 return cache[k]
             H.assert_writable(e, conn, a.env)        # tests create records (TD-14b)
             fixtures = dict(x.split("=", 1) for x in a.var)
@@ -2058,7 +2058,7 @@ def http_cmd(r: Path, a) -> int:
                 build = PV.build_token(PV.fetch_login_page(conn["url"]))
             except PV.PageError as ex:
                 raise H.TransportError(f"{a.env}: login page not readable ({ex})")
-            client = H.Client(conn["url"], H.resolve_key(conn, None))
+            client = H.Client(conn["url"], H.resolve_key(conn, None), timeout=H.conn_timeout(conn))
             schema = None
             for sid in [v["id"] for v in (e.get("sites") or {}).values() if v.get("id")] + [e.get("parent_id")]:
                 if not sid:

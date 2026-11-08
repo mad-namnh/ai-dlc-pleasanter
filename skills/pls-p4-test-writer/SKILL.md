@@ -44,7 +44,7 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
    | the test itself is wrong | fix the test and write why in the commit |
 
 5. **Coverage.** Add the test ids to `traceability.json` (`"tests"` per REQ). `pls coverage` must show 100 % of in-scope REQs with config and tests. `pls lint` must show 0 issues.
-6. **Write `releases/<release>/g3-verification.md`** from `references/g3-template.md`. `<release>` is the release P5 will create; for target dev it is the last dev release. Commit (`test(p4): …`). **Stop at G3** (see `pls-x-lifecycle` and its `references/gates.md`).
+6. **Write `releases/<release>/g3-verification.md`** from `references/g3-template.md`. `<release>` is the release P5 will create: for target dev, the last dev release (`R-YYYYMMDD-NN-dev`); for target stg or prod, the id P5 will plan (`R-YYYYMMDD-NN`, without `-dev`), created now as a folder that holds only `g3-verification.md` until `release-plan` fills it. Commit (`test(p4): …`). **Stop at G3** (see `pls-x-lifecycle` and its `references/gates.md`).
 
 ## Checklist before G3
 

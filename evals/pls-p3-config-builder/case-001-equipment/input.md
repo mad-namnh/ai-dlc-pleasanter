@@ -14,3 +14,5 @@ Framework at `../fw`: `tools/pls`, plus the skills KB, `pls-x-lifecycle` and `pl
 There is no network, so the agent stops before the deploy. Prompt: "G2 is approved. Continue."
 
 Reference answer: `pls-demo-equipment/config/` after R-20261105-E02-dev. Compare with `pls diff` against an export built from it.
+
+**Building the scratch state.** The source repository has one commit for P1–P6 (`547f549`), so the state is rebuilt with `git archive 547f549` and trimmed as listed above. Remove every note written after this phase from the copied files (e.g. "Revised after T-102" lines in REQ or DES files, later test ids in `traceability.json`): they leak the answer.

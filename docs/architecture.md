@@ -277,6 +277,13 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — `pls plan` (one site) and `pls release-plan` (several sites: order by `${site:x}` dependencies, per-site snapshot + rollback, reverse-order restore, nothing written if any site fails). Runner `applyRelease`: preflight on `UpdatedTime`, ordered apply, automatic restore on failure; smoke tests still run by hand (`runTests`) |
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
+| `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package (ADR-0009) | branch `brownfield-adr` |
+| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009) | branch |
+| `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
+| `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
+| `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
+| `pls sandbox` / `harvest` / `merge-site` / `merge-install` | P3 (several developers) | Per-developer sandbox environments, UI edits back into git, semantic merge of `site.json` (ADR-0011) | branch |
+| `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4 | branch |
 
 ### 7.2 Lint rule catalogue (seeded from findings)
 
@@ -291,6 +298,12 @@ One file, `traceability.json`, links the chain in both directions:
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
 | L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
+| L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
+| L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
+| L-ENV-02 | ADR-0010 | `side_effects` values are known states |
+| L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
+| L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
+| L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile |
 | P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
 
 ### 7.3 AI assets (framework templates, installed into project repos)

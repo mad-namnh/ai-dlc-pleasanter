@@ -144,6 +144,7 @@ class HttpTest(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.cwd)
         self.srv.shutdown()
+        self.srv.server_close()
         self.tmp.cleanup()
         os.environ.pop("T_ADMIN", None)
 
@@ -310,6 +311,28 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "loans", "--out", "z.json"]), 0)
         res = json.loads((self.r / "z.json").read_text(encoding="utf-8"))
         self.assertEqual(res["tests"][0]["status"], "pass", res)
+
+    def test_exec_without_expectation_must_succeed(self):
+        # a refused process (second 返却 → 400) fails the step unless the spec expects the refusal
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-4", "steps": [
+            {"op": "create", "site": "${site:loans}", "save": "l", "data": {}},
+            {"op": "exec", "record": "$l", "process": "return"},
+            {"op": "exec", "record": "$l", "process": "return"}]}]), encoding="utf-8")
+        pls.main(["test", "s.json", "--env", "dev", "--site", "loans", "--out", "z.json"])
+        res = json.loads((self.r / "z.json").read_text(encoding="utf-8"))
+        self.assertEqual(res["tests"][0]["status"], "fail", res)
+        self.assertTrue(any("expected HTTP 200" in line for line in res["tests"][0]["log"]), res)
+
+    def test_timeout_from_the_connection_entry(self):
+        self.assertEqual(H.conn_timeout({}), 30.0)
+        self.assertEqual(H.conn_timeout({"timeout": 120}), 120.0)
+        for bad in (0, 601, "60", True):
+            with self.assertRaises(H.TransportError):
+                H.conn_timeout({"timeout": bad})
+        c = json.loads((self.r / ".pls/connections.json").read_text(encoding="utf-8"))
+        c["dev"]["timeout"] = "slow"
+        (self.r / ".pls/connections.json").write_text(json.dumps(c), encoding="utf-8")
+        self.assertNotEqual(pls.main(["export", "--env", "dev", "--site", "equipment"]), 0)
 
 
     # ---------------------------------------------------------------- D3b (architecture review S1–S4, B2)

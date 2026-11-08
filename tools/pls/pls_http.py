@@ -99,6 +99,14 @@ def assert_writable(env_conf: dict, conn: dict, env: str) -> None:
 
 # ---------------------------------------------------------------- client
 
+def conn_timeout(conn: dict) -> float:
+    """Request timeout in seconds: `timeout` in the connection entry (slow on-prem servers, large exports), default 30."""
+    t = conn.get("timeout", 30)
+    if isinstance(t, bool) or not isinstance(t, (int, float)) or not 1 <= t <= 600:
+        raise TransportError(f"connections.json: timeout must be a number of seconds between 1 and 600, got {t!r}")
+    return float(t)
+
+
 class Client:
     """Minimal Pleasanter API client. `opener` is injectable for tests."""
 
@@ -116,7 +124,8 @@ class Client:
             with self.opener(req, timeout=self.timeout) as r:
                 status, text = r.status, r.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
-            status, text = e.code, e.read().decode("utf-8", "replace")
+            with e:  # an error response holds the connection open until it is closed
+                status, text = e.code, e.read().decode("utf-8", "replace")
         except urllib.error.URLError as e:
             raise TransportError(f"cannot reach {self.base}: {e.reason}")
         try:
@@ -289,9 +298,9 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                         raise TransportError(f"process '{st['process']}' not found")
                     code, _, _ = c.call(f"/api/items/{rid}/update", {"ProcessId": p["Id"], **(st.get("data") or {})})
                     log.append(f"exec {st['process']}(Id {p['Id']}) → HTTP {code}")
-                    if st.get("expectHttp") and code != st["expectHttp"]:
+                    if code != (st.get("expectHttp") or 200):
                         status = "fail"
-                        log.append(f"expected HTTP {st['expectHttp']}")
+                        log.append(f"expected HTTP {st.get('expectHttp') or 200}")
                 elif op in ("update", "delete"):
                     code, _, _ = c.call(f"/api/items/{rid}/{op}", _subst(st.get("data") or {}, vars_) if op == "update" else None)
                     log.append(f"{op} {rid} → HTTP {code}")

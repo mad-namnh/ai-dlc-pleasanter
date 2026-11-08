@@ -25,6 +25,7 @@ description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meetin
    - a new column → grid, filters, editor layout, exports;
    - a new action → who may do it, can it repeat, what if conditions are not met.
    Mark them `(derived)` and state the source of the derivation.
+   **New app (nothing runs yet):** there is no existing behaviour to protect, so derived requirements come only from the impact of one requested behaviour on another requested one (e.g. a new status that a requested view must still show). Everything else the app "obviously needs" is a question with an `[assumed]` default.
    Derived requirements **protect existing behaviour** from the impact of the change (views, notifications, reminders, aggregations, scripts). Behaviour the customer did not ask for and that no existing element needs (a new validation, an extra export, a new message) is **not** a requirement: raise it as a question with an `[assumed]` default, so G1 decides whether it enters scope.
 5. **Write acceptance criteria** for each requirement: observable, numbered, testable through the API or the edit screen. If a criterion cannot be tested automatically (e.g. mail delivery), say so explicitly.
 6. **List open questions** for the customer in **Japanese** (お客様への確認事項), each with the assumption you will use if unanswered, marked `[assumed]`.
