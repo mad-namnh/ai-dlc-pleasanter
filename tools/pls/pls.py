@@ -78,7 +78,10 @@ SECRET_RES = {
     "anthropic-key": re.compile(r"sk-ant-[A-Za-z0-9_\-]{10,}"),
     "aws-access-key": re.compile(r"AKIA[0-9A-Z]{16}"),
     "bearer-token": re.compile(r"(?i)bearer\s+[A-Za-z0-9\-\._~\+/]{20,}"),
-    "assigned-secret": re.compile(r"(?i)(api[_-]?key|secret|password|token)\s*[:=]\s*['\"][^'\"]{12,}['\"]"),
+    # one quoted literal right after the name (the blob is JSON-escaped: quotes may be \"): the value has no blank
+    # and no escape such as \n, and closes with the same quote — so `'…access_token=' + encode(accessToken)` spanning
+    # lines is not a secret (PLAY BOARD false alarm, 2026-11-08)
+    "assigned-secret": re.compile(r"""(?i)(api[_-]?key|secret|password|token)\\?["']?\s*[:=]\s*\\?(["'])[^"'\s\\]{12,}\\?\2"""),
 }
 
 

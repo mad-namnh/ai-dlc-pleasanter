@@ -105,6 +105,18 @@ class CliTest(unittest.TestCase):
             pls.main(["adopt", "--env", "dev", "--site", str(OLD), "--name", "anken"])
         self.assertFalse((self.r / "config/anken").exists())
 
+    def test_secret_detector_flags_literals_not_concatenation(self):
+        rx = pls.SECRET_RES["assigned-secret"]
+
+        def hit(body):
+            return bool(rx.search(json.dumps({"Body": body}, ensure_ascii=False)))     # as adopt and lint see it
+        for body in ("var password = 'abcdefghijklmnop';", 'const API_KEY = "abcdEFGH12345678";',
+                     '"token": "abcdefghijklmnopq"'):
+            self.assertTrue(hit(body), body)
+        for body in ("url = base + '?access_token=' +\n    imrUrlEncode(accessToken);\nvar g = 0; while (url !== '')",
+                     "var token = 'Bearer ' + x + 'abcdefghijklmn'", "password: 'short'"):
+            self.assertFalse(hit(body), body)                                  # PLAY BOARD false alarm (下書き管理)
+
     def test_second_environment_registers_the_id_only_and_bootstrap_skips_it(self):
         self.add_old_site()
         self.assertEqual(pls.main(["adopt", "--env", "dev", "--site", str(OLD), "--name", "anken"]), 0)
