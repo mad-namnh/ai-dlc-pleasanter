@@ -1,0 +1,91 @@
+{
+  "entry": "D21",
+  "title": "A process whose View holds only defaults (no filter, as the UI stores it, e.g. site 797) runs through the API (HTTP 200, status changed) — only a missing View fails",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "nofilter",
+          "DisplayName": "完了",
+          "CurrentStatus": 100,
+          "ChangedStatus": 900,
+          "View": {
+            "ApiColumnKeyDisplayType": 0,
+            "ApiColumnValueDisplayType": 0,
+            "ApiDataType": 0,
+            "CalendarSiteId": 0,
+            "Id": 0
+          }
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Processes[Name=nofilter].View.Id": 0
+  },
+  "tests": [
+    {
+      "id": "D21-nofilter",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D21 nofilter",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "nofilter",
+          "expectHttp": 200
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 900
+          }
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      }
+    }
+  }
+}

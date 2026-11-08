@@ -7,6 +7,7 @@ Each KB entry that skills rely on has probes in skills/pls-kb-pleasanter/referen
      "expect_save": 200,                                                 # HTTP of updatesite (D30: 500)
      "expect_stored": {"Columns[ColumnName=Status].DefaultInput": null}, # stored settings (null = absent, D8)
      "control": "<other probe>",                                         # this result counts only if that one passes
+     "observe": true,                                                    # records what happens (no expected outcome yet)
      "server_dates": true,                                               # $today/$yesterday… from the server's clock
      "tests": [ … specs in the `pls test` format, confined to the probe site … ],
      "teardown": {"SiteSettings": {…}}}                                 # saved after the run: leave the site harmless
@@ -125,7 +126,8 @@ def entry_results(rows: list[dict]) -> dict[str, str]:
     rank = ["pass", "inconclusive", "fail", "error"]
     for r in rows:
         cur = out.get(r["entry"], "pass")
-        out[r["entry"]] = max(cur, r["status"], key=rank.index)
+        st = "pass" if r["status"] == "observed" else r["status"]      # an observation does not decide the entry
+        out[r["entry"]] = max(cur, st, key=rank.index)
     return out
 
 
@@ -143,5 +145,5 @@ def report(env: str, version: dict | None, rows: list[dict], no_probe: list[str]
         out.append(f"| {r['entry']} | {r['probe']} | {r['status']} | {'; '.join(r['log'])[:300].replace('|', '/')} |")
     out += ["", "## Entries without a probe", "", ", ".join(no_probe) or "none", "",
             "A failing entry does not hold on this version: correct or split it by version (I9). "
-            "`error` = the probe could not run (infrastructure), not a verdict on the entry; `inconclusive` = its control failed."]
+            "`error` = the probe could not run (infrastructure), not a verdict on the entry; `inconclusive` = its control failed; `observed` = recorded behaviour without an expected outcome (read the detail)."]
     return "\n".join(out) + "\n"

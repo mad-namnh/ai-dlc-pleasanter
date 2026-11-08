@@ -457,7 +457,7 @@ VIEW_DEFAULTS = {"Id", "ApiColumnKeyDisplayType", "ApiColumnValueDisplayType", "
 def unconditioned_processes(settings: dict, view_missing_only: bool = False) -> list[str]:
     """Processes without a display condition. view_missing_only=True: only those with no View object at all (D21: API
     execution fails with HTTP 500 and opening the site's records fails in the UI). Otherwise also those whose View holds
-    only defaults (works in the UI; API execution not verified)."""
+    only defaults (they work, through the UI and the API; the button shows in every record of their CurrentStatus)."""
     out = []
     for p in settings.get("Processes") or []:
         view = p.get("View")
@@ -1001,7 +1001,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     extra = {
         "Literal mail addresses (L-MAIL-01)": [f"{p}: {a}" for p, a in SE.literal_addresses(ss)],
         "Processes with no View object (L-PRC-01, D21: API and record screen fail)": unconditioned_processes(ss, True),
-        "Processes whose View has no filter (works in the UI; API execution not verified)":
+        "Processes whose View has no filter (they work; the button shows in every record of their CurrentStatus — review)":
             [x for x in unconditioned_processes(ss) if x not in unconditioned_processes(ss, True)],
         "Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)": AD.script_id_uses(raw_scripts, ids_all),
     }
@@ -1981,6 +1981,8 @@ def http_cmd(r: Path, a) -> int:
                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
                     status = "error"
                     log.append(str(ex))
+                if p.get("observe") and status == "pass":
+                    status = "observed"
                 row["status"] = status
                 results[name] = status
                 rows.append(row)
