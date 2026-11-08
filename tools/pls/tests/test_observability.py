@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pls  # noqa: E402
 import pls_log as LG  # noqa: E402
 import pls_usage as US  # noqa: E402
@@ -58,7 +59,28 @@ class LogTest(unittest.TestCase):
         self.assertTrue(list((self.r / "ops/log").glob("*-tester.jsonl")))
 
     def test_writing_commands_are_marked(self):
-        self.assertEqual(LG.WRITING, {"apply", "bootstrap", "test", "kb-verify"})
+        import test_write_guards as WG
+        self.assertEqual(LG.WRITING, WG.WRITES)                                     # one list of writing commands
+
+    def test_help_and_usage_errors_are_logged_with_the_shell_exit_code(self):
+        with self.assertRaises(SystemExit):
+            pls.main(["lint", "--no-such-option"])
+        e = self.events()[-1]
+        self.assertEqual((e["cmd"], e["result"], e["exit_code"]), ("lint", "error", 2))
+
+    def test_nested_commands_log_only_their_own_metrics(self):
+        def inner():
+            LG.record_metric(inner=1)
+            return 0
+
+        def outer():
+            LG.record_metric(outer=1)
+            LG.run(lambda: self.r, ["canon", "--site", "x"], inner)
+            return 0
+        LG.run(lambda: self.r, ["lint"], outer)
+        ev = [e for e in self.events() if e["kind"] == "command"]
+        self.assertEqual([(e["cmd"], e["metrics"]) for e in ev], [("canon", {"inner": 1}), ("lint", {"outer": 1})])
+        self.assertEqual(ev[0]["run_id"], ev[1]["run_id"])
 
     def test_bad_phase_is_refused(self):
         with self.assertRaises(SystemExit):
@@ -100,7 +122,7 @@ class UsageTest(unittest.TestCase):
         self.assertEqual(rows[("A", "main")]["output"], 50)                         # 01:00Z = 10:00+09:00 → step A
         self.assertEqual(rows[("A", "main")]["requests"], 1)
         self.assertEqual(rows[("B", "main")]["output"], 7)                          # 02:30Z = 11:30+09:00 → step B
-        self.assertEqual(rows[("B", "general-purpose: spec")]["output"], 9)
+        self.assertEqual(rows[("B", "general-purpose a1")]["output"], 9)          # type + id, never the description
         self.assertEqual(sum(r["requests"] for r in rows.values()), 3)              # <synthetic> left out
         by_phase = {x["key"]: x for x in US.report(US.load(self.p), "phase")}
         self.assertEqual(by_phase["P3"]["output"], 16)
@@ -111,10 +133,44 @@ class UsageTest(unittest.TestCase):
         US.collect(self.p, self.steps, self.t)
         self.assertEqual(sum(r["requests"] for r in US.load(self.p)), 3)
 
-    def test_requests_before_the_first_step_are_kept_apart(self):
-        rows = US.attribute([{"ts": "2026-11-08T00:00:00Z", "model": "m", "agent": "main", "input": 1, "cache_creation": 0,
-                              "cache_read": 0, "output": 1}], self.steps)
-        self.assertEqual((rows[0]["step"], rows[0]["title"]), (None, "(before the first step)"))
+    def test_requests_outside_an_open_step_are_kept_apart(self):
+        req = {"model": "m", "agent": "main", "input": 1, "cache_creation": 0, "cache_read": 0, "output": 1}
+        rows = US.attribute([dict(req, ts="2026-11-08T00:00:00Z"),            # before the first step
+                             dict(req, ts="2026-11-12T00:00:00Z")], self.steps)  # days after the last one
+        self.assertEqual([(r["step"], r["title"]) for r in rows], [(None, "(no open step)")])
+        self.assertEqual(rows[0]["requests"], 2)
+
+    def test_naive_timestamps_do_not_break_collect(self):
+        steps = self.steps + [{"kind": "step", "run_id": "C", "phase": "P4", "title": "t", "ts": "2026-11-08T12:00:00"}]
+        self.assertTrue(US.collect(self.p, steps, self.t))
+
+    def test_since_selects_sessions_and_never_drops_earlier_requests(self):
+        US.collect(self.p, self.steps, self.t)
+        US.collect(self.p, self.steps, self.t, since="2026-11-08T02:00")
+        self.assertEqual(sum(r["requests"] for r in US.load(self.p)), 3)
+        self.assertEqual(US.collect(self.p, self.steps, self.t, since="2026-11-09"), [])
+
+    def test_only_my_steps_claim_my_tokens(self):
+        import os as _os
+        root = self.p
+        (root / "environments.json").write_text('{"envs": {}}', encoding="utf-8")
+        (root / "ops/log").mkdir(parents=True)
+        later = {"v": 1, "kind": "step", "run_id": "Z", "actor": "someone-else", "phase": "P6", "title": "theirs",
+                 "ts": "2026-11-08T11:20:00.000+09:00"}
+        mine = dict(self.steps[1], actor="me", v=1)
+        (root / "ops/log/2026-11-08-x.jsonl").write_text(json.dumps(mine) + chr(10) + json.dumps(later) + chr(10),
+                                                         encoding="utf-8")
+        cwd = _os.getcwd()
+        _os.chdir(root)
+        _os.environ["PLS_ACTOR"] = "me"
+        LG._ACTOR.clear()
+        try:
+            self.assertEqual(pls.main(["usage", "collect", "--transcripts", str(self.t)]), 0)
+        finally:
+            _os.chdir(cwd)
+            _os.environ.pop("PLS_ACTOR", None)
+            LG._ACTOR.clear()
+        self.assertNotIn("Z", {r["step"] for r in US.load(root)})
 
     def test_transcript_folder_name(self):
         self.assertEqual(US.transcripts_dir(Path("C:/Workspace/MADLAB/01. Project/demo")).name,

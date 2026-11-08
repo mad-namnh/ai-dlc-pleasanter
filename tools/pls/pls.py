@@ -1037,15 +1037,21 @@ def adopt_package(r: Path, a) -> int:
                 created.append((name, out))
             done.append(name)
             print(f"adopted   {sid:>7}  {name:24} {title}{'' if new else '  (id registered; config exists)'}")
-        except (Fail, H.TransportError) as ex:
+        except Exception as ex:                                       # noqa: BLE001 — one site never stops the others
             failed.append(name)
-            print(f"FAILED    {sid:>7}  {name:24} {title}: {str(ex).splitlines()[0][:160]}")
+            print(f"FAILED    {sid:>7}  {name:24} {title}: {(str(ex) or type(ex).__name__).splitlines()[0][:160]}")
     for sid, title in plan["skipped"]:
         print(f"skipped   {sid:>7}  {'(null in --names)':24} {title}")
     for name, out in created:                                         # every id is known now: map references again
-        with contextlib.redirect_stdout(io.StringIO()):
-            main(["unpack", str(out), "--env", a.env, "--site", name])
-            main(["canon", "--site", name])
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                ok = main(["unpack", str(out), "--env", a.env, "--site", name]) == 0 and main(["canon", "--site", name]) == 0
+        except Exception:                                             # noqa: BLE001
+            ok = False
+        if not ok:                                                    # a rerun prints "already": say how to finish
+            failed.append(name)
+            print(f"REMAP FAILED  {name}: run `pls unpack {out.relative_to(r).as_posix()} --env {a.env} --site {name}` "
+                  f"then `pls canon --site {name}`")
     LG.record_metric(adopted=len(done), failed=len(failed), skipped=len(plan["skipped"]), remapped=len(created))
     print(f"{len(done)} adopted, {len(failed)} failed, {len(plan['skipped'])} skipped — reports in ops/adopt/; "
           f"read only, nothing written to Pleasanter")
@@ -2548,7 +2554,8 @@ def _main(argv=None) -> int:
             tdir = Path(a.transcripts) if a.transcripts else US.transcripts_dir(r)
             if not tdir.exists():
                 raise Fail(f"no transcripts at {tdir} (pass --transcripts)")
-            steps = [e for e in LG.read(r) if e.get("kind") == "step"]
+            me = LG.actor(r)                         # my transcripts, my steps: never a teammate's after a pull
+            steps = [e for e in LG.read(r) if e.get("kind") == "step" and e.get("actor") == me]
             files = US.collect(r, steps, tdir, a.since)
             LG.record_metric(sessions=len(files))
             print(f"{len(files)} session(s) → ops/usage/ ({len(steps)} step marker(s) in the run log)")

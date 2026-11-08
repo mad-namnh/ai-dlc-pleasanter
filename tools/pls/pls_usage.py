@@ -15,7 +15,7 @@ import json
 import os
 import re
 from bisect import bisect_right
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 FIELDS = ("input", "cache_creation", "cache_read", "output")
@@ -27,19 +27,24 @@ def transcripts_dir(project: Path) -> Path:
     return base / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project.resolve()))
 
 
+STEP_TIMEOUT = timedelta(hours=24)       # a step not followed by another one counts as closed after a day
+
+
 def _ts(s: str | None) -> datetime | None:
+    """Aware datetime; a timestamp without offset is taken as local time (never mixed naive/aware)."""
     if not s:
         return None
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        t = datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return None
+    return t if t.tzinfo else t.astimezone()
 
 
 def _requests(path: Path, agent: str) -> dict[str, dict]:
     """requestId → {ts, model, agent, input, cache_creation, cache_read, output} for one transcript file."""
     out: dict[str, dict] = {}
-    with open(path, encoding="utf-8") as h:
+    with open(path, encoding="utf-8", errors="replace") as h:      # a damaged line must not stop the count
         for line in h:
             if '"usage"' not in line:
                 continue
@@ -51,7 +56,7 @@ def _requests(path: Path, agent: str) -> dict[str, dict]:
             u = msg.get("usage")
             if o.get("type") != "assistant" or not u or msg.get("model") == "<synthetic>":
                 continue                            # <synthetic>: messages Claude Code writes itself, no model call
-            rid = o.get("requestId") or o.get("uuid")
+            rid = o.get("requestId") or msg.get("id") or o.get("uuid")   # message id: the same on split lines
             row = {"ts": o.get("timestamp"), "model": msg.get("model"), "agent": agent,
                    "input": u.get("input_tokens") or 0, "cache_creation": u.get("cache_creation_input_tokens") or 0,
                    "cache_read": u.get("cache_read_input_tokens") or 0, "output": u.get("output_tokens") or 0}
@@ -74,9 +79,9 @@ def sessions(tdir: Path) -> dict[str, list[tuple[Path, str]]]:
         for f in sorted(sub.glob("agent-*.jsonl")) if sub.exists() else []:
             meta = f.with_name(f.stem + ".meta.json")
             label = f.stem
-            try:
+            try:                                    # agent type + id only: the description is conversation text
                 m = json.loads(meta.read_text(encoding="utf-8"))
-                label = f"{m.get('agentType') or 'agent'}: {m.get('description') or f.stem}"
+                label = f"{m.get('agentType') or 'agent'} {f.stem.removeprefix('agent-')[:8]}"
             except (OSError, ValueError):
                 pass
             files.append((f, label))
@@ -92,10 +97,10 @@ def attribute(requests: list[dict], steps: list[dict]) -> list[dict]:
     for r in requests:
         t = _ts(r["ts"])
         i = bisect_right(times, t) - 1 if t else -1
-        st = marks[i][1] if i >= 0 else None
+        st = marks[i][1] if i >= 0 and t - times[i] <= STEP_TIMEOUT else None
         key = (st.get("run_id") if st else None, r["agent"], r["model"])
         a = agg.setdefault(key, {"step": key[0], "phase": st.get("phase") if st else None,
-                                 "title": st.get("title") if st else "(before the first step)",
+                                 "title": st.get("title") if st else "(no open step)",
                                  "agent": r["agent"], "model": r["model"], "requests": 0,
                                  "first": r["ts"], "last": r["ts"], **{f: 0 for f in FIELDS}})
         a["requests"] += 1
@@ -106,14 +111,15 @@ def attribute(requests: list[dict], steps: list[dict]) -> list[dict]:
 
 
 def collect(project: Path, steps: list[dict], tdir: Path | None = None, since: str | None = None) -> list[Path]:
-    """Write ops/usage/<session>.json for every transcript session (requests on or after `since`, ISO date)."""
+    """Write ops/usage/<session>.json for every transcript session. `since` (ISO date) selects the sessions with a
+    request on or after it; a selected session is always counted whole, so the file never loses earlier requests."""
     tdir = tdir or transcripts_dir(project)
     written = []
     for sid, files in sessions(tdir).items():
         reqs = []
         for f, label in files:
-            reqs += [r for r in _requests(f, label).values() if not since or (r["ts"] or "") >= since]
-        if not reqs:
+            reqs += list(_requests(f, label).values())
+        if not reqs or (since and not any((r["ts"] or "") >= since for r in reqs)):
             continue
         rows = attribute(reqs, steps)
         out = project / "ops" / "usage" / f"{sid}.json"

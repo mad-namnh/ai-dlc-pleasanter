@@ -131,19 +131,27 @@ def run(root_fn, argv: list[str], body) -> int:
     except Exception:                       # noqa: BLE001 — not inside a project: nothing to log
         return body()
     if _DEPTH[0] == 0:
-        METRICS.clear()
         run.current = uuid.uuid4().hex[:12]
+    outer = dict(METRICS)                   # each command logs only its own metrics (nested runs do not mix)
+    METRICS.clear()
     _DEPTH[0] += 1
     t0, result, code, message = time.monotonic(), "error", None, None
     try:
         code = body()
         result = "ok" if code == 0 else "refused"
         return code
+    except SystemExit as ex:                # argparse errors and --help: exit code as the shell sees it
+        code = ex.code if isinstance(ex.code, int) else (0 if ex.code is None else 2)
+        result = "ok" if code == 0 else "error"
+        raise
     except Exception as ex:                 # Fail, TransportError, … — logged, then raised as before
         message = str(ex).splitlines()[0][:300] if str(ex) else type(ex).__name__
         raise
     finally:
         _DEPTH[0] -= 1
+        mine = dict(METRICS)
+        METRICS.clear()
+        METRICS.update(outer)
         cmd = _cmd(argv)
         if cmd != "step":                   # a step marker writes its own event
             append(root, {"kind": "command", "run_id": run.current, "cmd": cmd, "args": argv,
@@ -151,7 +159,7 @@ def run(root_fn, argv: list[str], body) -> int:
                           "release": _option(argv, "--release") or (argv[1] if cmd in ("apply", "bootstrap", "mark-applied")
                                                                      and len(argv) > 1 else None),
                           "result": result, "exit_code": code, "duration_ms": int((time.monotonic() - t0) * 1000),
-                          "writes": cmd in WRITING, "metrics": dict(METRICS) or None, "message": message})
+                          "writes": cmd in WRITING, "metrics": mine or None, "message": message})
 
 
 run.current = None
