@@ -54,7 +54,9 @@ A JSON file a person exports from the UI (no API key needed — useful for a cus
 | `PermissionIdList` | `GroupIdList [{GroupId, GroupName}]`, `UserIdList [{UserId, LoginId, Name, UserCode}]`, `DeptIdList` — names for mapping principals across environments |
 | `Data` | records, only when exported with data (empty in the seen package) |
 
-Compared with getsite of the same site after mapping ids: 0 differences (settings, scripts, permissions). Parts left out by the `Include…` flags are missing from `SiteSettings`; whether `IncludeNotifications: false` also strips process-level notifications (`Processes[].Notifications`) is **not verified** — `env-compare` treats them as left out too (safe side).
+Compared with getsite of the same site after mapping ids: 0 differences (settings, scripts, permissions).
+
+**Importing a site package (UI), seen 2026-11-08, 1.5.2, PLAY BOARD (23 sites) imported twice into empty folders:** the folder tree is recreated with new site ids. `Links[].SiteId` and the `"SiteId"` of lookups inside `ChoicesText` are mapped to the new ids. **Script, style and HTML bodies are not changed** (151 of 151 byte-identical): numbers in them still name the source environment's sites. Lookup view filters come back with values as strings (`"Status": 1` → `"1"`). Records are not imported when the package has none, so settings an app keeps in records (e.g. a 共通設定 site) are empty in the copy. Parts left out by the `Include…` flags are missing from `SiteSettings`; whether `IncludeNotifications: false` also strips process-level notifications (`Processes[].Notifications`) is **not verified** — `env-compare` treats them as left out too (safe side).
 
 ## Errors seen
 
