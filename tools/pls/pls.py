@@ -1517,7 +1517,8 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     return problems
 
 
-def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK) -> None:
+def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK,
+                 origin: str = "new") -> None:
     if target.exists() and any(target.iterdir()):
         raise Fail(f"{target} exists and is not empty - pls init only creates new projects")
     tpl = fw / "templates" / "project"
@@ -1532,6 +1533,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
             (target / d / ".keep").write_text("", encoding="utf-8")
     cm = target / "CLAUDE.md"
     text = cm.read_text(encoding="utf-8")
+    text = re.sub(r"\| Origin \|.*\|", f"| Origin | `{origin}` |", text, count=1)
     text = re.sub(r"\| Stage \|.*\|", f"| Stage | `{stage}` |", text, count=1)
     text = re.sub(r"\| Release target \|.*\|", f"| Release target | `{release_target}` |", text, count=1)
     if approver:
@@ -2192,6 +2194,8 @@ def main(argv=None) -> int:
     sp.add_parser("coverage")
     s = sp.add_parser("init", help="create a new project repository (templates/project + skills + launcher)")
     s.add_argument("dir")
+    s.add_argument("--origin", choices=["new", "existing"], default="new",
+                   help="new: the app is built by this project; existing: take over an app that already runs (onboarding first)")
     s.add_argument("--stage", choices=["demo", "project"], default="demo")
     s.add_argument("--target", choices=["dev", "stg", "prod"], default="dev", help="release target of the project")
     s.add_argument("--approver", help="name of the person who approves the gates (demo stage)")
@@ -2214,7 +2218,9 @@ def main(argv=None) -> int:
         prof = rj(profile_dir() / f"{pname}.json") if pname else None
         if a.profile and not prof:
             raise Fail(f"profile '{a.profile}' not found - run pls setup --profile {a.profile}")
-        init_project(target, a.stage, a.target, a.approver)
+        if a.origin == "existing" and a.stage == "demo":
+            print("note: an existing app in 運用保守 is usually --stage project (customer approves G1/G4) with --target stg or prod")
+        init_project(target, a.stage, a.target, a.approver, origin=a.origin)
         if prof:
             apply_profile(target, prof)
         msg = _git_first_commit(target) if not a.no_git else "git: skipped"

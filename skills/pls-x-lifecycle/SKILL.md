@@ -12,6 +12,19 @@ You are the orchestrator. You move the project through the phases in order. You 
 
 `pls` below means `python pls.py`, run from the project root (`python3` where `python` is not Python 3). The launcher `pls.py` runs the framework's tool from the path in `.claude/framework.lock`, or from env `PLS_HOME`. `pls skills check` shows whether the project's skills match the lock.
 
+## 0. Route: new app or existing app
+
+Read **Origin** in the project profile (`CLAUDE.md`) before anything else.
+
+| Origin | Onboarding summary `ops/onboarding/*-summary.md` | Next |
+|---|---|---|
+| `existing` | missing | `pls-x-onboarding` (read only), then `pls-x-spec-recovery`. **Do not start P1**, do not write requirements, do not bootstrap — even when the person's first message reads like a specification |
+| `existing` | present | open decisions in it? → settle them with the person first; otherwise the request is a **change request** → P1 (section 4) |
+| `new` | — | a specification → P1 (section 3) |
+| missing (older project) | — | ask the person once whether the app already runs in Pleasanter; record the answer as `Origin` in the profile |
+
+If Origin is `new` but the person names an app, site ids or a site package that already run in Pleasanter, stop and ask whether this is a takeover (`existing`) before writing anything.
+
 ## 1. Find where the project is
 
 Before doing anything, establish the state from the repository. Do not rely on memory of an earlier session.
@@ -23,9 +36,10 @@ Before doing anything, establish the state from the repository. Do not rely on m
 | `environments.json` `sites` (ids present?), `config/<site>/` | sites created on the target? config built? |
 | `tests/results/` (latest per env), `releases/*/g3-verification.md` | P4 done? G3 approved? |
 | `releases/*/plan.json` `status`, `releases/*/approvals.md` | release planned / applied? G4 approved? A record with `kind: adopt` (`releases/A-…`) is a drift baseline from `pls adopt`, not a release: it has no gate |
+| `ops/onboarding/*-summary.md`, `ops/adopt/*.md`, `design/as-is/*.md` | Origin `existing`: onboarding done? decisions still open? as-is spec reviewed? |
 | `git status`, `git log -5 --oneline` | uncommitted work from an interrupted session |
 
-Also read the **Project profile** in `CLAUDE.md`: stage, release target and approvers. If it is missing, ask for it once.
+Also read the **Project profile** in `CLAUDE.md`: origin, stage, release target and approvers. If it is missing, ask for it once.
 
 `pls http-check --env <e>` prints the recorded Pleasanter version. If it says *not recorded* or *build changed*, run `pls version --env <e>`; when it reports the application version as unknown, ask the person to read it on `<url>/versions` (logged in) and record it with `--app`. Never guess the version (ADR-0009).
 

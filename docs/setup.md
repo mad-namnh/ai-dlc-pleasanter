@@ -47,6 +47,8 @@ cd demo-equipment
 python pls.py http-check --env dev
 ```
 
+For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--origin existing` (usually with `--stage project --target stg`): the agent then starts with onboarding, not with requirements.
+
 `init` creates a ready project from the profile:
 - `CLAUDE.md` with the project profile: stage `demo`, release target `dev`, you as approver, role tests deferred;
 - the layout and the launcher `pls.py`;

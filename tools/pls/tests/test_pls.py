@@ -468,6 +468,16 @@ class PlsTest(unittest.TestCase):
 
     # ---------------------------------------------------------------- D3: init, launcher, skills, coverage paths
 
+    def test_init_records_the_origin(self):
+        import tempfile as _t
+        with _t.TemporaryDirectory() as d:
+            for origin in ("new", "existing"):
+                target = Path(d) / origin
+                pls.init_project(target, "project", "stg", "Nam", origin=origin)
+                text = (target / "CLAUDE.md").read_text(encoding="utf-8")
+                self.assertIn(f"| Origin | `{origin}` |", text)
+                self.assertIn("No P1 before the onboarding summary exists", text)
+
     def test_init_creates_a_working_project(self):
         proj = self.r / "newapp"
         self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam"]), 0)

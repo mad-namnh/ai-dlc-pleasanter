@@ -8,7 +8,9 @@ Load the skill **`pls-x-lifecycle`**. It finds where the project stands and runs
 
 P1 requirements → **G1** → P2 design → **G2** → P3 build → P4 verify → **G3** → P5 release → **G4** → P6 operate
 
-To start a new app, the user gives a specification in natural language (any language; Pleasanter end users read Japanese). Save it and begin P1.
+How a project starts depends on its **Origin** (profile below):
+- `new` — an app that does not exist yet: the user gives a specification in natural language (any language; Pleasanter end users read Japanese). Save it and begin P1.
+- `existing` — an app that already runs in Pleasanter (運用保守): first `pls-x-onboarding` (read only) and `pls-x-spec-recovery`. **No P1 before the onboarding summary exists** (`ops/onboarding/*-summary.md`); then every change is a change request through P1–P6.
 
 ## Project profile
 
@@ -16,6 +18,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 
 | Item | Value |
 |---|---|
+| Origin | `new` (the app is built by this project) / `existing` (the app already runs in Pleasanter and is taken over) |
 | Stage | `demo` (one person approves every gate; customer questions are answered with the `[assumed]` defaults unless the approver says otherwise) / `project` (customer owner approves G1 and G4) |
 | Release target | `dev` (P5 records the dev state as released) / `stg` / `prod` (customer-side deploy, ADR-0003) |
 | Approvers | G1, G4: <name>; G2, G3: <name> |
