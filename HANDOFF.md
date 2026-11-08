@@ -15,7 +15,7 @@ Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 **State**
 - `main` (= GitHub `34188a5`) is the **demo baseline**; do not commit there unless Nam asks.
 - Branch `brownfield-adr` (last commit: `pls gate`): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
-- Tests: 180 Python + 6 node; write-path inventory test (`test_write_guards.py`); gate records (`test_gate.py`).
+- Tests: 186 Python + 6 node; write-path inventory test (`test_write_guards.py`); gate records (`test_gate.py`).
 - Audit after BR9: ready with conditions. Fixed on the branch: template `.gitattributes`, docs refreshed, `exec` expects 200, request `timeout`, socket cleanup, **`pls gate`** (I4 checked by the tool: profile approvers, L-GATE-01, G3/G4 records needed for non-dev plan/apply/bootstrap).
 - Local project `pls-adopt-797` (sibling folder, not in git remote): trial adopt of site 797, read only. `demo-equipment`: released demo, local only, never pushed.
 
