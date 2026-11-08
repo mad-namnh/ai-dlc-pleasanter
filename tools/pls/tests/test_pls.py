@@ -406,6 +406,15 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(c["classification"], "data-impacting")
         self.assertIn("D16", c["data_impacting"][0])
 
+    def test_classify_lookup_json_by_meaning_not_layout(self):
+        before = '[\n  {\n    "SiteId" : ${site:b},\n    "View": {"ColumnFilterHash": {"Status": 1}}\n  }\n]'
+        layout = '[\n  {\n    "SiteId": ${site:b},\n    "View": {\n      "ColumnFilterHash": {\n        "Status": "1"\n      }\n    }\n  }\n]'
+        d = [{"path": "settings.Columns[ClassO].ChoicesText", "kind": "changed", "before": before, "after": layout}]
+        self.assertEqual(pls.classify(d)["classification"], "config-only")      # re-serialised by an import
+        other = layout.replace("${site:b}", "${site:c}")
+        d = [{"path": "settings.Columns[ClassO].ChoicesText", "kind": "changed", "before": before, "after": other}]
+        self.assertEqual(pls.classify(d)["classification"], "data-impacting")   # the link now points elsewhere
+
     def test_classify(self):
         d = [{"path": "settings.Columns[ClassB]", "kind": "removed", "before": {}, "after": None}]
         self.assertEqual(pls.classify(d)["classification"], "data-impacting")

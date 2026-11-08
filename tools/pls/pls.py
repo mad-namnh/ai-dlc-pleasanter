@@ -423,6 +423,27 @@ def md_diff(diffs: list[dict], lab: dict, title: str, right: str = "After (git)"
 
 # ---------------------------------------------------------------- classify (ADR-0004)
 
+def _lookup_json(text: Any) -> Any:
+    """A ChoicesText that is a JSON lookup / link definition (`[{"SiteId": …}]`), normalised for comparison: layout,
+    and numbers versus strings (`"Status": 1` / `"1"`, as a site package import re-serialises it), do not count.
+    None when the text is a list of choices."""
+    s = str(text or "").strip()
+    if not s.startswith(("[", "{")) or s.startswith("[["):
+        return None
+    try:
+        doc = json.loads(SX.REF_TOKEN.sub(lambda m: json.dumps(m.group(0)), s))
+    except ValueError:
+        return None
+
+    def norm(v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k: norm(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [norm(x) for x in v]
+        return v if isinstance(v, (bool, type(None))) else str(v)
+    return norm(doc)
+
+
 def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
     for d in diffs:
@@ -432,7 +453,13 @@ def classify(diffs: list[dict]) -> dict:
         elif re.match(r"settings\.Columns\[\w+\]\.ChoicesText", p) and d["kind"] in ("changed", "removed"):
             before = set(str(d["before"] or "").splitlines())
             after = set(str(d["after"] or "").splitlines())
-            if before - after:
+            jb, ja = _lookup_json(d["before"]), _lookup_json(d["after"])
+            if jb is not None and ja is not None:       # a lookup / link definition, not a list of choices
+                if jb == ja:
+                    cfg.append(p)
+                else:
+                    data.append(f"{p}: lookup / link definition changed")
+            elif before - after:
                 data.append(f"{p}: choices removed {sorted(before - after)}")
             else:
                 cfg.append(p)
