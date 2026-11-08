@@ -46,6 +46,7 @@ import hashlib
 import json
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,8 @@ import pls_scripts as SX                                    # noqa: E402 — scr
 import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
+import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
+import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -949,6 +952,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         eff = SE.effects(e)
         if eff["mail"] == "unknown":
             print(f"note: envs.{env}.side_effects.mail is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
+    LG.record_metric(sites=len(order), changes=sum(p["changes"] for p in per_site.values()), classification=worst)
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
           + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
     return 0
@@ -1891,6 +1895,7 @@ def http_cmd(r: Path, a) -> int:
             for line in res["log"]:
                 print(line)
             wj(rel / "apply-log.json", {"transport": "http", "at": datetime.now().astimezone().isoformat(timespec="seconds"), **res})
+            LG.record_metric(sites=len(plan["sites"]), apply_status=res["status"])
             if res["status"] != "applied-unverified":
                 print(f"{a.release}: {res['status']}")
                 return 1
@@ -1995,6 +2000,7 @@ def http_cmd(r: Path, a) -> int:
             name = "-".join(Path(f).stem for f in a.specs)
             out = Path(a.out) if a.out else r / "tests" / "results" / f"{a.env}-{datetime.now():%Y%m%d}-{name}-http.json"
             wj(out, res)
+            LG.record_metric(tests=len(res["tests"]), passed=sum(t["status"] in ("pass", "pass-api-only") for t in res["tests"]))
             print(f"results: {out}")
             return 0 if all(t["status"] in ("pass", "pass-api-only") for t in res["tests"]) else 1
 
@@ -2198,6 +2204,12 @@ def http_cmd(r: Path, a) -> int:
 # ---------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
+    """Every command is logged (ops/log/, ADR-0013); the work is done by _main."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    return LG.run(root, args, lambda: _main(args))
+
+
+def _main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="pls")
     sp = ap.add_subparsers(dest="cmd", required=True)
     for c in ("unpack", "diff", "drift", "classify", "plan", "slots"):
@@ -2283,6 +2295,15 @@ def main(argv=None) -> int:
     s.add_argument("ours")
     s.add_argument("theirs")
     sp.add_parser("merge-install", help="register the semantic merge driver in this repository")
+    s = sp.add_parser("usage", help="LLM token usage per step from Claude Code transcripts (numbers only)")
+    s.add_argument("action", choices=["collect", "report"])
+    s.add_argument("--transcripts", help="collect: transcript folder (default: Claude Code's folder for this project)")
+    s.add_argument("--since", help="collect: only requests on or after this ISO date")
+    s.add_argument("--by", choices=["phase", "step", "agent", "model"], default="phase", help="report: grouping")
+    s.add_argument("--json", action="store_true", help="report: machine-readable output (for a UI)")
+    s = sp.add_parser("step", help="mark the start of a step (phase + title) in the run log; LLM tokens are attributed to it")
+    s.add_argument("phase", choices=LG.PHASES)
+    s.add_argument("title")
     s = sp.add_parser("gate", help="record a gate decision the person stated (I4); never approve yourself")
     s.add_argument("gate", choices=GT.GATES)
     s.add_argument("--decision", choices=GT.DECISIONS, default="approved")
@@ -2303,7 +2324,8 @@ def main(argv=None) -> int:
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
     s.add_argument("--export", dest="exports", action="append", metavar="SITE=EXPORT", help="multi-site plan: one per site")
-    sp.add_parser("lint")
+    s = sp.add_parser("lint")
+    s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     sp.add_parser("coverage")
     s = sp.add_parser("init", help="create a new project repository (templates/project + skills + launcher)")
     s.add_argument("dir")
@@ -2413,12 +2435,38 @@ def main(argv=None) -> int:
     if a.cmd == "env-compare":
         return env_compare(r, a.site, a.source, datetime.now().astimezone().date().isoformat())
 
+    if a.cmd == "usage":
+        if a.action == "collect":
+            tdir = Path(a.transcripts) if a.transcripts else US.transcripts_dir(r)
+            if not tdir.exists():
+                raise Fail(f"no transcripts at {tdir} (pass --transcripts)")
+            steps = [e for e in LG.read(r) if e.get("kind") == "step"]
+            files = US.collect(r, steps, tdir, a.since)
+            LG.record_metric(sessions=len(files))
+            print(f"{len(files)} session(s) → ops/usage/ ({len(steps)} step marker(s) in the run log)")
+            return 0
+        rows = US.report(US.load(r), a.by)
+        if a.json:
+            print(json.dumps(rows, ensure_ascii=False, indent=1))
+            return 0
+        print(f"{a.by:42} {'requests':>8} {'input':>10} {'cache write':>12} {'cache read':>12} {'output':>9} {'total':>12}")
+        for x in rows:
+            print(f"{str(x['key'])[:42]:42} {x['requests']:>8} {x['input']:>10,} {x['cache_creation']:>12,} "
+                  f"{x['cache_read']:>12,} {x['output']:>9,} {x['total']:>12,}")
+        return 0
+
+    if a.cmd == "step":
+        f = LG.step(r, a.phase, a.title)
+        print(f"step {a.phase}: {a.title} → {f.relative_to(r).as_posix()}")
+        return 0
+
     if a.cmd == "gate":
         try:
             out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
                             datetime.now().astimezone().date().isoformat())
         except GT.GateError as ex:
             raise Fail(str(ex))
+        LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
         print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
         return 0
 
@@ -2499,8 +2547,16 @@ def main(argv=None) -> int:
 
     if a.cmd == "lint":
         issues = lint(r)
-        for i in issues:
-            print(f"{i['rule']}  {i['site']}  {i['msg']}")
+        by_rule = Counter(i["rule"] for i in issues)
+        LG.record_metric(issues=len(issues), by_rule=dict(sorted(by_rule.items())))
+        if a.summary:                                   # counts first; the full list stays one command away
+            for rule, n in sorted(by_rule.items()):
+                sites = Counter(i["site"] for i in issues if i["rule"] == rule)
+                top = ", ".join(f"{s} {c}" for s, c in sites.most_common(5))
+                print(f"{rule:10} {n:4}  {top}{' …' if len(sites) > 5 else ''}")
+        else:
+            for i in issues:
+                print(f"{i['rule']}  {i['site']}  {i['msg']}")
         print(f"{len(issues)} issue(s)")
         return 1 if issues else 0
 
@@ -2522,6 +2578,7 @@ def main(argv=None) -> int:
 
     if a.cmd == "drift":
         ddiffs, text = drift_report(r, e, a.env, a.site, rj(Path(a.export)), a.baseline)
+        LG.record_metric(differences=len(ddiffs))
         print(text)
         return 1 if ddiffs else 0
 
