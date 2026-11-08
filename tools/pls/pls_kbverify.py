@@ -9,7 +9,7 @@ Each KB entry that skills rely on has probes in skills/pls-kb-pleasanter/referen
      "control": "<other probe>",                                         # this result counts only if that one passes
      "server_dates": true,                                               # $today/$yesterday… from the server's clock
      "tests": [ … specs in the `pls test` format, confined to the probe site … ],
-     "cleanup": [ … steps run after the tests (e.g. close what was created) … ]}
+     "teardown": {"SiteSettings": {…}}}                                 # saved after the run: leave the site harmless
 
 Safety: a probe can only create records on its own site and act on records it created (no `site`, `run_on`,
 `as_key`, `vars`; ops create/get/list/exec). Probe sites never send mail (no notifications at any depth, no server
@@ -45,7 +45,7 @@ def _mail_parts(o: Any, path: str = "") -> list[str]:
 
 def check_probe(p: dict) -> None:
     """Raise ValueError when a probe could send mail or touch anything but its own site and records."""
-    mail = _mail_parts(p["site"].get("SiteSettings") or {})
+    mail = _mail_parts(p["site"].get("SiteSettings") or {}) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
     if mail:
         raise ValueError(f"probe sites must not send mail or run server scripts: {mail}")
     for spec in (p.get("tests") or []) + ([{"id": "cleanup", "steps": p["cleanup"]}] if p.get("cleanup") else []):

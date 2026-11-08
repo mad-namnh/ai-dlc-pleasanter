@@ -1,6 +1,6 @@
 {
   "entry": "D21",
-  "title": "A process without a display condition cannot be run through the API (HTTP 500, nothing changed) (control: the same process with a display condition runs, HTTP 200)",
+  "title": "A process without a display condition cannot be run through the API (HTTP 500, nothing changed) (control: the same process with a display condition runs, HTTP 200). Without a condition the edit screen also fails (UI), so the run ends with a teardown that removes that process",
   "site": {
     "ReferenceType": "Issues",
     "SiteSettings": {
@@ -85,5 +85,38 @@
         }
       ]
     }
-  ]
+  ],
+  "teardown": {
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 2,
+          "Name": "withview",
+          "DisplayName": "完了",
+          "CurrentStatus": 100,
+          "ChangedStatus": 900,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ]
+    }
+  }
 }

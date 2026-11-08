@@ -1947,6 +1947,13 @@ def http_cmd(r: Path, a) -> int:
                                 log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
                                 if t["status"] not in ("pass", "pass-api-only"):
                                     status = "fail"
+                    if p.get("teardown"):                      # leave the probe site usable in the UI (D21)
+                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
+                        code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
+                                                                           "Body": "", "SiteSettings": td})
+                        log.append(f"teardown → HTTP {code}")
+                        if code != 200:
+                            raise H.TransportError(f"teardown failed (HTTP {code}): the probe site may stay broken in the UI")
                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
                     status = "error"
                     log.append(str(ex))
