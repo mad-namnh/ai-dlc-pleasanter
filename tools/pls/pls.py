@@ -15,7 +15,8 @@ Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01)
+  gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -58,6 +59,7 @@ import pls_compare as CMP                                   # noqa: E402 — one
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
 import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
+import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -554,6 +556,7 @@ def lint(r: Path) -> list[dict]:
             for col, info in slots.items():
                 if info.get("status") == "allocated" and col not in used:
                     issues.append({"rule": "L-SLOT-01", "site": site, "msg": f"ledger allocates {col} but configuration does not define it"})
+    issues += GT.lint(r)                                          # L-GATE-01: approvals in documents have records (I4)
     return issues
 
 
@@ -835,6 +838,11 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         raise Fail(f"--accept-unverified must name the decision record (file not found: {accept_unverified})")
     if e.get("role") == "prod":
         print("note: production plans are executed by the customer-side runner (ADR-0003)")
+    if e.get("role") != "dev":
+        try:
+            GT.require(r, "G3", release, f"a release plan for {env}")
+        except GT.GateError as ex:
+            raise Fail(str(ex))
     results, failed = {}, False
     for site, path in sorted(exports.items()):
         if site not in e["sites"]:
@@ -1766,6 +1774,11 @@ def http_cmd(r: Path, a) -> int:
             e = env_conf(r, plan["env"])
             H_, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            if e.get("role") != "dev":
+                try:
+                    GT.require(r, "G4", a.release, f"applying to {plan['env']}")
+                except GT.GateError as ex:
+                    raise H.TransportError(str(ex))
             if plan.get("status") != "planned":
                 raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
             for s_ in plan["sites"]:                         # the plan's ids must be this env's own sites (ADR-0011)
@@ -1814,6 +1827,11 @@ def http_cmd(r: Path, a) -> int:
                 return 0
             _, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            if e.get("role") != "dev":
+                try:
+                    GT.require(r, "G4", a.release, f"creating sites in {plan['env']}")
+                except GT.GateError as ex:
+                    raise H.TransportError(str(ex))
             if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
                                              f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)"):
                 return 1
@@ -2177,6 +2195,13 @@ def main(argv=None) -> int:
     s.add_argument("ours")
     s.add_argument("theirs")
     sp.add_parser("merge-install", help="register the semantic merge driver in this repository")
+    s = sp.add_parser("gate", help="record a gate decision the person stated (I4); never approve yourself")
+    s.add_argument("gate", choices=GT.GATES)
+    s.add_argument("--decision", choices=GT.DECISIONS, default="approved")
+    s.add_argument("--approver", required=True, help="name as listed in the profile row Approvers")
+    s.add_argument("--quote", required=True, help="the person's own words for this decision")
+    s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
+    s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
     s = sp.add_parser("xref", help="which script uses which column and site (ops/xref/<site>.json)")
     s.add_argument("--site", required=True)
     s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
@@ -2299,6 +2324,15 @@ def main(argv=None) -> int:
 
     if a.cmd == "env-compare":
         return env_compare(r, a.site, a.source, datetime.now().astimezone().date().isoformat())
+
+    if a.cmd == "gate":
+        try:
+            out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
+                            datetime.now().astimezone().date().isoformat())
+        except GT.GateError as ex:
+            raise Fail(str(ex))
+        print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
+        return 0
 
     if a.cmd == "bootstrap-plan":
         return bootstrap_plan(r, a.env, a.release)

@@ -35,6 +35,9 @@ class PlsTest(unittest.TestCase):
         self.cwd = os.getcwd()
         os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")     # never the person's real profile
         os.chdir(self.r)
+        # a stg release plan needs a recorded G3 of its release (I4); the fixture release R1 has one
+        (self.r / "CLAUDE.md").write_text("| Approvers | Nam (all gates) |\n", encoding="utf-8")
+        assert pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]) == 0
 
     def tearDown(self):
         os.chdir(self.cwd)

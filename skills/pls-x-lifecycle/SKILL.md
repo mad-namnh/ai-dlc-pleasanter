@@ -51,7 +51,7 @@ Tell the user in two or three lines where the project stands and what comes next
 
 1. **Never approve a gate yourself (I4).**
    - At a gate, present the evidence, ask, and wait.
-   - Record the decision only after the person states it, with their name and the date.
+   - Record the decision only after the person states it: first `pls gate G<n> --approver <name> --quote "<their words>"` with `--item REQ-…` (G1) / `--item DES-…` (G2) for every id decided, or `--release <id>` (G3, G4; G4 also names the bootstrap id when the release creates sites), then the status lines. `pls` accepts only approvers named in the profile for that gate; if it refuses, ask the person — never change the profile to get past it. `pls lint` (L-GATE-01) flags a status line written without its record, and `release-plan` / `apply` / `bootstrap` on stg refuse without the G3 / G4 record.
    - "Looks good, continue" from the person counts as approval. Silence does not.
 2. **Writes go only to `role: dev` environments, or to `stg` after G4.** `pls` enforces this through `allow_write` in `.pls/connections.json`; never edit that file to get past a refusal. The same holds for `side_effects` in `environments.json` (ADR-0010): only the person records whether an environment sends real mail; on a `REFUSED (ADR-0010)`, ask them.
 3. **`pls apply` and `pls bootstrap` ask the person to type the release id.**

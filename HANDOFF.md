@@ -8,7 +8,7 @@ Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 
 - `main` (= GitHub) is the **demo baseline**; do not commit there unless Nam asks.
 - All brownfield work is on the **local branch `brownfield-adr`** (not pushed): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
-- Tests: 145 Python + 6 node, plus a write-path inventory test (`tools/pls/tests/test_write_guards.py`).
+- Tests: 158 Python + 6 node, plus a write-path inventory test (`tools/pls/tests/test_write_guards.py`).
 - Architecture audit after BR9: ready with conditions; fixes on the branch: template `.gitattributes`, docs refreshed, `pls gate` (I4), test/skill clarifications.
 - Next: onboarding of the first real project on dev with `pls init <name> --origin existing --stage project --target stg`; Nam accepts ADR-0009/0010/0011 after that run.
 

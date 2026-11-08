@@ -28,7 +28,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 
 ## Hard rules
 
-1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it.
+1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`).
 2. **Writes only to environments `pls` allows:** `role: dev`, or stg after G4, with `allow_write: true` in the operator's `.pls/connections.json`. Never change roles or `allow_write` to get past a refusal. Never write to prod.
 3. **`pls apply` / `pls bootstrap` need the person:** they run the command, or they tell you to add `--yes` for that target. Never add `--yes` on your own.
 4. **No keys, secrets or business data in git or chat.**
@@ -55,6 +55,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 | `environments.json` | environments: role, `parent_id`, site ids, principals |
 | `tests/api/` | test specs; `tests/results/` results |
 | `releases/` | bootstrap and release plans, reports, approvals |
+| `gates/` | one record per gate decision (`pls gate`): approver, their words, items or release |
 | `ops/drift/` | drift baselines and decisions |
 | `traceability.json` | REQ → design → config → tests |
 | `.pls/` | gitignored: connection, exports, local files |

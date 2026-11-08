@@ -8,7 +8,7 @@ At a gate, send the person **one short message**:
 
 Then wait. Do not continue to the next phase in the same turn.
 
-When they decide, record it exactly as said, with the approver's name and the date. Then commit (`docs(gN): …`). For "approve with changes", make the changes first, show them, and ask again if they alter what was approved.
+When they decide, record it exactly as said, with the approver's name and the date: `pls gate G<n> --approver <name> --quote "<their words>"` with `--item REQ-…` (G1) / `--item DES-…` (G2) for every id decided, or `--release <id>` (G3, G4; G4 also names the bootstrap id when the release creates sites) writes `gates/<date>-G<n>-NN.json`; then update the status lines and commit both. Then commit (`docs(gN): …`). For "approve with changes", make the changes first, show them, and ask again if they alter what was approved.
 
 | Gate | Present | Approver (demo stage: the project owner for all) | Record in |
 |---|---|---|---|
@@ -16,6 +16,11 @@ When they decide, record it exactly as said, with the approver's name and the da
 | **G2** design | the design table (element → setting → REQ, ladder rung); rejected alternatives; classification (config-only / data-impacting / permission-impacting); the **permission matrix** and the group per role (`design/roles.json`), saying which groups the person must create after G2; `pls lint` with no L-REF-02; probes and open points | MADLAB tech lead | `Status` line of `DES-*.md`; slot ledger entries `allocated` |
 | **G3** build verified | `pls lint` = 0 issues; `pls coverage` = 100 % in scope; test results (pass / pass-api-only, the result file); round trip 0 on dev; open items | MADLAB tech lead | `releases/<release>/g3-verification.md` (`Status: G3 approved (<name>, <date>)`) and `approvals.md` |
 | **G4** release | the Japanese diff report summary; classification; target; for stg/prod: the plan (sites, order, rollback), drift result and migrations; for dev: drift 0 since the tests | customer owner + operator | `releases/<release>/approvals.md`; after apply/verification: `Released:` line in each REQ, `released (<release>)` in `index.md` |
+
+## Gate records (`pls gate`)
+
+- **G3 for a stg or prod target:** say at G3 which release id the build will be planned as (`R-YYYYMMDD-NN`, P4 writes the G3 file in that folder) and record G3 against that id, so the person approves the id that `release-plan` checks. Never record a gate against an id the person was not shown.
+- **Projects started before `pls gate`:** lint reports L-GATE-01 for past approvals. Show the person the list; record each one only when they confirm it now, with their words of today as `--quote` (the record's date is today — never back-date or invent a quote).
 
 ## Customer questions at G1
 

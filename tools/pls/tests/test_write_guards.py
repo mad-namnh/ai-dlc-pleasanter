@@ -25,7 +25,7 @@ WRITES = {"apply", "bootstrap", "test", "kb-verify"}
 NETWORK_READS = {"http-check", "export", "version", "adopt", "principals", "backup", "harvest", "sandbox"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
-         "skills"}
+         "skills", "gate"}
 WRITE_ENDPOINT = re.compile(r"/(updatesite|createsite|bulkupsert|create|update|delete)\b|\{op\}")
 ALLOWED_WRITE_SITES = {("pls_http", "Client.apply"), ("pls_http", "Client.create_site"), ("pls_http", "Client.bulk_upsert"),
                        ("pls_http", "run_tests"), ("pls", "http_cmd")}
