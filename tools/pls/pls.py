@@ -727,6 +727,17 @@ def _applied_key(ts: str | None) -> float:
     return dt.timestamp()
 
 
+def payload_model(pl: dict, e: dict, site: str | None) -> dict:
+    """A release payload read back as the logical model. The payload carries no SiteId, but per-site decisions on
+    script numbers (pls refs --ref / --keep) are keyed by the site, so its id in `e` is passed along — without it a
+    recorded reference renders as a plain number and every round trip shows false differences."""
+    d = {"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}
+    sid = ((e.get("sites") or {}).get(site) or {}).get("id") if site else None
+    if sid:
+        d["SiteId"] = sid
+    return logical(d, e)
+
+
 def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tuple[dict, str]:
     """Desired state that the environment SHOULD currently have: the last applied release, not git HEAD."""
     if explicit:
@@ -741,7 +752,7 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
         if rel_plan.get("status") == "applied-differs" and live_f.exists():
             src = live_f       # what the environment really holds after that release (S2)
     pl = rj(src)
-    return logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
+    return payload_model(pl, e, site), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
 
 
 def same_meta(live: dict, base: dict) -> dict:
@@ -2609,7 +2620,7 @@ def _main(argv=None) -> int:
         bad = False
         for site in plan["sites"]:
             pl = rj(rel / plan["per_site"][site]["payload_file"])
-            want = logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e)
+            want = payload_model(pl, e, site)
             diffs = flat_diff(same_meta(logical(rj(Path(exports[site])), e), want), want)
             if diffs:
                 bad = True
@@ -2637,7 +2648,7 @@ def _main(argv=None) -> int:
         plan = rj(rel / "plan.json")
         e = env_conf(r, plan["env"])
         pl = rj(rel / "payload.json")
-        want = logical({"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}, e)
+        want = payload_model(pl, e, plan.get("site"))
         got = same_meta(logical(rj(Path(a.export)), e), want)
         diffs = flat_diff(got, want)
         if diffs:

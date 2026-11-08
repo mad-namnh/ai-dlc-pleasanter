@@ -181,6 +181,11 @@ class CliTest(unittest.TestCase):
         self.assertEqual((rec["number"], rec["context"], rec["by"]), ("797", "var s = 797;", "Nam"))
         self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)   # survives re-unpack
         self.assertIn("var s = ${site:anken};", self.raw())
+        # round trip: the payload read back (baseline, mark-applied) equals git — the reference is not seen as drift
+        for env in ("dev", "prod"):
+            pl = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"][env], "anken")
+            back = pls.payload_model(pl, ENVS["envs"][env], "anken")
+            self.assertEqual(back["scripts"], pls.read_tree(self.r / "config/anken")["scripts"], env)
         p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
         self.assertIn("var s = 9001;", p["SiteSettings"]["Scripts"][0]["Body"])
         # the decision was recorded with the dev number; an export of prod (id 9001) is read the same way
