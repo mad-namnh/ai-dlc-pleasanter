@@ -431,7 +431,8 @@ def _lookup_json(text: Any) -> Any:
     if not s.startswith(("[", "{")) or s.startswith("[["):
         return None
     try:
-        doc = json.loads(SX.REF_TOKEN.sub(lambda m: json.dumps(m.group(0)), s))
+        lenient = re.sub(r",(\s*[}\]])", r"\1", SX.REF_TOKEN.sub(lambda m: json.dumps(m.group(0)), s))
+        doc = json.loads(lenient)                       # Pleasanter accepts trailing commas; an import drops them
     except ValueError:
         return None
 

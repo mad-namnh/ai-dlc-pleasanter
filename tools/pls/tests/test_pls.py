@@ -411,6 +411,10 @@ class PlsTest(unittest.TestCase):
         layout = '[\n  {\n    "SiteId": ${site:b},\n    "View": {\n      "ColumnFilterHash": {\n        "Status": "1"\n      }\n    }\n  }\n]'
         d = [{"path": "settings.Columns[ClassO].ChoicesText", "kind": "changed", "before": before, "after": layout}]
         self.assertEqual(pls.classify(d)["classification"], "config-only")      # re-serialised by an import
+        comma = '[{"SiteId": ${site:b}, "Lookups": [{"From": "A", "To": "A",}]}]'
+        clean = '[{"SiteId": ${site:b}, "Lookups": [{"From": "A", "To": "A"}]}]'
+        d = [{"path": "settings.Columns[ClassF].ChoicesText", "kind": "changed", "before": comma, "after": clean}]
+        self.assertEqual(pls.classify(d)["classification"], "config-only")      # trailing comma dropped by an import
         other = layout.replace("${site:b}", "${site:c}")
         d = [{"path": "settings.Columns[ClassO].ChoicesText", "kind": "changed", "before": before, "after": other}]
         self.assertEqual(pls.classify(d)["classification"], "data-impacting")   # the link now points elsewhere
