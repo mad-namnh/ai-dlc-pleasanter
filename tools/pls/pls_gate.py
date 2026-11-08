@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 GATES = ("G1", "G2", "G3", "G4")
@@ -110,7 +110,13 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
     who = _approver_for(root, approver, gate)
     d = root / "gates"
     d.mkdir(exist_ok=True)
-    at = datetime.now().astimezone().isoformat(timespec="microseconds")
+    now = datetime.now().astimezone()
+    # the clock can repeat a value (coarse on Windows): a new record is always later than every record already there,
+    # so "the last decision wins" never depends on the random file suffix
+    prev = [datetime.fromisoformat(g["at"]) for g in load(root) if g.get("at")]
+    if prev and now <= max(prev):
+        now = max(prev) + timedelta(microseconds=1)
+    at = now.isoformat(timespec="microseconds")
     out = d / f"{today}-{gate}-{at[11:19].replace(':', '')}-{secrets.token_hex(3)}.json"
     with out.open("x", encoding="utf-8") as f:          # "x": an existing record is never overwritten
         f.write(json.dumps({"gate": gate, "decision": decision, "approver": who, "date": today, "at": at,
