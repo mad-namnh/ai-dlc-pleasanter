@@ -1205,6 +1205,8 @@ def sandbox_create(r: Path, name: str, sites: list[str], parent: int, base: str 
     e = {"role": "dev", "connection": base, "sandbox_of": base, "parent_id": parent,
          "principals": dict(b.get("principals") or {}), "values": dict(b.get("values") or {}),
          "side_effects": dict(b.get("side_effects") or {}), "sites": {}}
+    if b.get("pleasanter"):                                # same server as the base: same version (ADR-0009)
+        e["pleasanter"] = dict(b["pleasanter"])
     for s in sites:
         e["sites"][s] = {"title": f"{name}_{(b['sites'].get(s) or {}).get('title') or s}", "sandbox": True}
     for s in sites:                                        # references to sites that are not copied

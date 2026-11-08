@@ -131,6 +131,7 @@ class SandboxTest(unittest.TestCase):
         pls.wj(self.r / "design/slot-ledger.json", {"loans": {}})
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["managed_sites"] = ["loans"]
+        envs["envs"]["dev"]["pleasanter"] = {"app": "1.5.2"}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
 
     def test_sandbox_lifecycle_never_touches_shared_dev(self):
@@ -138,6 +139,7 @@ class SandboxTest(unittest.TestCase):
         self.assertEqual(pls.main(["sandbox", "create", "--name", "nam", "--sites", "loans", "--parent", str(TH.FOLDER)]), 0)
         env = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"]["dev-nam"]
         self.assertEqual((env["role"], env["connection"], env["sites"]["loans"]["title"]), ("dev", "dev", "nam_dev_L"))
+        self.assertEqual(env.get("pleasanter"), {"app": "1.5.2"})                          # version copied from the base
         boot = next((self.r / "releases").glob("B-*-dev-nam"))
         self.assertEqual(pls.main(["bootstrap", boot.name, "--yes"]), 0)                     # creates the copy only
         sid = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"]["dev-nam"]["sites"]["loans"]["id"]
