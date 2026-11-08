@@ -32,6 +32,14 @@ class PureTest(unittest.TestCase):
         self.assertEqual(SX.replace_ids(s, {"797": "anken"}),
                          "site ${site:anken}; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [${site:anken}]")
 
+    def test_units_colours_and_names_are_never_site_ids(self):
+        s = ("padding-left:110px; min-height:110px; sleep(110ms); w:110%; c:#110; item110; v110a; "
+             "getSite(110); siteId=110; サイト110の一覧")
+        self.assertEqual(SX.replace_ids(s, {"110": "haisosaki"}),
+                         "padding-left:110px; min-height:110px; sleep(110ms); w:110%; c:#110; item110; v110a; "
+                         "getSite(${site:haisosaki}); siteId=${site:haisosaki}; サイト${site:haisosaki}の一覧")
+        self.assertEqual(SX.literal_left("padding:110px; id=110", "110"), [18])
+
     def test_recorded_literal_context_is_kept(self):
         lit = {"797": ["width 797 px"]}
         self.assertEqual(SX.replace_ids("site 797; width 797 px", {"797": "anken"}, lit), "site ${site:anken}; width 797 px")

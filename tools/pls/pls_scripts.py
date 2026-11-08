@@ -60,8 +60,11 @@ def for_site(site: str | None) -> dict[str, list[str]]:
 
 def id_pattern(number: str) -> str:
     """A standalone site id: not part of a longer number, and never the fraction or integer part of a decimal
-    (`4.797`, `797.5`) — seen in SVG path data and minified libraries (site 797, BR7)."""
-    return r"(?<![\d.])%s(?!\d|\.\d)" % re.escape(number)
+    (`4.797`, `797.5`) — seen in SVG path data and minified libraries (site 797, BR7) — and never a number glued
+    to a letter, `_`, `#` or `%`: CSS and time values (`110px`, `110ms`, `110%`), colours (`#110`) and names
+    (`item110`, `v110a`) are not ids (PLAY BOARD trial: 20 such values had been replaced).
+    ASCII only, so an id written right after Japanese text is still found."""
+    return r"(?<![0-9A-Za-z_.#])%s(?![0-9A-Za-z_%%]|\.\d)" % re.escape(number)
 
 
 def _spans(s: str, contexts: list[str]) -> list[tuple[int, int]]:
