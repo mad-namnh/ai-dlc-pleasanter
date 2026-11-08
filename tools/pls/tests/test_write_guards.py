@@ -22,7 +22,7 @@ import pls  # noqa: E402
 import test_http as TH  # noqa: E402
 
 WRITES = {"apply", "bootstrap", "test", "kb-verify"}
-NETWORK_READS = {"http-check", "export", "version", "adopt", "principals", "backup", "harvest", "sandbox"}
+NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "principals", "backup", "harvest", "sandbox"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
          "skills", "gate", "step", "usage"}

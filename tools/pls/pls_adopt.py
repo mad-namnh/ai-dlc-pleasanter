@@ -17,6 +17,7 @@ from typing import Any
 import pls_scripts as SX
 
 REF_IN_TEXT = re.compile(r"\[\[(\d+)")          # ChoicesText "[[123]]" and "[[123,…]]"
+LOOKUP_SITE = re.compile(r'"SiteId"\s*:\s*(\d+)')   # ChoicesText JSON lookup: [{"SiteId": 123, …}]
 
 
 def slot_entries(slots: dict[str, str], today: str, filter_only: set[str] | None = None) -> dict[str, dict]:
@@ -46,6 +47,7 @@ def referenced_sites(settings: Any) -> set[int]:
             out.add(o)
         elif isinstance(o, str):
             out.update(int(m) for m in REF_IN_TEXT.findall(o))
+            out.update(int(m) for m in LOOKUP_SITE.findall(o))     # JSON lookups inside ChoicesText
     walk(settings)
     return out
 
@@ -118,3 +120,50 @@ def script_id_uses(raw_scripts: dict, ids: dict[str, str]) -> list[str]:
                     else:
                         out.append(f"POSSIBLE — kept as written; {kind} '{label}' line {line}: {sid} (= {name}?) … `{ctx}`")
     return out
+
+
+# ---------------------------------------------------------------- adopting every site of a site package
+
+
+def package_plan(package: dict, known_titles: dict[str, set[str]], names: dict) -> dict:
+    """Which site of a UI site package gets which logical name, and in which order to adopt.
+
+    known_titles: title → logical names already in the project (any environment). names: a person's file,
+    {"<site id or title>": "<name>" | null} — null skips the site. A site gets the name from `names` first, else the
+    one known name of its title; a title known under two names, or a new site without an entry, is `missing`
+    (nothing is adopted until a person names it). Order: sites another site of the package refers to come first
+    (links, lookups, summaries), then parents before children — so references resolve without a second pass.
+    """
+    sites = {int(s["SiteId"]): s for s in package.get("Sites") or []}
+    title_count: dict[str, int] = {}
+    for s in sites.values():
+        title_count[s.get("Title") or ""] = title_count.get(s.get("Title") or "", 0) + 1
+    chosen, missing, skipped = {}, [], []
+    for sid, s in sites.items():
+        title = s.get("Title") or ""
+        if str(sid) in names or (title in names and title_count[title] == 1):
+            val = names.get(str(sid), names.get(title))
+            (skipped.append((sid, title)) if val is None else chosen.__setitem__(sid, str(val)))
+        elif title_count[title] == 1 and len(known_titles.get(title, set())) == 1:
+            chosen[sid] = next(iter(known_titles[title]))
+        else:
+            missing.append((sid, title))
+    deps = {sid: {x for x in referenced_sites(sites[sid].get("SiteSettings") or {}) if x in chosen and x != sid}
+            for sid in chosen}
+    depth: dict[int, int] = {}
+
+    def level(sid: int) -> int:                      # parents first
+        if sid not in depth:
+            depth[sid] = 0
+            parent = int(sites[sid].get("ParentId") or 0)
+            depth[sid] = level(parent) + 1 if parent in sites else 0
+        return depth[sid]
+    order, done = [], set()
+    pending = sorted(chosen, key=lambda x: (level(x), x))
+    while pending:                                   # referenced sites first; a cycle falls back to tree order
+        ready = [x for x in pending if deps[x] <= done] or pending[:1]
+        order.append(ready[0])
+        done.add(ready[0])
+        pending.remove(ready[0])
+    return {"order": [(sid, chosen[sid], sites[sid].get("Title")) for sid in order],
+            "missing": missing, "skipped": skipped}

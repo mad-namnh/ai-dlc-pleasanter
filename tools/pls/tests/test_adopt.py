@@ -137,5 +137,88 @@ class CliTest(unittest.TestCase):
             pls.main(["adopt", "--env", "dev", "--site", str(TH.EQ), "--name", "Bad Name"])
 
 
+class PackageTest(unittest.TestCase):
+    """pls adopt-package: every site of a UI site package, read only, referenced sites first."""
+    setUp = TH.HttpTest.setUp
+    tearDown = TH.HttpTest.tearDown
+
+    def sites(self):
+        master = {"SiteId": 911, "Title": "企業マスタ", "ReferenceType": "Results", "ParentId": 900, "UpdatedTime": "t0",
+                  "Body": "", "SiteSettings": {"Version": 1.017, "ReferenceType": "Results", "Columns": [{"ColumnName": "Title"}]}}
+        case = {"SiteId": 910, "Title": "案件一覧", "ReferenceType": "Issues", "ParentId": 900, "UpdatedTime": "t0", "Body": "",
+                "SiteSettings": {"Version": 1.017, "ReferenceType": "Issues",
+                                 "Columns": [{"ColumnName": "ClassA", "LabelText": "企業",
+                                              "ChoicesText": '[{"SiteId": 911, "Lookups": []}]'}],
+                                 "Links": [{"ColumnName": "ClassA", "SiteId": 911}],
+                                 "Scripts": [{"Id": 1, "Title": "lib", "Body": "const COMPANY_SITE_ID = 911; const S = 911;"}]}}
+        secret = {"SiteId": 912, "Title": "下書き", "ReferenceType": "Results", "ParentId": 900, "UpdatedTime": "t0", "Body": "",
+                  "SiteSettings": {"Version": 1.017, "ReferenceType": "Results",
+                                   "ServerScripts": [{"Id": 1, "Name": "x", "Body": "var token = 'abcdefghijklmnopqrstu';"}]}}
+        folder = {"SiteId": 900, "Title": "アプリ", "ReferenceType": "Sites", "ParentId": 0, "UpdatedTime": "t0", "Body": "",
+                  "SiteSettings": {"Version": 1.017, "ReferenceType": "Sites"}}
+        for s in (master, case, secret, folder):
+            self.fake.sites[s["SiteId"]] = s
+        pkg = self.r / ".pls/pkg.json"
+        pkg.write_text(json.dumps({"HeaderInfo": {"BaseSiteId": 900}, "Sites": [folder, case, master, secret]}), encoding="utf-8")
+        return pkg
+
+    def test_names_are_required_then_referenced_sites_come_first_and_only_reads(self):
+        pkg = self.sites()
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["adopt-package", "--env", "dev", "--package", str(pkg)]), 1)    # no names yet
+        self.assertEqual(self.fake.calls[n:], [])
+        self.assertFalse((self.r / "config/anken").exists())
+        names = self.r / ".pls/names.json"
+        names.write_text(json.dumps({"910": "anken", "911": "kigyo", "下書き": None, "900": "app"}), encoding="utf-8")
+        self.assertEqual(pls.main(["adopt-package", "--env", "dev", "--package", str(pkg), "--names", str(names)]), 0)
+        calls = [p for p, _ in self.fake.calls[n:]]
+        self.assertTrue(all(p.endswith("/getsite") for p in calls))                        # read only
+        self.assertLess(calls.index("/api/items/911/getsite"), calls.index("/api/items/910/getsite"))   # referenced first
+        self.assertNotIn("/api/items/912/getsite", calls)                                  # skipped (null)
+        site = json.loads((self.r / "config/anken/site.json").read_text(encoding="utf-8"))
+        self.assertIn("${site:kigyo}", site["Columns"][0]["ChoicesText"])
+        body = next((self.r / "config/anken/scripts").glob("*.js")).read_text(encoding="utf-8")
+        self.assertIn("COMPANY_SITE_ID = ${site:kigyo}", body)
+        self.assertIn("const S = 911;", body)                                              # POSSIBLE, kept as written
+
+    def test_a_failing_site_does_not_stop_the_others(self):
+        pkg = self.sites()
+        names = self.r / ".pls/names.json"
+        names.write_text(json.dumps({"910": "anken", "911": "kigyo", "912": "draft", "900": "app"}), encoding="utf-8")
+        self.assertEqual(pls.main(["adopt-package", "--env", "dev", "--package", str(pkg), "--names", str(names)]), 1)
+        self.assertTrue((self.r / "config/anken/site.json").exists())
+        self.assertFalse((self.r / "config/draft").exists())                              # refused: secret (I7)
+
+    def test_second_environment_reuses_names_by_title(self):
+        pkg = self.sites()
+        names = self.r / ".pls/names.json"
+        names.write_text(json.dumps({"910": "anken", "911": "kigyo", "下書き": None, "900": "app"}), encoding="utf-8")
+        self.assertEqual(pls.main(["adopt-package", "--env", "dev", "--package", str(pkg), "--names", str(names)]), 0)
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        envs["envs"]["stg"] = {"role": "stg", "sites": {}}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        c = json.loads((self.r / ".pls/connections.json").read_text(encoding="utf-8"))
+        c["stg"] = c["dev"]
+        (self.r / ".pls/connections.json").write_text(json.dumps(c), encoding="utf-8")
+        copy = json.loads(pkg.read_text(encoding="utf-8"))
+        for s in copy["Sites"]:                                                            # the same app, new ids
+            s["SiteId"] += 100
+            s["ParentId"] = s["ParentId"] + 100 if s["ParentId"] else 0
+            self.fake.sites[s["SiteId"]] = dict(s)
+        p2 = self.r / ".pls/pkg-stg.json"
+        p2.write_text(json.dumps(copy), encoding="utf-8")
+        self.assertEqual(pls.main(["adopt-package", "--env", "stg", "--package", str(p2), "--names", str(names)]), 0)
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        self.assertEqual(envs["envs"]["stg"]["sites"]["anken"]["id"], 1010)
+        self.assertEqual(envs["envs"]["stg"]["sites"]["kigyo"]["id"], 1011)
+
+    def test_plan_without_names_uses_known_titles(self):
+        pkg = {"Sites": [{"SiteId": 1, "Title": "A", "ParentId": 0}, {"SiteId": 2, "Title": "B", "ParentId": 1,
+                          "SiteSettings": {"Links": [{"SiteId": 3}]}}, {"SiteId": 3, "Title": "C", "ParentId": 1}]}
+        plan = AD.package_plan(pkg, {"A": {"a"}, "B": {"b"}, "C": {"c"}}, {})
+        self.assertEqual([n for _, n, _ in plan["order"]], ["a", "c", "b"])
+        self.assertEqual(AD.package_plan(pkg, {"A": {"a", "a2"}}, {})["missing"][0], (1, "A"))
+
+
 if __name__ == "__main__":
     unittest.main()

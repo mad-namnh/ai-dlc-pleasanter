@@ -982,6 +982,69 @@ def _adopted(r: Path, site: str) -> bool:
     return False
 
 
+def adopt_package(r: Path, a) -> int:
+    """Adopt every site of a UI site package in one run (read only: one getsite per site). Names come from the
+    project (same title on another environment) or from the person's --names file; nothing is adopted while a site
+    has no name. Referenced sites first; a site that fails (e.g. a secret) does not stop the others; configs created
+    in this run are re-mapped at the end, so references between them resolve."""
+    import contextlib
+    import io
+    import pls_http as H
+    try:
+        pkg = json.loads(Path(a.package).read_text(encoding="utf-8-sig"))
+        names = json.loads(Path(a.names).read_text(encoding="utf-8-sig")) if a.names else {}
+    except (OSError, ValueError) as ex:
+        raise Fail(f"cannot read the package or the names file: {ex}")
+    ev = rj(r / "environments.json")
+    known: dict[str, set[str]] = {}
+    for ec in ev["envs"].values():
+        for n, c in (ec.get("sites") or {}).items():
+            if c.get("title"):
+                known.setdefault(c["title"], set()).add(n)
+    plan = AD.package_plan(pkg, known, names)
+    for sid, title in plan["missing"]:
+        print(f"NAME NEEDED  {sid}  {title}")
+    if plan["missing"]:
+        print(f"{len(plan['missing'])} site(s) without a logical name — nothing adopted. A person names them in a JSON "
+              'file {"<site id or title>": "<name>" | null} (null skips the site) and passes it with --names')
+        LG.record_metric(missing_names=len(plan["missing"]))
+        return 1
+    env_conf(r, a.env)
+    _, _, c = _client(r, a.env)
+    registered = {n: conf.get("id") for n, conf in (ev["envs"][a.env].get("sites") or {}).items()}
+    today, created, done, failed = datetime.now().astimezone().date().isoformat(), [], [], []
+    for sid, name, title in plan["order"]:
+        if registered.get(name) == sid:
+            print(f"already   {sid:>7}  {name:24} {title}")
+            continue
+        try:
+            adopt_check_name(name)
+            exp = c.export_site(sid)                                  # the only call to Pleasanter: getsite (read)
+            stamp = _stamp()
+            out = r / ".pls" / "exports" / f"{a.env}-{name}-adopt-{stamp}.json"
+            wj(out, exp)
+            new = not (r / "config" / name / "site.json").exists()
+            with contextlib.redirect_stdout(io.StringIO()):
+                adopt(r, a.env, name, exp, today, stamp)
+            if new:
+                created.append((name, out))
+            done.append(name)
+            print(f"adopted   {sid:>7}  {name:24} {title}{'' if new else '  (id registered; config exists)'}")
+        except (Fail, H.TransportError) as ex:
+            failed.append(name)
+            print(f"FAILED    {sid:>7}  {name:24} {title}: {str(ex).splitlines()[0][:160]}")
+    for sid, title in plan["skipped"]:
+        print(f"skipped   {sid:>7}  {'(null in --names)':24} {title}")
+    for name, out in created:                                         # every id is known now: map references again
+        with contextlib.redirect_stdout(io.StringIO()):
+            main(["unpack", str(out), "--env", a.env, "--site", name])
+            main(["canon", "--site", name])
+    LG.record_metric(adopted=len(done), failed=len(failed), skipped=len(plan["skipped"]), remapped=len(created))
+    print(f"{len(done)} adopted, {len(failed)} failed, {len(plan['skipped'])} skipped — reports in ops/adopt/; "
+          f"read only, nothing written to Pleasanter")
+    return 1 if failed else 0
+
+
 def adopt_check_name(name: str) -> None:
     if not AD.SAFE_NAME.fullmatch(name):
         raise Fail(f"--name {name!r}: use a stable lower-case logical name (letters, digits, - and _)")
@@ -2130,6 +2193,9 @@ def http_cmd(r: Path, a) -> int:
                 return 2
             return 0 if all(v == "pass" for v in ent.values()) else 1
 
+        if a.cmd == "adopt-package":
+            return adopt_package(r, a)
+
         if a.cmd == "adopt":
             adopt_check_name(a.name)
             env_conf(r, a.env)
@@ -2272,6 +2338,10 @@ def _main(argv=None) -> int:
     s = sp.add_parser("kb-verify", help="run the KB probes on a dev environment (creates probe sites in values.kb_probe_parent)")
     s.add_argument("--env", required=True)
     s.add_argument("--yes", action="store_true", help="skip the typed confirmation (only when the person allowed it)")
+    s = sp.add_parser("adopt-package", help="read-only: adopt every site of a UI site package (names from the project or --names)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--package", required=True, help="site package JSON exported from the UI (keep it in .pls/packages/)")
+    s.add_argument("--names", help='JSON {"<site id or title>": "<name>" | null} decided by a person; null skips a site')
     s = sp.add_parser("adopt", help="read-only: bring an existing site into this project (config, ledger, drift baseline, report)")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True, type=int, help="id of the existing site")
@@ -2406,7 +2476,7 @@ def _main(argv=None) -> int:
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
 
-    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt", "kb-verify"):
+    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt", "adopt-package", "kb-verify"):
         return http_cmd(r, a)
 
     if a.cmd == "refs":
