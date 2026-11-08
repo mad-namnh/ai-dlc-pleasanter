@@ -14,16 +14,18 @@ You are the orchestrator. You move the project through the phases in order. You 
 
 ## 0. Route: new app or existing app
 
-Read **Origin** in the project profile (`CLAUDE.md`) before anything else.
+Read **Origin** in the project profile (`CLAUDE.md`) together with the repository state of section 1; then route. Report the state in two or three lines, then say which route you take.
 
 | Origin | Onboarding summary `ops/onboarding/*-summary.md` | Next |
 |---|---|---|
-| `existing` | missing | `pls-x-onboarding` (read only), then `pls-x-spec-recovery`. **Do not start P1**, do not write requirements, do not bootstrap — even when the person's first message reads like a specification |
+| `existing` | missing | `pls-x-onboarding` (read only), then `pls-x-spec-recovery`. **Do not start P1**, do not write `REQ-*` files, do not bootstrap — even when the person's first message reads like a specification. Save such a request verbatim as `requirements/sources/<date>-pending-<slug>.md` with the line "Pending: change request after onboarding" (no analysis), so it is not lost |
 | `existing` | present | open decisions in it? → settle them with the person first; otherwise the request is a **change request** → P1 (section 4) |
 | `new` | — | a specification → P1 (section 3) |
 | missing (older project) | — | ask the person once whether the app already runs in Pleasanter; record the answer as `Origin` in the profile |
 
-If Origin is `new` but the person names an app, site ids or a site package that already run in Pleasanter, stop and ask whether this is a takeover (`existing`) before writing anything.
+If Origin is `new` but the person names an app, site ids or a site package that already run in Pleasanter, stop and ask whether this is a takeover (`existing`) before writing anything. After the person answers, you update `Origin` (and, with their agreement, stage and release target) in the profile, show the change and commit it (`docs(profile): …`).
+
+Answer in the person's language; questions meant for the customer are in Japanese.
 
 ## 1. Find where the project is
 

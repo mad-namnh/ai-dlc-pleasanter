@@ -12,6 +12,8 @@ How a project starts depends on its **Origin** (profile below):
 - `new` — an app that does not exist yet: the user gives a specification in natural language (any language; Pleasanter end users read Japanese). Save it and begin P1.
 - `existing` — an app that already runs in Pleasanter (運用保守): first `pls-x-onboarding` (read only) and `pls-x-spec-recovery`. **No P1 before the onboarding summary exists** (`ops/onboarding/*-summary.md`); then every change is a change request through P1–P6.
 
+If Origin is `new` but the person names an app, site ids or a site package that already run in Pleasanter, ask whether this is a takeover before writing anything.
+
 ## Project profile
 
 Filled in when the project is created; the lifecycle skill reads it.
