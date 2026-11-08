@@ -92,6 +92,19 @@ class PlsTest(unittest.TestCase):
         msgs = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-SLOT-01"]
         self.assertTrue(any("ClassB" in m for m in msgs))
 
+    def test_process_without_display_condition_is_a_lint_error(self):          # L-PRC-01, D21
+        ss = {"Processes": [{"Id": 1, "Name": "ok", "View": {"ColumnFilterHash": {"Status": "[\"100\"]"}}},
+                            {"Id": 2, "Name": "none"},
+                            {"Id": 3, "Name": "defaults-only", "View": {"Id": 0, "ApiDataType": 0, "ColumnFilterHash": {}}}]}
+        self.assertEqual(pls.unconditioned_processes(ss), ["none", "defaults-only"])
+        self.unpack_dev()
+        p = self.r / "config/a/site.json"
+        site = json.loads(p.read_text(encoding="utf-8"))
+        site["Processes"] = ss["Processes"]
+        p.write_text(json.dumps(site), encoding="utf-8")
+        msgs = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PRC-01"]
+        self.assertEqual(len(msgs), 2)
+
     def test_canon_and_lint(self):
         self.unpack_dev()
         p = self.r / "config/a/site.json"

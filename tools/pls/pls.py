@@ -15,7 +15,7 @@ Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -451,6 +451,20 @@ def classify(diffs: list[dict]) -> dict:
 
 # ---------------------------------------------------------------- lint (architecture §7.2)
 
+VIEW_DEFAULTS = {"Id", "ApiColumnKeyDisplayType", "ApiColumnValueDisplayType", "ApiDataType", "CalendarSiteId"}
+
+
+def unconditioned_processes(settings: dict) -> list[str]:
+    """Processes without a display condition: no View, or a View with nothing but defaults (D21: API execution fails with
+    HTTP 500)."""
+    out = []
+    for p in settings.get("Processes") or []:
+        view = p.get("View") if isinstance(p.get("View"), dict) else {}
+        if not {k: v for k, v in view.items() if k not in VIEW_DEFAULTS and v not in (None, {}, [], "")}:
+            out.append(str(p.get("Name") or p.get("DisplayName") or p.get("Id")))
+    return out
+
+
 def lint(r: Path) -> list[dict]:
     issues: list[dict] = []
     e_all = envs(r)
@@ -499,6 +513,10 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
+        for name in unconditioned_processes(m["settings"]):   # L-PRC-01 (D21)
+            issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no display condition: it cannot be "
+                           "run or tested through the API (HTTP 500, D21) — give it a condition, at least the status it starts "
+                           "from (on an adopted site: a decision for the person, it changes when the button is shown)"})
         for proc in m["settings"].get("Processes") or []:
             for key, _ in ACL_KEYS:
                 for x in proc.get(key) or []:
@@ -979,6 +997,8 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
                                                   "Links", "ServerScripts", "Scripts", "Styles", "Htmls", "DashboardParts")}
     extra = {
         "Literal mail addresses (L-MAIL-01)": [f"{p}: {a}" for p, a in SE.literal_addresses(ss)],
+        "Processes without a display condition (L-PRC-01, D21: not executable through the API — adding one is a decision)":
+            unconditioned_processes(ss),
         "Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)": AD.script_id_uses(raw_scripts, ids_all),
     }
     if second_env:
