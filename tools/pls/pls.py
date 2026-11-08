@@ -63,6 +63,7 @@ import pls_kbverify as KV                                   # noqa: E402 — exe
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
+import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -413,13 +414,15 @@ def labels(model: dict) -> dict:
     return {c["ColumnName"]: c.get("LabelText", c["ColumnName"]) for c in model["settings"].get("Columns", [])}
 
 
-def md_diff(diffs: list[dict], lab: dict, title: str, right: str = "After (git)") -> str:
+def md_diff(diffs: list[dict], lab: dict, title: str, right: str = "After (git)", kinds: dict | None = None) -> str:
+    """`kinds` renames the kind column for the reader (drift: what exists where, not what a release would do)."""
+    kinds = kinds or {}
     rows = [f"### {title}", "", f"{len(diffs)} difference(s).", ""]
     if diffs:
         rows += [f"| Path | Kind | Label | Before (live) | {right} |", "|---|---|---|---|---|"]
         for d in diffs:
             m = re.search(r"\[(\w+)\]", d["path"])
-            rows.append(f"| `{d['path']}` | {d['kind']} | {lab.get(m.group(1), '') if m else ''} | "
+            rows.append(f"| `{d['path']}` | {kinds.get(d['kind'], d['kind'])} | {lab.get(m.group(1), '') if m else ''} | "
                         f"{short(d['before']) if d['before'] is not None else ''} | {short(d['after']) if d['after'] is not None else ''} |")
     return "\n".join(rows) + "\n"
 
@@ -749,7 +752,8 @@ def drift_report(r: Path, e: dict, env: str, site: str, export: Any, explicit: s
     base, label = baseline(r, e, env, site, explicit)
     live = same_meta(logical(export, e), base)
     diffs = flat_diff(live, base)
-    text = md_diff(diffs, labels(base) | labels(live), f"{env}/{site}: live vs baseline ({label})", "Baseline (last release)")
+    text = md_diff(diffs, labels(base) | labels(live), f"{env}/{site}: live vs baseline ({label})", "Baseline (last release)",
+                   {"removed": f"only on {env} (live)", "added": "only in the baseline", "changed": "changed on live"})
     if diffs:
         rev = classify(diffs)
         text += (f"\n**Reverting this drift would be: {rev['classification']}.**"
@@ -2373,6 +2377,10 @@ def _main(argv=None) -> int:
     s.add_argument("ours")
     s.add_argument("theirs")
     sp.add_parser("merge-install", help="register the semantic merge driver in this repository")
+    s = sp.add_parser("spec-skeleton", help="as-is 画面設計書 tables from the configuration; AI writes only the marked places")
+    s.add_argument("--site", required=True)
+    s.add_argument("--out", help="default design/as-is/<site>.md")
+    s.add_argument("--force", action="store_true", help="overwrite an existing document (its written text is lost)")
     s = sp.add_parser("usage", help="LLM token usage per step from Claude Code transcripts (numbers only)")
     s.add_argument("action", choices=["collect", "report"])
     s.add_argument("--transcripts", help="collect: transcript folder (default: Claude Code's folder for this project)")
@@ -2512,6 +2520,25 @@ def _main(argv=None) -> int:
 
     if a.cmd == "env-compare":
         return env_compare(r, a.site, a.source, datetime.now().astimezone().date().isoformat())
+
+    if a.cmd == "spec-skeleton":
+        d = r / "config" / a.site
+        if not (d / "site.json").exists():
+            raise Fail(f"config/{a.site} not found (adopt the site first)")
+        out = Path(a.out) if a.out else r / "design" / "as-is" / f"{a.site}.md"
+        if out.exists() and not a.force:
+            raise Fail(f"{out} exists — it may hold reviewed text; use --out for a new file or --force to replace it")
+        titles = {}
+        for ec in envs(r)["envs"].values():
+            for n, c in (ec.get("sites") or {}).items():
+                titles.setdefault(n, c.get("title") or n)
+        text = SP.skeleton(a.site, read_tree(d), titles)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        LG.record_metric(ai_markers=SP.ai_markers(text), lines=text.count(chr(10)) + 1)
+        print(f"{out.relative_to(r).as_posix() if out.is_relative_to(r) else out}: {text.count(chr(10)) + 1} lines, "
+              f"{SP.ai_markers(text)} place(s) for the AI to write")
+        return 0
 
     if a.cmd == "usage":
         if a.action == "collect":
