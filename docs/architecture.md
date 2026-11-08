@@ -290,7 +290,8 @@ One file, `traceability.json`, links the chain in both directions:
 | Rule | Source | Checks |
 |---|---|---|
 | L-SEC-01 | D5 | No secret-like values in configuration or scripts |
-| L-REF-01 | D3 | No hard-coded SiteIds in script bodies |
+| L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
+| L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |
 | L-SCR-01 | D7 | No top-level `const`/`let` in shared server scripts |
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |

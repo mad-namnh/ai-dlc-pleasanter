@@ -138,20 +138,22 @@ def id_maps(e: dict) -> tuple[dict, dict]:
     return ids, vals
 
 
-def to_refs(obj: Any, ids: dict, vals: dict, key: str = "", literal: dict | None = None) -> Any:
-    """Replace env-specific values with ${site:x} / ${env:x} references. `literal`: numbers a person decided to keep
-    (only ever given for the script bodies of one site, BR7)."""
+def to_refs(obj: Any, ids: dict, vals: dict, key: str = "", literal: dict | None = None,
+            reference: dict | None = None) -> Any:
+    """Replace env-specific values with ${site:x} / ${env:x} references. Site ids in strings only where they are
+    written as site ids (pls_scripts.ID_CONTEXT). `literal` / `reference`: a person's decisions for numbers in the
+    script bodies of one site (BR7)."""
     if isinstance(obj, dict):
-        return {k: to_refs(v, ids, vals, k, literal) for k, v in obj.items()}
+        return {k: to_refs(v, ids, vals, k, literal, reference) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [to_refs(v, ids, vals, key, literal) for v in obj]
+        return [to_refs(v, ids, vals, key, literal, reference) for v in obj]
     if isinstance(obj, int) and not isinstance(obj, bool) and key.endswith("SiteId") and str(obj) in ids:
         return "${site:%s}" % ids[str(obj)]
     if isinstance(obj, str):
         s = obj
         for v, name in sorted(vals.items(), key=lambda x: -len(x[0])):
             s = s.replace(v, "${env:%s}" % name)
-        return SX.replace_ids(s, ids, literal)   # decimals never; recorded literals of this site's scripts (BR7)
+        return SX.replace_ids(s, ids, literal, reference)   # id contexts only; a person's decisions (BR7)
     return obj
 
 
@@ -231,7 +233,8 @@ def logical(export: Any, e: dict) -> dict:
     model = {
         "meta": to_refs({k: d.get(k) for k in META_FIELDS if k in d}, ids, vals),
         "settings": to_refs(ss, ids, vals),
-        "scripts": to_refs(scripts, ids, vals, literal=SX.for_site(ids.get(str(d.get("SiteId"))))),
+        "scripts": to_refs(scripts, ids, vals, literal=SX.for_site(ids.get(str(d.get("SiteId")))),
+                           reference=SX.references_for(ids.get(str(d.get("SiteId"))), ids)),
     }
     acl_to_refs(model["settings"], e)
     if "Permissions" in d or "InheritPermission" in d:
@@ -512,8 +515,12 @@ def lint(r: Path) -> list[dict]:
                 body, nm = it.get("Body", ""), it.get("Name")
                 for i in all_ids:
                     if SX.literal_left(body, i, SX.for_site(site)):
-                        issues.append({"rule": "L-REF-01", "site": site, "msg": f"{kind}/{nm}: hard-coded SiteId {i}; use ${{site:…}}, "
-                                       "or record it as a literal number (pls refs --keep)"})
+                        issues.append({"rule": "L-REF-01", "site": site, "msg": f"{kind}/{nm}: site id {i} written as a site id; "
+                                       "use ${site:…}, or record it as a literal number (pls refs --keep)"})
+                for name in sorted(set(SX.unstable_refs(body, site))):        # L-REF-03: round trip would lose it
+                    issues.append({"rule": "L-REF-03", "site": site, "msg": f"{kind}/{nm}: ${{site:{name}}} outside a site-id context "
+                                   "becomes a plain number on the next unpack; write it as a site id (…SiteId = ${site:…}) "
+                                   "or record it (pls refs --ref)"})
                 if kind == "ServerScripts" and it.get("Shared") and re.search(r"(?m)^\s*(const|let)\s+\w", body):
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
@@ -1011,7 +1018,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         "Processes with no View object (L-PRC-01, D21: API and record screen fail)": unconditioned_processes(ss, True),
         "Processes whose View has no filter (they work; the button shows in every record of their CurrentStatus — review)":
             [x for x in unconditioned_processes(ss) if x not in unconditioned_processes(ss, True)],
-        "Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)": AD.script_id_uses(raw_scripts, ids_all),
+        "Numbers equal to a site id inside script bodies (written as a site id → ${site:x}; POSSIBLE lines stay as written)": AD.script_id_uses(raw_scripts, ids_all),
     }
     if second_env:
         git = read_tree(r / "config" / name)
@@ -1052,7 +1059,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         else:
             ledger_p.write_text(ledger_before, encoding="utf-8")
         raise
-    n_sus = sum(1 for x in extra["Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)"] if x.startswith("SUSPICIOUS"))
+    n_sus = sum(1 for x in extra["Numbers equal to a site id inside script bodies (written as a site id → ${site:x}; POSSIBLE lines stay as written)"] if x.startswith("POSSIBLE"))
     print(f"adopted site {sid} as '{name}' ({d.get('ReferenceType')}) from {env} — read only; nothing written to Pleasanter")
     if second_env:
         print(f"  second environment: id registered, config/{name} unchanged; "
@@ -1062,7 +1069,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
               f"(zone customer)")
     print(f"  record releases/{rel}/ (drift baseline, not a release)")
     print(f"  findings: {len(SC.unverified(ss))} unverified component(s), {len(principals)} unmapped principal(s), "
-          f"{len(undecided)} server script(s) without a decision, {n_sus} suspicious id replacement(s) in scripts")
+          f"{len(undecided)} server script(s) without a decision, {n_sus} possible site id(s) in scripts kept as written (pls refs)")
     print(f"  report: {out.relative_to(r)}")
     return 0
 
@@ -1130,12 +1137,25 @@ def refs_cmd(r: Path, a) -> int:
     resolve = {k: str(v["id"]) for k, v in e["sites"].items() if v.get("id")}
     d = r / "config" / a.site
     model = read_tree(d)
+    if a.ref:
+        return _record_reference(r, a, d, resolve)
     if not a.keep:
         uses = SX.site_refs(model["scripts"], resolve)
         for u in uses:
-            print(f"{'SUSPICIOUS ' if u['suspicious'] else ''}{u['kind']}/{u['script']} line {u['line']}: "
-                  f"${{site:{u['site']}}} = {u['number']} … `{u['context']}`")
-        print(f"{a.site}: {len(uses)} site reference(s) in scripts, {sum(u['suspicious'] for u in uses)} in a numeric context")
+            print(f"{u['kind']}/{u['script']} line {u['line']}: ${{site:{u['site']}}} = {u['number']} … `{u['context']}`")
+        possible = 0
+        for kind, items in model["scripts"].items():
+            for it in items or []:
+                body = it.get("Body") or ""
+                for name, num in resolve.items():
+                    for pos in SX.possible_ids(body, num):
+                        possible += 1
+                        ls, le = body.rfind("\n", 0, pos) + 1, body.find("\n", pos)
+                        ctx = body[max(ls, pos - 30):(le if le != -1 else len(body))][:70].replace("\r", "")
+                        print(f"POSSIBLE {kind}/{it.get('Name') or it.get('Title')} line {body.count(chr(10), 0, pos) + 1}: "
+                              f"{num} (= {name}?) … `{ctx}`")
+        print(f"{a.site}: {len(uses)} site reference(s) in scripts; {possible} number(s) equal to a site id kept as "
+              "written — mark a real one with --ref \"<context>\" --reason … --by <name>")
         return 0
     if not (a.reason and a.by):
         raise Fail("--keep needs --reason and --by (the person who decided)")
@@ -1164,9 +1184,45 @@ def refs_cmd(r: Path, a) -> int:
     doc["literal"].append({"site": a.site, "number": num, "context": a.keep, "reason": a.reason, "by": a.by,
                            "date": datetime.now().astimezone().date().isoformat()})
     wj(f, doc)
+    SX.load_literal(r)
     for path, new, _n in targets:
         path.write_text(new, encoding="utf-8", newline="")
     print(f"kept {changed} occurrence(s) of {num} as a literal number in config/{a.site}; decision recorded in design/refs-literal.json")
+    return 0
+
+
+def _record_reference(r: Path, a, d: Path, resolve: dict) -> int:
+    """A person says: this number, in this context, is a site id. Recorded first, then the git scripts change."""
+    if not (a.reason and a.by):
+        raise Fail("--ref needs --reason and --by (the person who decided)")
+    found = [(name, num) for name, num in resolve.items() if re.search(SX.id_pattern(num), a.ref)]
+    if len(found) != 1:
+        raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
+    name, num = found[0]
+    why = SX.check_context(a.ref, num)
+    if why:
+        raise Fail(f"--ref {a.ref!r}: {why}")
+    targets = []
+    for kind, (folder, _ext) in SCRIPT_KINDS.items():
+        idx = d / folder / "_index.json"
+        for entry in rj(idx) if idx.exists() else []:
+            path = d / folder / entry["File"]
+            with open(path, encoding="utf-8", newline="") as fh:     # keep CRLF as stored (S7)
+                body = fh.read()
+            new = SX.replace_ids(body, {num: name}, None, {num: [a.ref]})
+            if new != body:
+                targets.append((path, new))
+    if not targets:
+        raise Fail(f"context {a.ref!r} not found as written in config/{a.site} scripts (copy it from `pls refs`)")
+    f = r / "design" / "refs-literal.json"
+    doc = rj(f) if f.exists() else {"literal": []}
+    doc.setdefault("reference", []).append({"site": a.site, "target": name, "number": num, "context": a.ref, "reason": a.reason,
+                                            "by": a.by, "date": datetime.now().astimezone().date().isoformat()})
+    wj(f, doc)
+    SX.load_literal(r)                                       # the decision holds for the rest of this run too
+    for path, new in targets:
+        path.write_text(new, encoding="utf-8", newline="")
+    print(f"{num} in {a.ref!r} is now ${{site:{name}}} in config/{a.site} ({len(targets)} file(s)); decision recorded")
     return 0
 
 
@@ -2174,10 +2230,11 @@ def main(argv=None) -> int:
     s.add_argument("--env", required=True)
     s.add_argument("--app", help="application version read on <url>/versions by a logged-in person, e.g. 1.5.2.0")
     s.add_argument("--from-package", help="site package JSON exported from that environment: its AssemblyVersion is recorded (no HTTP)")
-    s = sp.add_parser("refs", help="site ids inside the scripts of a site: list them, or keep one as a literal number")
+    s = sp.add_parser("refs", help="site ids inside the scripts of a site: list them, keep one as a literal number, or mark a POSSIBLE one as a reference")
     s.add_argument("--site", required=True)
     s.add_argument("--env", default="dev", help="environment whose ids are shown (default dev)")
     s.add_argument("--keep", metavar="CONTEXT", help="text around the number, as printed by `pls refs` (number included)")
+    s.add_argument("--ref", metavar="CONTEXT", help="a POSSIBLE number that is a real site id: text around it, as printed")
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
     s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")

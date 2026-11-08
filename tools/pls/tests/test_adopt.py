@@ -20,12 +20,12 @@ class PureTest(unittest.TestCase):
               "Processes": [{"Id": 1, "CurrentStatus": 100}], "UseSearchFilter": True}
         self.assertEqual(AD.referenced_sites(ss), {500, 600, 700, 800})
 
-    def test_script_id_uses_flags_numeric_context(self):
-        raw = {"Scripts": [{"Id": 1, "Title": "lib", "Body": "var site = 797;\nvar path = 'M10 797 2.127 6';"}]}
+    def test_script_id_uses_lists_possible_numbers_as_kept(self):
+        raw = {"Scripts": [{"Id": 1, "Title": "lib", "Body": "var siteId = 797;\nvar path = 'M10 797 2.127 6';"}]}
         uses = AD.script_id_uses(raw, {"797": "anken"})
         self.assertEqual(len(uses), 2)
-        self.assertFalse(uses[0].startswith("SUSPICIOUS"))
-        self.assertTrue(uses[1].startswith("SUSPICIOUS") and "line 2" in uses[1])
+        self.assertIn("→ ${site:anken}", uses[0])
+        self.assertTrue(uses[1].startswith("POSSIBLE — kept as written") and "line 2" in uses[1])
 
     def test_unsafe_and_duplicate_script_names_keep_every_body(self):
         import tempfile

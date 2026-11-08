@@ -19,40 +19,78 @@ def export(scripts):
     return {"Response": {"Data": {"SiteId": 797, "Title": "案件", "ReferenceType": "Issues", "Body": "",
                                   "SiteSettings": {"Version": 1.017,
                                                    "Columns": [{"ColumnName": "ClassA", "LabelText": "顧客",
-                                                                "Description": "width 797 px"}],
+                                                                "Description": "siteId: 797 px"}],
                                                    "Scripts": scripts}}}}
 
 
 class PureTest(unittest.TestCase):
     def tearDown(self):
         SX.LITERAL.clear()
+        SX.REFERENCE.clear()
 
     def test_decimals_are_never_site_ids(self):
-        s = "site 797; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [797]"
+        s = "siteId = 797; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [[797]]"
         self.assertEqual(SX.replace_ids(s, {"797": "anken"}),
-                         "site ${site:anken}; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [${site:anken}]")
+                         "siteId = ${site:anken}; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [[${site:anken}]]")
+
+    def test_only_numbers_written_as_site_ids_are_replaced(self):
+        # real lines of the PLAY BOARD app (site ids 103-120 collide with status codes, timings and colours)
+        kept = ("const CASE_INFLUENCER_STATUS_SELECTION = 103;\nconst JUNCTION_STATUS_CODES = [102, 103, 104, 107];\n"
+                "box-shadow: 0 2px 8px rgba(103,58,183,.35);\nsetTimeout(restoreHashtag, 103);\nconst maxAttempts = 103;\n"
+                "103,ユーザー無効\n/* site 103 を変更しない */\npbWarn('[playboard][product-103] 失敗');\n")
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+        ids = ('_notiPickSiteId("NOTIFICATION_SITE_ID", 103);\nif ($p.siteId() === 103) {}\nitems.Get(103, "{}");\n'
+               "$p.apiGet({ id: 103, done: f });\nfetch('/api/items/103/get');\nurl = '/api/items/' + 103;\n"
+               '"SiteId": 103,\n[[103]]\nClassA~103,Title\nconst X_SITE_ID = 103;\n')
+        out = SX.replace_ids(ids, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 10)
+        self.assertEqual(len(SX.possible_ids(kept, "103")), 8)          # every 103 in `kept` is listed, none replaced
+        self.assertEqual(SX.possible_ids(ids, "103"), [])
+
+    def test_look_alike_names_and_calls_are_not_contexts(self):
+        s = ("this.items.splice(103, 1); cart.items.push(103); updateStatus(siteId, 103); SITE_IDLE_TIMEOUT = 103; "
+             "websiteId = 103; siteIdx = 103; 期間 1~103 日")
+        self.assertEqual(SX.replace_ids(s, {"103": "x"}), s)
+
+    def test_ids_across_lines_reversed_or_not_first_are_found(self):
+        s = ("$p.apiGet({\n    id: 103,\n    done: f });\nitems.Get(\n  103);\nif (103 === $p.siteId()) {}\n"
+             "$p.apiGet({ data: {}, id: 103 });\nconst ANKEN_SITE_ID = 103;\n")
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 5)
+
+    def test_hand_written_reference_outside_a_context_is_flagged(self):
+        self.assertEqual(SX.unstable_refs("const ANKEN = ${site:anken};", "s"), ["anken"])
+        self.assertEqual(SX.unstable_refs("const ANKEN_SITE_ID = ${site:anken}; items.Get(${site:anken});", "s"), [])
+
+    def test_a_person_can_mark_a_possible_number_as_a_reference(self):
+        s = "const ANKEN = 797; const LIMIT = 797;"
+        self.assertEqual(SX.replace_ids(s, {"797": "anken"}, None, {"797": ["const ANKEN = 797"]}),
+                         "const ANKEN = ${site:anken}; const LIMIT = 797;")
 
     def test_units_colours_and_names_are_never_site_ids(self):
         s = ("padding-left:110px; min-height:110px; sleep(110ms); w:110%; c:#110; item110; v110a; "
-             "getSite(110); siteId=110; サイト110の一覧")
+             "siteId=110; siteId=110px")
         self.assertEqual(SX.replace_ids(s, {"110": "haisosaki"}),
                          "padding-left:110px; min-height:110px; sleep(110ms); w:110%; c:#110; item110; v110a; "
-                         "getSite(${site:haisosaki}); siteId=${site:haisosaki}; サイト${site:haisosaki}の一覧")
-        self.assertEqual(SX.literal_left("padding:110px; id=110", "110"), [18])
+                         "siteId=${site:haisosaki}; siteId=110px")
+        self.assertEqual(SX.literal_left("padding:110px; siteId=110", "110"), [22])
 
     def test_recorded_literal_context_is_kept(self):
-        lit = {"797": ["width 797 px"]}
-        self.assertEqual(SX.replace_ids("site 797; width 797 px", {"797": "anken"}, lit), "site ${site:anken}; width 797 px")
-        self.assertEqual(SX.literal_left("site 797; width 797 px", "797", lit), [5])
-        self.assertEqual(SX.replace_ids("width 797 px", {"797": "anken"}), "width ${site:anken} px")     # no decision given
+        lit = {"797": ["siteId: 797 (legacy)"]}
+        s = "siteId = 797; siteId: 797 (legacy)"
+        self.assertEqual(SX.replace_ids(s, {"797": "anken"}, lit), "siteId = ${site:anken}; siteId: 797 (legacy)")
+        self.assertEqual(SX.literal_left(s, "797", lit), [9])
+        self.assertEqual(SX.replace_ids("siteId: 797 (legacy)", {"797": "anken"}), "siteId: ${site:anken} (legacy)")  # no decision
 
     def test_result_does_not_depend_on_the_order_of_ids(self):
-        lit = {"797": ["calc(798, 797) mm"]}
-        s = "a 797; calc(798, 797) mm"
+        lit = {"797": ["getSiteId(797) legacy"]}
+        s = "siteId = 797; getSiteId(798); getSiteId(797) legacy"
         one = SX.replace_ids(s, {"798": "b", "797": "a"}, lit)
         two = SX.replace_ids(s, {"797": "a", "798": "b"}, lit)
         self.assertEqual(one, two)
-        self.assertEqual(one, "a ${site:a}; calc(${site:b}, 797) mm")
+        self.assertEqual(one, "siteId = ${site:a}; getSiteId(${site:b}); getSiteId(797) legacy")
 
     def test_short_or_generic_contexts_are_refused(self):
         self.assertIsNotNone(SX.check_context("797", "797"))
@@ -87,13 +125,15 @@ class CliTest(unittest.TestCase):
         os.chdir(self.r)
         self.exp = self.r / "dev.json"
         self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True,
-                                                "Body": "var site = 797;\r\nvar w = 'width 797 px';\r\n"}]), ensure_ascii=False),
+                                                "Body": "var siteId = 797;\r\nvar w = 'siteId: 797 px';\r\nvar s = 797;\r\n"}]),
+                                        ensure_ascii=False),
                             encoding="utf-8")
         self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
 
     def tearDown(self):
         os.chdir(self.cwd)
         SX.LITERAL.clear()
+        SX.REFERENCE.clear()
         self.tmp.cleanup()
 
     def script_file(self):
@@ -106,20 +146,40 @@ class CliTest(unittest.TestCase):
     def test_keep_records_the_decision_and_every_command_respects_it(self):
         self.assertEqual(self.raw().count("${site:anken}"), 2)
         with self.assertRaises(pls.Fail):                                                   # a person must be named
-            pls.main(["refs", "--site", "anken", "--keep", "width 797 px"])
-        self.assertEqual(pls.main(["refs", "--site", "anken", "--keep", "width 797 px", "--reason", "CSS width", "--by", "Nam"]), 0)
-        self.assertEqual(self.raw(), "var site = ${site:anken};\r\nvar w = 'width 797 px';\r\n")   # CRLF kept
+            pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px"])
+        self.assertEqual(pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px", "--reason", "CSS width", "--by", "Nam"]), 0)
+        self.assertEqual(self.raw(), "var siteId = ${site:anken};\r\nvar w = 'siteId: 797 px';\r\nvar s = 797;\r\n")   # CRLF kept
         rec = json.loads((self.r / "design/refs-literal.json").read_text(encoding="utf-8"))["literal"][0]
-        self.assertEqual((rec["site"], rec["number"], rec["context"], rec["by"]), ("anken", "797", "width 797 px", "Nam"))
+        self.assertEqual((rec["site"], rec["number"], rec["context"], rec["by"]), ("anken", "797", "siteId: 797 px", "Nam"))
         self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)   # survives re-unpack
-        self.assertIn("width 797 px", self.raw())
+        self.assertIn("siteId: 797 px", self.raw())
         site = json.loads((self.r / "config/anken/site.json").read_text(encoding="utf-8"))
-        self.assertEqual(site["Columns"][0]["Description"], "width ${site:anken} px")       # settings are never protected
+        self.assertEqual(site["Columns"][0]["Description"], "siteId: ${site:anken} px")     # settings are never protected
         self.assertNotIn("L-REF-01", {i["rule"] for i in pls.lint(self.r)})
         p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
         body = p["SiteSettings"]["Scripts"][0]["Body"]
-        self.assertIn("site = 9001", body)                                                  # real id follows the env
-        self.assertIn("width 797 px", body)                                                 # the literal does not
+        self.assertIn("siteId = 9001", body)                                                # real id follows the env
+        self.assertIn("siteId: 797 px", body)                                               # the literal does not
+        self.assertIn("var s = 797;", body)                                                 # a POSSIBLE number neither
+
+    def test_ref_marks_a_possible_number_and_survives_unpack(self):
+        with self.assertRaises(pls.Fail):                                                   # a person must be named
+            pls.main(["refs", "--site", "anken", "--ref", "var s = 797;"])
+        self.assertEqual(pls.main(["refs", "--site", "anken", "--ref", "var s = 797;", "--reason", "site of 案件", "--by", "Nam"]), 0)
+        self.assertEqual(self.raw(), "var siteId = ${site:anken};\r\nvar w = 'siteId: ${site:anken} px';\r\nvar s = ${site:anken};\r\n")  # CRLF kept
+        self.assertNotIn("L-REF-03", {i["rule"] for i in pls.lint(self.r)})       # the recorded reference covers it
+        rec = json.loads((self.r / "design/refs-literal.json").read_text(encoding="utf-8"))["reference"][0]
+        self.assertEqual((rec["number"], rec["context"], rec["by"]), ("797", "var s = 797;", "Nam"))
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)   # survives re-unpack
+        self.assertIn("var s = ${site:anken};", self.raw())
+        p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
+        self.assertIn("var s = 9001;", p["SiteSettings"]["Scripts"][0]["Body"])
+        # the decision was recorded with the dev number; an export of prod (id 9001) is read the same way
+        prod = self.r / "prod.json"
+        prod.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": p["SiteSettings"]["Scripts"][0]["Body"]}])
+                                   ).replace('"SiteId": 797', '"SiteId": 9001'), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(prod), "--env", "prod", "--site", "anken"]), 0)
+        self.assertIn("var s = ${site:anken};", self.raw())
 
     def test_keep_needs_a_real_context(self):
         with self.assertRaises(pls.Fail):

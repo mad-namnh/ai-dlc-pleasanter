@@ -1,9 +1,11 @@
 """Script tooling (plan BR7): syntax check, site ids inside script bodies, cross-reference index.
 
-Site ids inside scripts become ${site:x} in git (D3), so a script keeps working in another environment. A number
-that only looks like a site id (a coordinate, a constant inside a minified library) must stay literal: replacing it
-would change the code wherever the site has another id. Decimals are never ids (`4.797`). For other cases a person
-records the number in design/refs-literal.json — {"literal": [{"site", "number", "context", "reason", "by", "date"}]}.
+A site id written as a site id (`siteId === 797`, `SITE_ID", 116`, `/items/797/`, `[[797]]`) becomes ${site:x} in
+git (D3), so a script keeps working in another environment. Every other number stays as it is, even when it equals a
+site id: status codes, timings, colours and choice codes often do (PLAY BOARD trial), and rewriting them would change
+code that runs today. `pls refs` lists those numbers as POSSIBLE; a person decides, recorded in
+design/refs-literal.json — {"literal": [...], "reference": [...]}, entries {"site", "number", "context", "reason",
+"by", "date"}: `literal` keeps a number inside an id context, `reference` turns a number outside one into ${site:x}.
 A decision applies only to the **script bodies of that site** and only where the raw text contains the recorded
 context (contexts, not line numbers, so the decision survives edits elsewhere in the script).
 """
@@ -15,8 +17,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
-# (site, number) → contexts that keep it literal; loaded once per pls run from design/refs-literal.json
+# (site, number) → contexts that keep it literal / make it a reference; loaded once per pls run from
+# design/refs-literal.json
 LITERAL: dict[tuple[str, str], list[str]] = {}
+REFERENCE: dict[tuple[str, str], list[str]] = {}
 REF_TOKEN = re.compile(r"\$\{(site|env|principal):([A-Za-z0-9_\-]+)\}")
 MIN_CONTEXT = 8          # characters of a context besides the number itself
 
@@ -37,25 +41,55 @@ def check_context(context: str, number: str) -> str | None:
 
 def load_literal(project: Path) -> None:
     LITERAL.clear()
+    REFERENCE.clear()
     f = project / "design" / "refs-literal.json"
     if not f.exists():
         return
     try:
-        entries = json.loads(f.read_text(encoding="utf-8-sig")).get("literal") or []
-        for x in entries:
-            site, num, ctx = str(x["site"]), str(x["number"]), x["context"]
-            why = check_context(ctx, num)
-            if why:
-                raise ValueError(f"entry {num!r} for {site}: {why}")
-            LITERAL.setdefault((site, num), []).append(ctx)
+        doc = json.loads(f.read_text(encoding="utf-8-sig"))
+        for key in ("literal", "reference"):
+            for x in doc.get(key) or []:
+                site, num, ctx = str(x["site"]), str(x["number"]), x["context"]
+                why = check_context(ctx, num)
+                if why:
+                    raise ValueError(f"{key} entry {num!r} for {site}: {why}")
+                if key == "literal":            # a literal number is the same in every environment
+                    LITERAL.setdefault((site, num), []).append(ctx)
+                else:                           # a reference follows its target site: stored without the number
+                    if not x.get("target"):
+                        raise ValueError(f"reference entry {num!r} for {site}: 'target' (logical site) is missing")
+                    REFERENCE.setdefault(site, []).append((str(x["target"]), _template(ctx, num)))
     except (ValueError, KeyError, TypeError, AttributeError) as ex:
         LITERAL.clear()
+        REFERENCE.clear()
         raise ValueError(f"design/refs-literal.json: {ex}") from ex
 
 
+def _template(context: str, number: str) -> str:
+    """The context with its site id cut out: `{id}` stands where the number was (the first standalone occurrence)."""
+    m = re.search(id_pattern(number), context)
+    return context[:m.start()] + "{id}" + context[m.end():] if m else context
+
+
 def for_site(site: str | None) -> dict[str, list[str]]:
-    """number → contexts recorded for one site (empty for settings, meta and unknown sites)."""
+    """number → literal contexts recorded for one site (empty for settings, meta and unknown sites)."""
     return {num: ctx for (s, num), ctx in LITERAL.items() if s == site} if site else {}
+
+
+def references_for(site: str | None, ids: dict[str, str]) -> dict[str, list[str]]:
+    """number → reference contexts of one site, written with THIS environment's id of each target site (`ids`:
+    number → logical name), so a decision recorded on dev also holds for an stg or prod export."""
+    by_name = {name: num for num, name in ids.items()}
+    out: dict[str, list[str]] = {}
+    for target, tpl in REFERENCE.get(site, []) if site else []:
+        if target in by_name:
+            out.setdefault(by_name[target], []).append(tpl.replace("{id}", by_name[target]))
+    return out
+
+
+def reference_tokens(site: str | None) -> list[str]:
+    """Reference contexts of one site as they read in git (`${site:target}` where the number was)."""
+    return [tpl.replace("{id}", "${site:%s}" % target) for target, tpl in REFERENCE.get(site, [])] if site else []
 
 
 def id_pattern(number: str) -> str:
@@ -77,29 +111,82 @@ def _spans(s: str, contexts: list[str]) -> list[tuple[int, int]]:
     return out
 
 
-def replace_ids(s: str, ids: dict[str, str], literal: dict[str, list[str]] | None = None) -> str:
-    """Replace standalone site ids by ${site:x} in one pass over the original string, except inside contexts
-    recorded as literal (computed on the original text, so the result does not depend on the order of ids)."""
+# Text right before a number that makes it a site id. Anything else stays a literal number: in a real app (PLAY
+# BOARD) about 9 in 10 numbers equal to a site id were status codes, timings, colours, choice codes or prose.
+# A name that holds a site id: siteId, SiteId, getSiteId, SITE_ID, NOTIFICATION_SITE_ID, site_id, SITE_ID_DEFAULT —
+# not websiteId, siteIdx, SITE_IDLE_TIMEOUT (a camel-case or `_` boundary before "site", nothing but `_…` after "id").
+SITE_ID_NAME = r"(?:(?<![A-Za-z])site|Site|SITE)_?(?:Id|ID|id)(?:_\w*)?(?![A-Za-z0-9])"
+ID_CONTEXT = re.compile(r"""(?x)(?:
+      %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*["']?            # siteId === 797, siteId: 797, getSiteId(797
+    | %(name)s["']\s*[:,]\s*                                       # "SiteId": 797, 'NOTIFICATION_SITE_ID', 116
+    | (?<![\w.$])items\.[A-Z]\w*\(\s*                              # server script items.Get(797, …) — PascalCase API only
+    | \$p\.api\w*\(\s*\{[^()]{0,60}?(?<![\w$])["']?id["']?\s*:\s*  # client $p.apiGet({ … id: 797, … })
+    | /items/                                                      # /api/items/797/get
+    | items/["']\s*\+\s*                                            # '/api/items/' + 797
+    | \[\[                                                         # ChoicesText link [[797]]
+    | (?:Class|Num|Date|Description|Check|Attachments)\w*~          # linked column ClassA~797
+    )\Z""" % {"name": SITE_ID_NAME})
+# Text right after the number: 797 === $p.siteId(), 797 == siteId
+AFTER_CONTEXT = re.compile(r"""\A\s*(?:===?|!==?)\s*[\w$.]*?%s""" % SITE_ID_NAME)
+CONTEXT_REACH = 80        # characters looked at around the number (line breaks included: `items.Get(\n  797`)
+
+
+def in_id_context(s: str, start: int, end: int | None = None) -> bool:
+    """True when the number at s[start:end] is written as a site id (text before it, or a comparison after it)."""
+    if ID_CONTEXT.search(s[max(0, start - CONTEXT_REACH):start]):
+        return True
+    if end is None:
+        m = re.match(r"\d+", s[start:])
+        end = start + (m.end() if m else 0)
+    return bool(AFTER_CONTEXT.match(s[end:end + CONTEXT_REACH]))
+
+
+def _covered(spans: list[tuple[int, int]], m: re.Match) -> bool:
+    return any(a <= m.start() and m.end() <= b for a, b in spans)
+
+
+def replace_ids(s: str, ids: dict[str, str], literal: dict[str, list[str]] | None = None,
+                reference: dict[str, list[str]] | None = None) -> str:
+    """Replace site ids by ${site:x} where they are written as site ids: in an id context (ID_CONTEXT), or inside a
+    context a person recorded as a reference. A context recorded as literal always keeps the number. Every other
+    number stays as it is, so the deployed code is byte for byte the code that runs today (no rewriting of an
+    existing app). One pass over the original string, so the result does not depend on the order of ids."""
     if not ids:
         return s
-    literal = literal or {}
-    spans = {num: _spans(s, literal.get(num, [])) for num in ids}
+    literal, reference = literal or {}, reference or {}
+    keep = {num: _spans(s, literal.get(num, [])) for num in ids}
+    ref = {num: _spans(s, reference.get(num, [])) for num in ids}
     pat = re.compile("|".join(f"(?P<n{i}>{id_pattern(num)})" for i, num in enumerate(ids)))
     nums = list(ids)
 
     def sub(m: re.Match) -> str:
         num = nums[int(m.lastgroup[1:])]
-        if any(a <= m.start() and m.end() <= b for a, b in spans[num]):
+        if _covered(keep[num], m) or not (in_id_context(s, m.start(), m.end()) or _covered(ref[num], m)):
             return m.group(0)
         return "${site:%s}" % ids[num]
     return pat.sub(sub, s)
 
 
+def possible_ids(body: str, num: str) -> list[int]:
+    """Positions of a raw number equal to a site id that is NOT in an id context: left as it is, listed by
+    `pls refs` as POSSIBLE so a person can mark a real reference (`--ref`)."""
+    return [m.start() for m in re.finditer(id_pattern(num), body) if not in_id_context(body, m.start(), m.end())]
+
+
 def literal_left(body: str, num: str, literal: dict[str, list[str]] | None = None) -> list[int]:
-    """Positions of a raw id that is NOT covered by a literal decision (for lint L-REF-01)."""
+    """Positions of a raw id in an id context that is NOT covered by a literal decision (lint L-REF-01): a site id
+    written as a site id must be ${site:x}; numbers elsewhere are not ids unless a person says so."""
     spans = _spans(body, (literal or {}).get(num, []))
     return [m.start() for m in re.finditer(id_pattern(num), body)
-            if not any(a <= m.start() and m.end() <= b for a, b in spans)]
+            if in_id_context(body, m.start(), m.end()) and not _covered(spans, m)]
+
+
+def unstable_refs(body: str, site: str | None) -> list[str]:
+    """${site:x} tokens in a git body that the next unpack would turn back into numbers: outside an id context and
+    not covered by a recorded reference (lint L-REF-03). Fix: write it in an id context, or `pls refs --ref`."""
+    spans = _spans(body, reference_tokens(site))
+    return [m.group(2) for m in REF_TOKEN.finditer(body) if m.group(1) == "site"
+            and not in_id_context(body, m.start(), m.end()) and not _covered(spans, m)]
 
 
 def numeric_context(body: str, start: int, end: int) -> bool:

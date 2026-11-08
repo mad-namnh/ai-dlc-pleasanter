@@ -101,9 +101,9 @@ SAFE_NAME = re.compile(r"[a-z0-9][a-z0-9_\-]*")
 
 
 def script_id_uses(raw_scripts: dict, ids: dict[str, str]) -> list[str]:
-    """Every place where a managed site id appears inside a script body (it becomes ${site:x} in git, D3).
-    Numbers inside numeric data (coordinates, decimals, minified libraries) are flagged: they are probably
-    not site ids, and replacing them would change the code on another environment."""
+    """Every place where a number equal to a managed site id appears inside a script body. Written as a site id
+    (an id context) it becomes ${site:x} in git (D3); anywhere else it stays as it is and is listed as POSSIBLE, for
+    a person to mark it as a reference if it really is one (`pls refs --ref`)."""
     out = []
     for kind, items in raw_scripts.items():
         for it in items or []:
@@ -111,11 +111,10 @@ def script_id_uses(raw_scripts: dict, ids: dict[str, str]) -> list[str]:
             label = it.get("Name") or it.get("Title") or f"Id {it.get('Id')}"
             for sid, name in ids.items():
                 for m in re.finditer(SX.id_pattern(sid), body):   # the same rule as the replacement itself
-                    before = body[:m.start()].rstrip(" ")[-1:]
-                    after = body[m.end():].lstrip(" ")[:1]
-                    numeric = bool(re.match(r"[\d.,\-]", before or "")) or bool(re.match(r"[\d.]", after or ""))
                     line = body.count("\n", 0, m.start()) + 1
                     ctx = body[max(0, m.start() - 25):m.end() + 25].replace("\r", "").replace("\n", "⏎")
-                    out.append(f"{'SUSPICIOUS — numeric context; ' if numeric else ''}{kind} '{label}' line {line}: "
-                               f"{sid} → ${{site:{name}}} … `{ctx}`")
+                    if SX.in_id_context(body, m.start(), m.end()):
+                        out.append(f"{kind} '{label}' line {line}: {sid} → ${{site:{name}}} … `{ctx}`")
+                    else:
+                        out.append(f"POSSIBLE — kept as written; {kind} '{label}' line {line}: {sid} (= {name}?) … `{ctx}`")
     return out

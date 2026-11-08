@@ -17,7 +17,7 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 | Topic | Rule | Source |
 |---|---|---|
 | Ids | Never a numeric site, group or user id in a body: `${site:x}`, `${principal:x}`, `${env:x}`. `pls refs --site <s>` shows every site reference | D3, L-REF-01 |
-| Numbers that look like ids | Decimals are never replaced. Any other number that must stay literal is the person's decision (`pls refs --keep`) — tell them, never record it | BR7 |
+| Numbers that look like ids | Only numbers written as site ids (`…SiteId`/`SITE_ID` names, `items.X(`, `$p.api…({ id:`, `/items/`, `[[`, `~`) become `${site:x}`; every other number stays as the customer wrote it and `pls refs` lists it as POSSIBLE. Whether a POSSIBLE number is a site id (`pls refs --ref`) or a recognised one must stay literal (`--keep`) is the person's decision — tell them, never record it | BR7 |
 | Shared server scripts | No top-level `const`/`let` (`var` only): shared scripts are concatenated | D7, L-SCR-01 |
 | Time | A server script is cut off at ~10 s; external calls need a shorter timeout | KB fact 8 |
 | Errors to users | `context.Error('…')` with a short Japanese message rejects the save | D25 |
