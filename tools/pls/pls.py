@@ -873,11 +873,12 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         raise Fail(f"--accept-unverified must name the decision record (file not found: {accept_unverified})")
     if e.get("role") == "prod":
         print("note: production plans are executed by the customer-side runner (ADR-0003)")
+    gate_error = None                                  # reported together with every other refusal reason
     if e.get("role") != "dev":
         try:
             GT.require(r, "G3", release, f"a release plan for {env}")
         except GT.GateError as ex:
-            raise Fail(str(ex))
+            gate_error = str(ex)
     results, failed = {}, False
     for site, path in sorted(exports.items()):
         if site not in e["sites"]:
@@ -891,7 +892,9 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
             print(m)
         failed |= not ok
         results[site] = res
-    if failed:
+    if gate_error:
+        print(f"GATE {gate_error}")
+    if failed or gate_error:
         print("release plan REFUSED: no files written")
         return 1
     fresh = new_sites(r, env)

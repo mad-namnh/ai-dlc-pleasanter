@@ -176,14 +176,21 @@ class StgWriteTest(unittest.TestCase):
         self.assertTrue(self.writes(n))
 
     def test_release_plan_for_stg_needs_g3(self):
+        # refused with every reason at once (missing G3 is reported next to drift and other findings); nothing written
+        import contextlib
+        import io
         self.stg()
-        with self.assertRaisesRegex(pls.Fail, "G3 approval of R-20261108-09"):
-            pls.release_plan(self.r, "stg", "R-20261108-09", {}, None)
-        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
-        del envs["envs"]["stg"]["role"]                              # a missing role fails closed
-        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
-        with self.assertRaisesRegex(pls.Fail, "G3 approval"):
-            pls.release_plan(self.r, "stg", "R-20261108-09", {}, None)
+        for drop_role in (False, True):                              # a missing role fails closed
+            if drop_role:
+                envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+                del envs["envs"]["stg"]["role"]
+                (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(pls.release_plan(self.r, "stg", "R-20261108-09", {}, None), 1)
+            self.assertIn("G3 approval of R-20261108-09", out.getvalue())
+            self.assertIn("REFUSED", out.getvalue())
+            self.assertFalse((self.r / "releases/R-20261108-09/plan.json").exists())
 
 
 if __name__ == "__main__":
