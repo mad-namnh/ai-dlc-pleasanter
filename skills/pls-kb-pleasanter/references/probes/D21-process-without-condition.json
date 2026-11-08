@@ -1,6 +1,6 @@
 {
   "entry": "D21",
-  "title": "A process without a display condition cannot be run through the API (HTTP 500, nothing changed) (control: the same process with a display condition runs, HTTP 200). The run ends with a teardown that removes that process (a server error was seen when opening a record of this probe site; cause not established)",
+  "title": "A process without a display condition cannot be run through the API (HTTP 500, nothing changed) (control: the same process with a display condition runs, HTTP 200). The process has no View object at all, which also breaks opening the site's records in the UI, so the run ends with a teardown that removes it",
   "site": {
     "ReferenceType": "Issues",
     "SiteSettings": {

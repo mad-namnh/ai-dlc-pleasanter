@@ -39,7 +39,7 @@ Every entry here was **observed on a real environment** (version and evidence gi
 11. Permission value 1 (read) blocks writes and process execution (403), but **read-only users still see process buttons** whose display condition matches. To hide a button, set process access control (`Groups`/`Users`/`Depts` ID lists — environment-specific, map them with `${principal:x}`). *(1.5.2, D19, D20)*
 12. Adding or changing a **Summary** does not recalculate existing parents and there is no sync API; only touching a child recalculates its parent. A new summary is therefore data-impacting and needs a migration. *(1.5.2, D16)*
 13. Removing a column, choice or status **keeps the stored values** (hidden or orphaned). *(1.5.2, D12)*
-14. A process needs a **display condition** to be executable through the API (none → HTTP 500). *(1.5.2, D21; a UI error seen on the probe site is not explained yet)*
+14. Every process must carry a `View` object with its **display condition**: without `View`, API execution fails (HTTP 500) and opening the site's records fails with a server error. *(1.5.2, D21)*
 15. A column must be in `EditorColumnHash` to work at all (API, summaries, data changes). *(1.5.2, D22)*
 16. "No open child" via a conditional Count summary: filter `["\t","0"]` (never-linked parents are empty). Overdue lists: Issues view `Overdue`. *(1.5.2, D23, D24)*
 17. A user picker is `ChoicesText "[[Users*]]"`; records hold the user id as a string, which differs per environment. *(1.5.2, D28)*

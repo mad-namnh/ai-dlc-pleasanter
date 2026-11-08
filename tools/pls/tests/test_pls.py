@@ -97,13 +97,15 @@ class PlsTest(unittest.TestCase):
                             {"Id": 2, "Name": "none"},
                             {"Id": 3, "Name": "defaults-only", "View": {"Id": 0, "ApiDataType": 0, "ColumnFilterHash": {}}}]}
         self.assertEqual(pls.unconditioned_processes(ss), ["none", "defaults-only"])
+        self.assertEqual(pls.unconditioned_processes(ss, view_missing_only=True), ["none"])
         self.unpack_dev()
         p = self.r / "config/a/site.json"
         site = json.loads(p.read_text(encoding="utf-8"))
         site["Processes"] = ss["Processes"]
         p.write_text(json.dumps(site), encoding="utf-8")
         msgs = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PRC-01"]
-        self.assertEqual(len(msgs), 2)
+        self.assertEqual(len(msgs), 1)                    # only the process with no View object (D21)
+        self.assertIn("'none'", msgs[0])
 
     def test_canon_and_lint(self):
         self.unpack_dev()

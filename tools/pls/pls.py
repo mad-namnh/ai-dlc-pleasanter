@@ -454,13 +454,16 @@ def classify(diffs: list[dict]) -> dict:
 VIEW_DEFAULTS = {"Id", "ApiColumnKeyDisplayType", "ApiColumnValueDisplayType", "ApiDataType", "CalendarSiteId"}
 
 
-def unconditioned_processes(settings: dict) -> list[str]:
-    """Processes without a display condition: no View, or a View with nothing but defaults (D21: API execution fails with
-    HTTP 500)."""
+def unconditioned_processes(settings: dict, view_missing_only: bool = False) -> list[str]:
+    """Processes without a display condition. view_missing_only=True: only those with no View object at all (D21: API
+    execution fails with HTTP 500 and opening the site's records fails in the UI). Otherwise also those whose View holds
+    only defaults (works in the UI; API execution not verified)."""
     out = []
     for p in settings.get("Processes") or []:
-        view = p.get("View") if isinstance(p.get("View"), dict) else {}
-        if not {k: v for k, v in view.items() if k not in VIEW_DEFAULTS and v not in (None, {}, [], "")}:
+        view = p.get("View")
+        if not isinstance(view, dict):
+            out.append(str(p.get("Name") or p.get("DisplayName") or p.get("Id")))
+        elif not view_missing_only and not {k: v for k, v in view.items() if k not in VIEW_DEFAULTS and v not in (None, {}, [], "")}:
             out.append(str(p.get("Name") or p.get("DisplayName") or p.get("Id")))
     return out
 
@@ -513,10 +516,10 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
-        for name in unconditioned_processes(m["settings"]):   # L-PRC-01 (D21)
-            issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no display condition: it cannot be "
-                           "run or tested through the API (HTTP 500, D21) — give it a condition, at least the status it starts "
-                           "from (on an adopted site: a decision for the person, it changes when the button is shown)"})
+        for name in unconditioned_processes(m["settings"], view_missing_only=True):   # L-PRC-01 (D21)
+            issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no View object: API execution fails "
+                           "(HTTP 500) and opening the site's records fails in the UI (D21) — give it a View with its display "
+                           "condition, at least the status it starts from"})
         for proc in m["settings"].get("Processes") or []:
             for key, _ in ACL_KEYS:
                 for x in proc.get(key) or []:
@@ -997,8 +1000,9 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
                                                   "Links", "ServerScripts", "Scripts", "Styles", "Htmls", "DashboardParts")}
     extra = {
         "Literal mail addresses (L-MAIL-01)": [f"{p}: {a}" for p, a in SE.literal_addresses(ss)],
-        "Processes without a display condition (L-PRC-01, D21: not executable through the API — adding one is a decision)":
-            unconditioned_processes(ss),
+        "Processes with no View object (L-PRC-01, D21: API and record screen fail)": unconditioned_processes(ss, True),
+        "Processes whose View has no filter (works in the UI; API execution not verified)":
+            [x for x in unconditioned_processes(ss) if x not in unconditioned_processes(ss, True)],
         "Site ids inside script bodies (become ${site:x}; review every SUSPICIOUS line)": AD.script_id_uses(raw_scripts, ids_all),
     }
     if second_env:
