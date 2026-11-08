@@ -48,6 +48,15 @@ class PureTest(unittest.TestCase):
         self.assertEqual(len(SX.possible_ids(kept, "103")), 8)          # every 103 in `kept` is listed, none replaced
         self.assertEqual(SX.possible_ids(ids, "103"), [])
 
+    def test_possible_numbers_are_grouped_for_reading(self):
+        g = SX.possible_group
+        self.assertEqual(g("  // site 103 を変更しない"), "comment")
+        self.assertEqual(g("  pbWarn('[playboard][product-104] 失敗');"), "log or message text")
+        self.assertEqual(g("const CASE_INFLUENCER_STATUS_SELECTION = 103;"), "status or code value")
+        self.assertEqual(g("setTimeout(restoreHashtag, 120);"), "timing or retry")
+        self.assertEqual(g("box-shadow: 0 2px 8px rgba(103,58,183,.35);"), "colour or layout")
+        self.assertEqual(g("        return 797;"), "other")                       # a person has to read this one
+
     def test_look_alike_names_and_calls_are_not_contexts(self):
         s = ("this.items.splice(103, 1); cart.items.push(103); updateStatus(siteId, 103); SITE_IDLE_TIMEOUT = 103; "
              "websiteId = 103; siteIdx = 103; 期間 1~103 日")

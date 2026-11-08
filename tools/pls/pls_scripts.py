@@ -311,3 +311,24 @@ def xref(settings: dict, scripts: dict) -> dict:
             for c in cols:
                 by_column.setdefault(c, {"label": labels.get(c, ""), "scripts": []})["scripts"].append(f"{kind}/{name}")
     return {"scripts": by_script, "columns": dict(sorted(by_column.items()))}
+
+
+# ---------------------------------------------------------------- POSSIBLE numbers: grouping for display
+
+# Display groups for numbers equal to a site id that stay as written. A group never changes the code or a decision:
+# it only tells a person which lines need reading ("other") and which are almost certainly not site ids.
+POSSIBLE_GROUPS = (
+    ("comment", re.compile(r"^\s*(//|/\*|\*|<!--)")),
+    ("log or message text", re.compile(r"(console\.\w+|pbWarn|pbLog|logTag|log\w*\(|warn\(|error\(|\[playboard\])", re.I)),
+    ("status or code value", re.compile(r"STATUS|_CODE|CODES|Status\b|status\b|choice", re.I)),
+    ("timing or retry", re.compile(r"setTimeout|setInterval|sleep|delay|interval|timeout|retry|attempt|\bms\b", re.I)),
+    ("colour or layout", re.compile(r"rgba?\(|px\b|width|height|margin|padding|top|left|z-index|font", re.I)),
+)
+
+
+def possible_group(line: str) -> str:
+    """Display group of a POSSIBLE number from the text of its line; 'other' when nothing matches."""
+    for name, rx in POSSIBLE_GROUPS:
+        if rx.search(line):
+            return name
+    return "other"

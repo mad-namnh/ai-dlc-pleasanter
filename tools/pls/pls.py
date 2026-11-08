@@ -1178,7 +1178,7 @@ def refs_cmd(r: Path, a) -> int:
         uses = SX.site_refs(model["scripts"], resolve)
         for u in uses:
             print(f"{u['kind']}/{u['script']} line {u['line']}: ${{site:{u['site']}}} = {u['number']} … `{u['context']}`")
-        possible = 0
+        possible, groups = 0, Counter()
         for kind, items in model["scripts"].items():
             for it in items or []:
                 body = it.get("Body") or ""
@@ -1186,9 +1186,16 @@ def refs_cmd(r: Path, a) -> int:
                     for pos in SX.possible_ids(body, num):
                         possible += 1
                         ls, le = body.rfind("\n", 0, pos) + 1, body.find("\n", pos)
+                        group = SX.possible_group(body[ls:(le if le != -1 else len(body))])
+                        groups[group] += 1
+                        if a.summary and group != "other":
+                            continue                    # summary: only the lines a person has to read
                         ctx = body[max(ls, pos - 30):(le if le != -1 else len(body))][:70].replace("\r", "")
-                        print(f"POSSIBLE {kind}/{it.get('Name') or it.get('Title')} line {body.count(chr(10), 0, pos) + 1}: "
-                              f"{num} (= {name}?) … `{ctx}`")
+                        print(f"POSSIBLE [{group}] {kind}/{it.get('Name') or it.get('Title')} line "
+                              f"{body.count(chr(10), 0, pos) + 1}: {num} (= {name}?) … `{ctx}`")
+        LG.record_metric(references=len(uses), possible=possible, possible_groups=dict(groups))
+        if a.summary:
+            print("POSSIBLE by group: " + ", ".join(f"{g} {n}" for g, n in groups.most_common()))
         print(f"{a.site}: {len(uses)} site reference(s) in scripts; {possible} number(s) equal to a site id kept as "
               "written — mark a real one with --ref \"<context>\" --reason … --by <name>")
         return 0
@@ -2278,6 +2285,7 @@ def _main(argv=None) -> int:
     s.add_argument("--env", default="dev", help="environment whose ids are shown (default dev)")
     s.add_argument("--keep", metavar="CONTEXT", help="text around the number, as printed by `pls refs` (number included)")
     s.add_argument("--ref", metavar="CONTEXT", help="a POSSIBLE number that is a real site id: text around it, as printed")
+    s.add_argument("--summary", action="store_true", help="group POSSIBLE numbers; print only the group 'other' line by line")
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
     s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")
