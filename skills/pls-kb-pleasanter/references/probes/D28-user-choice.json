@@ -1,0 +1,50 @@
+{
+  "entry": "D28",
+  "title": "[[Users*]] user choice is stored as given; records hold the user id as a string",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "ClassA",
+          "LabelText": "担当者",
+          "ChoicesText": "[[Users*]]"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "ClassA"
+        ]
+      }
+    }
+  },
+  "expect_stored": {
+    "Columns[ColumnName=ClassA].ChoicesText": "[[Users*]]"
+  },
+  "tests": [
+    {
+      "id": "D28",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D28",
+            "ClassHash": {
+              "ClassA": "$admin_uid"
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "ClassHash.ClassA": "$admin_uid"
+          }
+        }
+      ]
+    }
+  ]
+}

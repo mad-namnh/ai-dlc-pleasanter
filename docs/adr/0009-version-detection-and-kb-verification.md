@@ -1,6 +1,6 @@
 # ADR-0009: Pleasanter version detection and executable KB verification
 
-- **Status:** Proposed (2026-11-05) — part 1 (version label) implemented on branch `brownfield-adr` (plan BR2)
+- **Status:** Proposed (2026-11-05) — part 1 (version label, BR2) and part 2 (`kb-verify`, BR8) implemented on branch `brownfield-adr`
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** I5, I9; KB `pls-kb-pleasanter` (every entry says "1.5.2"); D8 (canonicalisation); ADR-0001; plan Step 4c
@@ -57,6 +57,15 @@ A version difference can silently break a design that relies on a KB entry (e.g.
 - Not built: a reader of `/versions` through the browser runner (session) — possible later if typing the label proves error-prone. Points 2–6 (KB `verified_on`, `kb-verify`, canonical defaults per schema) are plan BR8.
 - `tools/pls/pls_version.py`, 10 tests in `tests/test_version.py`. An independent code review found eight gaps (stale label kept when the token is missing — high; schema change not resetting the label; http-check silent when nothing was verified; exceptions other than `OSError`; …); all fixed and tested. First real run on MADLAB dev: build `201520`, schema `1.017`, app label pending.
 - Open: does `SiteSettings.Version` differ between sites of one installation (lazy migration)? If so, the reported schema depends on which site is read first — probe after the next upgrade.
+
+### Implementation notes (BR8, 2026-11-08)
+
+- Probes: `skills/pls-kb-pleasanter/references/probes/<entry>-<topic>.json` — the probe site's configuration, the expected HTTP of the save, expected stored settings (`null` = dropped, D8), and test steps in the `pls test` format. First set: D8, D10, D21, D24, D27, D28, D30 (a pair: with and without `View`, so an unrelated refusal cannot pass as D30). Probes never contain notifications or reminders (refused on load).
+- `verified_on` lives in `references/probes/index.json` per entry instead of a column in `behaviours.md` (one place for the tool and the skills to read).
+- `pls kb-verify --env <dev env> [--yes]`: dev only, never a sandbox; probe sites under `values.kb_probe_parent` (a folder the person creates and records); one site per probe, created once and reused (`.pls/kb-probes-<env>.json`); writes `ops/kb-verify/<date>-<env>.md/.json` with pass/fail per probe for the environment's recorded version, and the entries that have no probe. Updating `index.json` from a report is a framework change (I9), done by a person or with their review.
+- Safety after code review: a probe site is reused only when getsite shows it is provably the probe's own (folder, title `zz_kbprobe_<name>`, type, not an app site) and the state file names the same server and folder — otherwise nothing is written; the probe folder must be a folder of its own (not 0, not the app's folder or sites); probes are confined to their own site and records (no `site`, `run_on`, `as_key`, `vars`; ops create/get/list/exec) and refused when they contain notifications at any depth or server scripts; the admin principal must be `User,<id>`; each probe failure is recorded per probe (`error` → exit 2). Probe validity: positive controls in D8 and D27, D10 runs from any status so only the display condition refuses, D21 has a control process with a condition, D24 uses the server's date and closes its records, D30's 500 probe is `inconclusive` when its control fails; an entry passes only when all its probes pass; `Version` and `ReferenceType` are sent inside SiteSettings as in releases.
+- Not covered by probes yet: entries that need a second user or role key (D19, D20), several sites (D16, D23), data migration (D13, D14, D18), scripts (D7, D25), packages (D3, D6) — they keep their written evidence.
+- Not built: `canonical-defaults.json` keyed by schema version (point 6) — needed when two schema versions are in use.
 
 ## Consequences
 

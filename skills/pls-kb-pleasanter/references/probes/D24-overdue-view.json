@@ -1,0 +1,104 @@
+{
+  "entry": "D24",
+  "title": "Issues view Overdue lists records not completed whose 完了 is before today; due today is not overdue",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Views": [
+        {
+          "Id": 1,
+          "Name": "overdue",
+          "Overdue": true
+        }
+      ],
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "close",
+          "DisplayName": "完了",
+          "CurrentStatus": -1,
+          "ChangedStatus": 900,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "id": "D24",
+      "steps": [
+        {
+          "op": "create",
+          "save": "late",
+          "data": {
+            "Title": "kbprobe D24 late",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$yesterday"
+          }
+        },
+        {
+          "op": "create",
+          "save": "due",
+          "data": {
+            "Title": "kbprobe D24 due",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today"
+          }
+        },
+        {
+          "op": "list",
+          "view": {
+            "Overdue": true
+          },
+          "contains": [
+            "$late"
+          ],
+          "excludes": [
+            "$due"
+          ]
+        },
+        {
+          "op": "exec",
+          "record": "$late",
+          "process": "close",
+          "expectHttp": 200
+        },
+        {
+          "op": "exec",
+          "record": "$due",
+          "process": "close",
+          "expectHttp": 200
+        },
+        {
+          "op": "list",
+          "view": {
+            "Overdue": true
+          },
+          "excludes": [
+            "$late"
+          ]
+        }
+      ]
+    }
+  ],
+  "server_dates": true
+}

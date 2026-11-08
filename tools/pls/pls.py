@@ -57,6 +57,7 @@ import pls_adopt as AD                                      # noqa: E402 — ado
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
 import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
+import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -1864,6 +1865,116 @@ def http_cmd(r: Path, a) -> int:
             print(f"results: {out}")
             return 0 if all(t["status"] in ("pass", "pass-api-only") for t in res["tests"]) else 1
 
+        if a.cmd == "kb-verify":
+            e = env_conf(r, a.env)
+            if e.get("role") != "dev" or e.get("sandbox_of"):
+                raise H.TransportError("kb-verify creates probe sites: only on a dev environment (not a sandbox)")
+            parent = str((e.get("values") or {}).get("kb_probe_parent") or "")
+            app_ids = {int(v["id"]) for v in e["sites"].values() if v.get("id")} | {int(e.get("parent_id") or 0)}
+            if not parent.isdigit() or int(parent) == 0 or int(parent) in app_ids:
+                raise H.TransportError(f"envs.{a.env}.values.kb_probe_parent: the id of a folder for probe sites only, created and "
+                                       "recorded by a person — not 0, not the app's folder or one of its sites (ADR-0009)")
+            parent_i = int(parent)
+            try:
+                uid = KV.admin_uid(e.get("principals"))
+            except ValueError as ex:
+                raise H.TransportError(str(ex))
+            _, conn, c = _client(r, a.env)
+            H.assert_writable(e, conn, a.env)
+            st_, js, _ = c.call(f"/api/items/{parent_i}/getsite")
+            if st_ != 200 or ((js or {}).get("Response") or {}).get("Data", {}).get("ReferenceType") != "Sites":
+                raise H.TransportError(f"kb_probe_parent {parent_i} is not a folder this key can read (HTTP {st_})")
+            kb = FRAMEWORK / "skills" / "pls-kb-pleasanter"
+            try:
+                probes = KV.load_probes(kb)
+            except (OSError, ValueError, KeyError) as ex:
+                raise H.TransportError(f"probes: {ex}")
+            if not _confirm("kb-verify", a.yes, f"kb-verify writes {len(probes)} probe site(s) and test records under folder "
+                                                f"{parent_i} in {a.env} ({conn['url']})"):
+                return 1
+            state_f = r / ".pls" / f"kb-probes-{a.env}.json"
+            state = rj(state_f) if state_f.exists() else {}
+            if state.get("url") != conn["url"] or state.get("parent") != parent_i:
+                state = {"url": conn["url"], "parent": parent_i, "sites": {}}     # another server or folder: never reuse
+            schema = (e.get("pleasanter") or {}).get("schema") or 1.017
+            rows, results = [], {}
+            for p in probes:
+                name, rt, log, status = p["_name"], p["site"]["ReferenceType"], [], "pass"
+                row = {"entry": p["entry"], "probe": name, "status": "pass", "log": log}
+                try:
+                    sid = state["sites"].get(name)
+                    if sid:
+                        code, sjs, _ = c.call(f"/api/items/{sid}/getsite")
+                        if code == 404:
+                            sid = None
+                        elif code != 200:
+                            raise H.TransportError(f"getsite {sid} → HTTP {code}")
+                        elif not KV.is_own_probe_site(sjs["Response"]["Data"], name, rt, parent_i, app_ids):
+                            raise H.TransportError(f"site {sid} in the state file is not this probe's site (folder, title or type "
+                                                   f"differ) — nothing written; check .pls/kb-probes-{a.env}.json")
+                    if not sid:
+                        code, cjs, text = c.call(f"/api/items/{parent_i}/createsite",
+                                                 {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": {}})
+                        if code != 200 or not (cjs or {}).get("Id"):
+                            raise H.TransportError(f"createsite → HTTP {code}")
+                        sid = int(cjs["Id"])
+                        state["sites"][name] = sid
+                        wj(state_f, state)
+                    row["site_id"] = sid
+                    settings = {"Version": schema, "ReferenceType": rt, **(p["site"].get("SiteSettings") or {})}
+                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
+                                                                       "Body": "", "SiteSettings": settings})
+                    want = p.get("expect_save", 200)
+                    ok = code == want
+                    log.append(f"{'ok' if ok else 'NG'} save → HTTP {code} (expected {want})")
+                    status = status if ok else "fail"
+                    if ok and code == 200:
+                        data = c.export_site(sid)["Response"]["Data"]
+                        for path, exp in (p.get("expect_stored") or {}).items():
+                            act = KV.get_path(data["SiteSettings"], path)
+                            good = H._check(act, exp)
+                            log.append(f"{'ok' if good else 'NG'} stored {path} = {json.dumps(act, ensure_ascii=False)}")
+                            status = status if good else "fail"
+                        server_day = None
+                        if p.get("server_dates"):
+                            server_day = datetime.fromisoformat(str(data["UpdatedTime"])[:19]).date()
+                            log.append(f"server date {server_day}")
+                        vars_ = KV.date_vars(server_day) | {"admin_uid": uid}
+                        specs = [dict(t, vars=dict(vars_)) for t in p.get("tests") or []]
+                        if specs:
+                            res = H.run_tests(lambda role: c, sid, specs, a.env)
+                            for t in res["tests"]:
+                                log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
+                                if t["status"] not in ("pass", "pass-api-only"):
+                                    status = "fail"
+                except (H.TransportError, KeyError, TypeError, ValueError) as ex:
+                    status = "error"
+                    log.append(str(ex))
+                row["status"] = status
+                results[name] = status
+                rows.append(row)
+            for row in rows:                                         # a probe whose control failed proves nothing
+                ctl = next((p.get("control") for p in probes if p["_name"] == row["probe"]), None)
+                if ctl and results.get(ctl) != "pass" and row["status"] == "pass":
+                    row["status"] = "inconclusive"
+                    row["log"].append(f"control {ctl} did not pass")
+            entries = set(re.findall(r"^\| (D\d+) \|", (kb / "references" / "behaviours.md").read_text(encoding="utf-8"), re.M))
+            no_probe = sorted(entries - {x["entry"] for x in rows}, key=lambda d: int(d[1:]))
+            today = datetime.now().astimezone().date().isoformat()
+            out = r / "ops" / "kb-verify" / f"{today}-{a.env}.md"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(KV.report(a.env, e.get("pleasanter"), rows, no_probe, today), encoding="utf-8")
+            wj(out.with_suffix(".json"), {"env": a.env, "pleasanter": e.get("pleasanter"), "date": today, "probes": rows,
+                                          "entries": KV.entry_results(rows), "without_probe": no_probe})
+            for x in rows:
+                print(f"{x['status']:12} {x['entry']:4} {x['probe']}")
+            ent = KV.entry_results(rows)
+            print(f"{sum(v == 'pass' for v in ent.values())}/{len(ent)} entries verified on {a.env} "
+                  f"(Pleasanter {(e.get('pleasanter') or {}).get('app', 'unknown')}) → {out.relative_to(r)}")
+            if any(x["status"] == "error" for x in rows):
+                return 2
+            return 0 if all(v == "pass" for v in ent.values()) else 1
+
         if a.cmd == "adopt":
             adopt_check_name(a.name)
             env_conf(r, a.env)
@@ -1997,6 +2108,9 @@ def main(argv=None) -> int:
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
     s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s = sp.add_parser("kb-verify", help="run the KB probes on a dev environment (creates probe sites in values.kb_probe_parent)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--yes", action="store_true", help="skip the typed confirmation (only when the person allowed it)")
     s = sp.add_parser("adopt", help="read-only: bring an existing site into this project (config, ledger, drift baseline, report)")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True, type=int, help="id of the existing site")
@@ -2108,7 +2222,7 @@ def main(argv=None) -> int:
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
 
-    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt"):
+    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt", "kb-verify"):
         return http_cmd(r, a)
 
     if a.cmd == "refs":

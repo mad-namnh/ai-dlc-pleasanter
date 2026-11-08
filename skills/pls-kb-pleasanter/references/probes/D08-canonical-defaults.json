@@ -1,0 +1,35 @@
+{
+  "entry": "D8",
+  "title": "Default-valued attributes are dropped on save (Issues: CompletionTime required, Status DefaultInput 100)",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "CompletionTime",
+          "ValidateRequired": true
+        },
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed",
+          "DefaultInput": "100"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      }
+    }
+  },
+  "expect_stored": {
+    "Columns[ColumnName=CompletionTime].ValidateRequired": null,
+    "Columns[ColumnName=Status].DefaultInput": null,
+    "Columns[ColumnName=Status].ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed",
+    "EditorColumnHash.General.4": "CompletionTime"
+  }
+}

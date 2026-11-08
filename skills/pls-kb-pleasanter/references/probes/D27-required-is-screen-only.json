@@ -1,0 +1,47 @@
+{
+  "entry": "D27",
+  "title": "ValidateRequired is a screen setting: an API create without the column succeeds",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "ClassA",
+          "LabelText": "必須項目",
+          "ValidateRequired": true
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "ClassA"
+        ]
+      }
+    }
+  },
+  "tests": [
+    {
+      "id": "D27",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D27"
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Title": "kbprobe D27"
+          }
+        }
+      ]
+    }
+  ],
+  "expect_stored": {
+    "Columns[ColumnName=ClassA].ValidateRequired": true
+  }
+}

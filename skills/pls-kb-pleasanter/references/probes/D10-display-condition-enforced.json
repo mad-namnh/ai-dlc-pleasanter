@@ -1,0 +1,73 @@
+{
+  "entry": "D10",
+  "title": "A process run through the API outside its display condition is refused with HTTP 400",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "close",
+          "DisplayName": "完了",
+          "CurrentStatus": -1,
+          "ChangedStatus": 900,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "id": "D10",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D10",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "close",
+          "expectHttp": 200
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 900
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "close",
+          "expectHttp": 400
+        }
+      ]
+    }
+  ]
+}

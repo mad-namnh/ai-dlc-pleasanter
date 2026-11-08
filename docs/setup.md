@@ -62,6 +62,8 @@ python pls.py http-check --env dev
 
 **Pleasanter version (ADR-0009).** Run `python pls.py version --env dev` once. It detects the build and the settings schema by itself. The application version is only shown to a logged-in user, so open `<url>/versions` in your browser and record what it says: `python pls.py version --env dev --app 1.5.2.0`. When the server is upgraded, `http-check` warns that the build changed; run `version` again.
 
+**KB verification (optional, ADR-0009).** To re-check the knowledge base on your Pleasanter version: create a folder for probe sites, put its id in `environments.json` → `envs.dev.values.kb_probe_parent`, then `python pls.py kb-verify --env dev`. It creates one small probe site per probe once and reuses them.
+
 **Mail and scheduled jobs (ADR-0010).** Notifications and reminders send mail when tests change records on dev. `environments.json` therefore says what each environment does with mail and jobs: `"side_effects": {"mail": "unknown", "jobs": "unknown"}`. While mail is `unknown`, `pls test` refuses tests that change records on a site with notifications or reminders, and `pls apply` refuses a release that adds or changes them. Ask whoever runs the Pleasanter server whether SMTP is configured, then set the value yourself:
 
 | `mail` | Meaning |

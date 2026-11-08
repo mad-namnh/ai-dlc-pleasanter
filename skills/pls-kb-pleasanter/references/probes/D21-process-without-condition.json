@@ -1,0 +1,89 @@
+{
+  "entry": "D21",
+  "title": "A process without a display condition cannot be run through the API (HTTP 500, nothing changed) (control: the same process with a display condition runs, HTTP 200)",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "noview",
+          "DisplayName": "完了",
+          "CurrentStatus": 100,
+          "ChangedStatus": 900
+        },
+        {
+          "Id": 2,
+          "Name": "withview",
+          "DisplayName": "完了",
+          "CurrentStatus": 100,
+          "ChangedStatus": 900,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "tests": [
+    {
+      "id": "D21",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D21",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "noview",
+          "expectHttp": 500
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 100
+          }
+        },
+        {
+          "op": "create",
+          "save": "r2",
+          "data": {
+            "Title": "kbprobe D21 control",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r2",
+          "process": "withview",
+          "expectHttp": 200
+        }
+      ]
+    }
+  ]
+}

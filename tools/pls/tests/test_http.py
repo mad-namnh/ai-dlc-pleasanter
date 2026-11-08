@@ -62,7 +62,7 @@ class Fake:
         if act == "createsite":
             self.next_id += 1
             self.sites[self.next_id] = {"SiteId": self.next_id, "Title": body["Title"], "ReferenceType": body["ReferenceType"],
-                                        "UpdatedTime": "t0", "SiteSettings": {}}
+                                        "ParentId": iid, "UpdatedTime": "t0", "SiteSettings": {}}
             return 200, {"Id": self.next_id}
         if act == "create":
             if who == "staff":

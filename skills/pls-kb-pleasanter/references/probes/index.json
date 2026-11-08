@@ -1,0 +1,188 @@
+{
+  "_doc": "verified_on per KB entry (ADR-0009). Entries with a probe are re-verified by `pls kb-verify --env <dev env>`; the others rest on the evidence written in the entry. Update after each kb-verify report (I9).",
+  "entries": {
+    "D3": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D4": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D5": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D7": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D8": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D08-canonical-defaults"
+      ]
+    },
+    "D9": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D10": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D10-display-condition-enforced"
+      ]
+    },
+    "D11": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D12": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D13": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D14": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D15": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D16": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D17": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D18": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D19": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D20": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D21": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D21-process-without-condition"
+      ]
+    },
+    "D22": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D23": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D24": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D24-overdue-view"
+      ]
+    },
+    "D25": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D26": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D27": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D27-required-is-screen-only"
+      ]
+    },
+    "D28": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D28-user-choice"
+      ]
+    },
+    "D29": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    },
+    "D30": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D30-dashboard-part-with-view",
+        "D30-dashboard-part-without-view"
+      ]
+    },
+    "D31": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": []
+    }
+  }
+}

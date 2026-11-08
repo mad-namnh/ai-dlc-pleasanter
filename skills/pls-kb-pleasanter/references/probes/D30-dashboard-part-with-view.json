@@ -1,0 +1,27 @@
+{
+  "entry": "D30",
+  "title": "A timeline dashboard part with View saves (control for the probe without View)",
+  "site": {
+    "ReferenceType": "Dashboards",
+    "SiteSettings": {
+      "DashboardParts": [
+        {
+          "Id": 1,
+          "Title": "kbprobe",
+          "Type": 1,
+          "X": 0,
+          "Y": 0,
+          "Width": 6,
+          "Height": 10,
+          "TimeLineSites": "",
+          "TimeLineTitle": "[Title]",
+          "TimeLineBody": "[Body]",
+          "TimeLineItemCount": 10,
+          "TimeLineDisplayType": 2,
+          "View": {}
+        }
+      ]
+    }
+  },
+  "expect_save": 200
+}
