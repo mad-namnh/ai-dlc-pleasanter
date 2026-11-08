@@ -6,11 +6,27 @@ Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 
 ## Current state — 2026-11-08 (read first)
 
-- `main` (= GitHub) is the **demo baseline**; do not commit there unless Nam asks.
-- All brownfield work is on the **local branch `brownfield-adr`** (not pushed): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
-- Tests: 158 Python + 6 node, plus a write-path inventory test (`tools/pls/tests/test_write_guards.py`).
-- Architecture audit after BR9: ready with conditions; fixes on the branch: template `.gitattributes`, docs refreshed, `pls gate` (I4), test/skill clarifications.
-- Next: onboarding of the first real project on dev with `pls init <name> --origin existing --stage project --target stg`; Nam accepts ADR-0009/0010/0011 after that run.
+**Resume in a new session / another account:** everything is in this repository; nothing lives only in a chat.
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, **never push** unless Nam asks).
+2. Read this section, then `docs/plan.md` Step 4c and its decision log, then `docs/reviews/architecture-audit-2026-11-08.md`.
+3. Check: `cd tools/pls && python -m unittest discover -s tests` (158 OK) and `node tests/test_runner.mjs` (6 pass).
+4. Switch back to `main` when done: `demo-equipment` runs the framework working tree and must stay on the demo baseline.
+
+**State**
+- `main` (= GitHub `34188a5`) is the **demo baseline**; do not commit there unless Nam asks.
+- Branch `brownfield-adr` (last commit: `pls gate`): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
+- Tests: 158 Python + 6 node; write-path inventory test (`test_write_guards.py`); gate records (`test_gate.py`).
+- Audit after BR9: ready with conditions. Fixed on the branch: template `.gitattributes`, docs refreshed, `exec` expects 200, request `timeout`, socket cleanup, **`pls gate`** (I4 checked by the tool: profile approvers, L-GATE-01, G3/G4 records needed for non-dev plan/apply/bootstrap).
+- Local project `pls-adopt-797` (sibling folder, not in git remote): trial adopt of site 797, read only. `demo-equipment`: released demo, local only, never pushed.
+
+**Rules that hold (Nam's decisions)**
+- Site 797 and any customer site: read only. Customer site packages / exports never go into git (keep them in the project's `.pls/`).
+- Commit by explicit paths, never `git add -A`. Writes only to dev; `--yes` only for the target Nam names. Agents never delete Pleasanter sites; Nam deletes them.
+
+**Next**
+1. Onboarding of the first real project on dev (Nam deploys it first): `pls init <name> --origin existing --stage project --target stg`, then skill `pls-x-onboarding`. Projects created before `pls gate` get L-GATE-01 for past approvals: Nam confirms them again (see lifecycle `references/gates.md`).
+2. After that run: Nam decides ADR-0009/0010/0011 (Proposed).
+3. Later (not started): split `http_cmd` (audit F-06); structured L-LAD-01 (F-08); jobs guard if dev runs jobs; tie a G4 record to an environment; browser e2e runner decision (`pls-p4-e2e-tester`); KB probes for D16/D19/D20/D23; daily drift.
 
 ## What this is
 
