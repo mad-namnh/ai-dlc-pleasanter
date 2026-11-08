@@ -283,6 +283,9 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
 | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
 | `pls sandbox` / `harvest` / `merge-site` / `merge-install` | P3 (several developers) | Per-developer sandbox environments, UI edits back into git, semantic merge of `site.json` (ADR-0011) | branch |
+| `pls adopt-package` | onboarding | Every site of a UI site package in one read-only run (names from the project or a person's file) | branch |
+| `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
+| `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4 | branch |
 
 ### 7.2 Lint rule catalogue (seeded from findings)

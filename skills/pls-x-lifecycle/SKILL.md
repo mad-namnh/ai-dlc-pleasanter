@@ -66,6 +66,11 @@ Tell the user in two or three lines where the project stands and what comes next
    - Read `config/<site>/site.json` by section (the part you change), not end to end, once it is large.
    - Use HTTP `pls` commands. The browser runner and base64 transfers are a fallback only when no network path exists, and only after telling the person why.
    - Do not repeat earlier output back to the person. Summarise.
+   - Prefer the summary forms: `pls lint --summary`, `pls refs --site <s> --summary`; the full list only for the lines you act on.
+   - **One Claude Code session per change request.** The state lives in the repository (`requirements/`, `design/`, `gates/`, `releases/`, `ops/log/`); a new session reads it with section 1. A long session re-reads its whole context on every turn (ADR-0013: 88 % of a day's tokens).
+   - Ask the gates of one release together when the evidence is ready (e.g. G4 of one release with G1/G2 of the next); each is still recorded on its own with `pls gate`.
+   - Mechanical filling that a tool checks afterwards (as-is tables, grouping) may run on a smaller model; design, impact analysis and framework reviews stay on the strongest model.
+9. **Log every step (ADR-0013).** At the start of each step run `pls step <phase> "<what starts>"` (phases: onboarding, P1–P6, G1–G4, other). Every `pls` command is logged by itself in `ops/log/`. Before the commit that ends a phase, run `pls usage collect` and commit `ops/log/` and `ops/usage/` with it; `pls usage report --by step` shows the cost of the change request.
 
 ## 3. Phases
 

@@ -15,6 +15,8 @@ description: Writes the as-is specification (画面設計書, Japanese) of an ad
 
 ## Output
 
+Start with `pls spec-skeleton --site <site>`: it writes `design/as-is/<site>.md` with every table below filled from the configuration. **Do not edit the tables.** Write only the places marked with an `AI:` HTML comment (overview, one or two sentences per script, 未確認事項), reading each script by searching it, not end to end. Write a document only for a site a change request touches.
+
 `design/as-is/<site>.md`, in **Japanese** (it is read by the customer), headings:
 
 1. 概要 — サイト名、種類 (記録/期限付き/ダッシュボード)、リンク元・リンク先サイト

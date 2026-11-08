@@ -26,7 +26,7 @@ The app is already on dev from P3/P4. The release makes that state official.
 
    Drift here means someone changed dev after P4. Explain it and ask the person. Do not release over it.
 2. **Release id:** the last applied dev release (`R-YYYYMMDD-NN-dev`). The record goes into its folder.
-3. **Write `diff-report.md`** (template). The raw changes are the `raw-diff-<site>.md` files written by `release-plan` for each dev release since the previous released state. For a new app that means since the skeletons.
+3. **Write `diff-report.md`** (template) — only the Japanese summary; `release-plan` already wrote the operator part as `diff-report.operator.md`. The raw changes are the `raw-diff-<site>.md` files written by `release-plan` for each dev release since the previous released state. For a new app that means since the skeletons.
 4. **Write `approvals.md`** with G1–G3 filled in from the existing records and G4 pending. **Stop at G4.**
 5. After G4:
    - record the approval;
@@ -40,7 +40,7 @@ The app is already on dev from P3/P4. The release makes that state official.
    - **Refused for drift:** explain it and ask the person. Planning over drift needs a decision record (`ops/drift/…`) passed as `--accept-drift`.
    - **Refused for slots:** go back to P2.
    - **Data-impacting without a migration:** go back to P2/G2. Migrations run through the browser runner today; tell the person.
-2. **Write `diff-report.md`** from `raw-diff-<site>.md` and `plan.json` (order, classification, rollback). Write `approvals.md`. **Stop at G4.**
+2. **Write `diff-report.md`** — the Japanese summary only — from `raw-diff-<site>.md`; the operator part (order, classification, checks, rollback) is `diff-report.operator.md`, written by `release-plan`. Write `approvals.md`. **Stop at G4.**
 3. After G4 — recorded with `pls gate G4 --release R-… [--release B-…]`; `apply` and `bootstrap` on stg refuse without it — the person runs `pls apply R-…`, or tells you to use `--yes` for that target.
    - It runs a preflight on `UpdatedTime`, applies in order and restores every touched site on failure. Then it exports and runs `mark-applied`.
    - `mark-applied` must report 0 differences. Otherwise stop: the release is applied but not verified. Explain the differences and fold them back (P3 step 6) with the person's agreement.
