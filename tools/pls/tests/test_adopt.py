@@ -189,6 +189,24 @@ class PackageTest(unittest.TestCase):
         self.assertTrue((self.r / "config/anken/site.json").exists())
         self.assertFalse((self.r / "config/draft").exists())                              # refused: secret (I7)
 
+    def test_an_unexpected_error_on_one_site_is_reported_and_the_others_continue(self):
+        pkg = self.sites()
+        names = self.r / ".pls/names.json"
+        names.write_text(json.dumps({"910": "anken", "911": "kigyo", "下書き": None, "900": "app"}), encoding="utf-8")
+        real = pls.adopt
+
+        def flaky(r, env, name, exp, today, stamp):
+            if name == "kigyo":
+                raise KeyError("SiteSettings")
+            return real(r, env, name, exp, today, stamp)
+        pls.adopt = flaky
+        try:
+            self.assertEqual(pls.main(["adopt-package", "--env", "dev", "--package", str(pkg), "--names", str(names)]), 1)
+        finally:
+            pls.adopt = real
+        self.assertTrue((self.r / "config/anken/site.json").exists())
+        self.assertFalse((self.r / "config/kigyo").exists())
+
     def test_second_environment_reuses_names_by_title(self):
         pkg = self.sites()
         names = self.r / ".pls/names.json"
