@@ -64,6 +64,7 @@ import pls_gate as GT                                       # noqa: E402 — gat
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
+import pls_report as RP                                     # noqa: E402 — operator part of the release report
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -957,6 +958,8 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         if eff["mail"] == "unknown":
             print(f"note: envs.{env}.side_effects.mail is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
     LG.record_metric(sites=len(order), changes=sum(p["changes"] for p in per_site.values()), classification=worst)
+    (rel / "diff-report.operator.md").write_text(
+        RP.operator_report(plan, {n: c.get("title") or n for n, c in e["sites"].items()}), encoding="utf-8")
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
           + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
     return 0

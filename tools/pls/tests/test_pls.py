@@ -258,6 +258,9 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(plan["sites"], ["b", "a"])                      # a references b → b first
         self.assertEqual([x["site"] for x in plan["rollback"]], ["a", "b"])
         self.assertEqual(plan["per_site"]["a"]["depends_on"], ["b"])
+        op = (self.r / "releases/R1/diff-report.operator.md").read_text(encoding="utf-8")   # written by the tool
+        self.assertIn("| Order | b → a", op)
+        self.assertIn("## Checks per site", op)
         self.assertEqual(plan["per_site"]["b"]["snapshot_updated_time"], "t-stg-b")
         for f in ("payload-a.json", "payload-b.json", "rollback-a.json", "rollback-b.json", "raw-diff-a.md", "raw-diff-b.md"):
             self.assertTrue((rel / f).exists(), f)
