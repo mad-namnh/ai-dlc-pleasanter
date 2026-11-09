@@ -45,3 +45,10 @@ The browser was needed only because the agent sandbox had no network path to Ple
 
 - A role test run with another role's key does damage: refusals it expects succeed (a fixture was deleted). `pls test` and `pls http-check` now refuse/warn when two roles resolve to the same key.
 - Fixtures belong in the spec, created with the 総務 key by step-level `as_key`, so a run never depends on IDs typed by hand.
+
+## Open questions (2026-11-09, recovery states)
+
+`apply` and `mark-applied` now read sites back after a failure. Each site is classified as applied, not applied or differs, and a failure never ends in an applied state. Two Pleasanter 1.5.x behaviours are assumed and not yet probed:
+
+1. **`updatesite` is atomic.** A write that times out is either fully stored or not stored at all. If it can store part of a payload, such a site reads back as "differs", and only the status `recovery-required` catches that case.
+2. **A restore reads back equal to `rollback-<site>.json`.** The rollback payload comes from a live export, so it should come back unchanged. If Pleasanter canonicalises it on save (D8), every successful rollback over HTTP ends `recovery-required` instead of `rolled-back`. That is safe but noisy; a KB probe on dev should confirm it.

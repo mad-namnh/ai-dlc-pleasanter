@@ -20,6 +20,7 @@ allow_write true in the local connection. role "prod" is never written to by thi
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import re
@@ -33,6 +34,10 @@ WRITABLE_ROLES = {"dev", "stg"}
 
 class TransportError(Exception):
     pass
+
+
+class UncertainOutcome(TransportError):
+    """The request was sent but no complete answer came back: the server may or may not have written."""
 
 
 # ---------------------------------------------------------------- connections
@@ -125,9 +130,18 @@ class Client:
                 status, text = r.status, r.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
             with e:  # an error response holds the connection open until it is closed
-                status, text = e.code, e.read().decode("utf-8", "replace")
-        except urllib.error.URLError as e:
+                try:
+                    status, text = e.code, e.read().decode("utf-8", "replace")
+                except (OSError, http.client.HTTPException) as ex:      # the request was sent and answered in part
+                    raise UncertainOutcome(f"{path}: HTTP {e.code} from {self.base}, body unreadable ({type(ex).__name__}) — "
+                                           "the server may have written")
+        except urllib.error.URLError as e:     # urllib wraps errors raised while sending: the server got no request
             raise TransportError(f"cannot reach {self.base}: {e.reason}")
+        except (OSError, http.client.HTTPException) as e:
+            # Raised while waiting for / reading the response (read timeout, reset, bad status line): the request
+            # was sent, so the server may have written. Callers must read back, never retry blindly.
+            raise UncertainOutcome(f"{path}: no complete answer from {self.base} ({type(e).__name__}: {e}) — "
+                                   "the server may have written")
         try:
             js = json.loads(text)
         except json.JSONDecodeError:
@@ -190,16 +204,27 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         touched.append(step["site"])          # a failed updatesite may still have changed the site → restore it too
         try:
             st, msg = client.apply(step["site_id"], files[step["payload_file"]])
+        except UncertainOutcome as ex:
+            # Do not restore blindly: the write may have landed or not, and a restore could hit the same timeout.
+            # The person reads every touched site back and `pls mark-applied` records what is really there.
+            return {"status": "uncertain", "failed_site": step["site"], "touched": touched,
+                    "log": log + [f"apply {step['site']} ({step['site_id']}) → {ex}",
+                                  "not restored: the outcome is unknown — read back with pls export, then pls mark-applied"]}
         except TransportError as ex:
             st, msg = 0, str(ex)
         log.append(f"apply {step['site']} ({step['site_id']}) → HTTP {st}")
         if st != 200:
-            return {"status": "rolled-back", "failed_site": step["site"], "log": log + rollback(client, plan, files, touched)}
-    return {"status": "applied-unverified", "log": log + ["next: pls export each site, then pls mark-applied"]}
+            lines, failed = rollback(client, plan, files, touched)
+            # "rolled-back" only when every restore answered 200; the caller still reads the sites back
+            return {"status": "recovery-required" if failed else "rolled-back", "failed_site": step["site"],
+                    "touched": touched, "failed_restores": failed, "log": log + lines}
+    return {"status": "applied-unverified", "touched": touched,
+            "log": log + ["next: pls export each site, then pls mark-applied"]}
 
 
-def rollback(client: Client, plan: dict, files: dict, sites: list | None = None) -> list[str]:
-    out = []
+def rollback(client: Client, plan: dict, files: dict, sites: list | None = None) -> tuple[list[str], list[str]]:
+    """Restore `sites` (all when None) in rollback order. Returns (log lines, sites whose restore did not answer 200)."""
+    out, failed = [], []
     for step in plan["rollback"]:
         if sites is not None and step["site"] not in sites:
             continue
@@ -208,7 +233,9 @@ def rollback(client: Client, plan: dict, files: dict, sites: list | None = None)
         except TransportError as ex:
             st = f"error {ex}"
         out.append(f"restore {step['site']} ({step['site_id']}) → HTTP {st}")
-    return out
+        if st != 200:
+            failed.append(step["site"])
+    return out, failed
 
 
 def bootstrap(client: Client, plan: dict) -> dict:
@@ -219,7 +246,15 @@ def bootstrap(client: Client, plan: dict) -> dict:
     for s in plan["steps"]:
         if s["op"] != "createsite" or s["parent_id"] != plan["parent_id"]:
             return {"status": "refused", "created": created, "log": log + [f"bad step {s.get('site')}"]}
-        st, sid, text = client.create_site(s["parent_id"], s["payload"])
+        try:
+            st, sid, text = client.create_site(s["parent_id"], s["payload"])
+        except UncertainOutcome as ex:
+            # The site may exist now. Keep what was created (the caller binds it) and name the unknown one,
+            # so a re-run never creates it a second time without a person checking first.
+            return {"status": "uncertain", "created": created, "uncertain": s["site"],
+                    "log": log + [f"createsite {s['site']} under {s['parent_id']} → {ex}"]}
+        except TransportError as ex:
+            st, sid, text = 0, None, str(ex)
         log.append(f"createsite {s['site']} under {s['parent_id']} → HTTP {st}" + (f" id {sid}" if sid else ""))
         if st != 200 or not sid:
             return {"status": "partial", "created": created, "log": log + [text, "stop: bind what was created, then decide"]}

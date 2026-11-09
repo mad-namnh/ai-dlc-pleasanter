@@ -144,7 +144,8 @@ def site_data(export: Any) -> dict:
 
 def id_maps(e: dict) -> tuple[dict, dict]:
     ids = {str(v["id"]): k for k, v in e["sites"].items() if v.get("id")}   # sites not created yet have no id (ADR-0007)
-    vals = {v: k for k, v in (e.get("values") or {}).items() if v}
+    # only text values can appear inside config text; a number (e.g. kb_probe_parent) is never replaced
+    vals = {v: k for k, v in (e.get("values") or {}).items() if isinstance(v, str) and v}
     return ids, vals
 
 
@@ -189,7 +190,7 @@ def from_refs(obj: Any, e: dict, key: str = "") -> Any:
             val = (e.get("values") or {}).get(name)
             if val is None:
                 raise Fail(f"unresolved reference ${{env:{name}}}")
-            return val
+            return str(val)
         s = REF_RE.sub(sub, obj)
         if key.endswith("SiteId") and REF_RE.fullmatch(obj):
             return int(s)
@@ -876,6 +877,72 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
             src = live_f       # what the environment really holds after that release (S2)
     pl = rj(src)
     return payload_model(pl, e, site), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
+
+
+def _now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+# Release states in plan.json after `apply` started writing. Only "planned" may be applied; these need a read-back
+# (`pls mark-applied` records what the sites really hold) or, for "rolled-back", a new release plan.
+OPEN_STATES = ("applying", "applied-unverified", "uncertain", "recovery-required")
+
+
+def readback_state(rel: Path, plan: dict, step: dict, export: Any, e: dict) -> tuple[str, list[dict]]:
+    """Classify one site of a multi-site release from its export: "applied" (live == payload), "not applied"
+    (live == rollback file, or the site was not written since the plan) or "differs" (written, equals neither)."""
+    site = step["site"]
+    want = payload_model(rj(rel / step["payload_file"]), e, site)
+    diffs = flat_diff(same_meta(logical(export, e), want), want)
+    if not diffs:
+        return "applied", []
+    back_file = next((s["payload_file"] for s in plan["rollback"] if s["site"] == site), None)
+    if back_file is None:
+        raise Fail(f"plan.json has no rollback step for {site}")
+    back = payload_model(rj(rel / back_file), e, site)
+    if not flat_diff(same_meta(logical(export, e), back), back):
+        return "not applied", diffs
+    updated = site_data(export).get("UpdatedTime")
+    if updated is not None and updated == step.get("expect_updated_time"):
+        return "not applied", diffs
+    return "differs", diffs
+
+
+def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str]) -> list[str]:
+    """After a rollback: export every touched site and compare it with its rollback file. Returns problems."""
+    rel_plan = {s["site"]: s for s in plan["rollback"]}
+    bad = []
+    for site in touched:
+        step = rel_plan[site]
+        try:
+            live = client.export_site(step["site_id"])
+        except H.TransportError as ex:
+            bad.append(f"read-back {site}: {ex}")
+            continue
+        back = payload_model(files[step["payload_file"]], e, site)
+        diffs = flat_diff(same_meta(logical(live, e), back), back)
+        if diffs:
+            bad.append(f"read-back {site}: {len(diffs)} difference(s) from {step['payload_file']} after the restore")
+    return bad
+
+
+def apply_outcome_message(release: str, plan: dict, res: dict) -> str:
+    """What happened and what the person does next, for every apply result except success."""
+    st, site = res["status"], res.get("failed_site")
+    exports = " ".join(f"--export {s}=<file>" for s in plan["sites"])
+    if st == "refused":
+        return f"{release}: refused — nothing was written"
+    if st == "rolled-back":
+        return (f"{release}: ROLLED BACK after {site} failed — every touched site was restored and read back equal to "
+                f"its rollback file. Fix the cause, then make a new release plan (pls release-plan with a new id).")
+    if st == "uncertain":
+        return (f"{release}: OUTCOME UNKNOWN — {site} got no answer and may or may not have been written; nothing was "
+                f"restored. Do not re-run apply. Export every site of the release (pls export), then "
+                f"pls mark-applied {release} {exports} records what each site holds.")
+    return (f"{release}: RECOVERY REQUIRED — {site} failed and the restore did not complete "
+            f"({', '.join(res.get('failed_restores') or []) or 'see read-back lines above'}). Restore those sites from "
+            f"releases/{release}/rollback-<site>.json, then export every site and run pls mark-applied {release} {exports} "
+            f"to record the state.")
 
 
 def same_meta(live: dict, base: dict) -> dict:
@@ -2161,13 +2228,32 @@ def http_cmd(r: Path, a) -> int:
             if not _confirm(a.release, a.yes, f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
                                              f"{plan.get('classification')}" + (f"\n{warning}" if warning else "")):
                 return 1
-            res = H.apply_release(c, plan, files)
+            # Recorded before the first write: if the process dies mid-way, the release is not "planned" any more,
+            # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
+            plan.update(status="applying", apply_started_at=_now())
+            wj(rel / "plan.json", plan)
+            try:
+                res = H.apply_release(c, plan, files)
+            except H.TransportError as ex:           # only the preflight reads raise: nothing was written
+                res = {"status": "refused", "log": [f"preflight: {ex}"]}
+            except Exception as ex:                  # unknown point of failure: keep "applying" and leave evidence
+                wj(rel / "apply-log.json", {"transport": "http", "at": _now(), "status": "applying",
+                                            "error": f"{type(ex).__name__}: {ex}"})
+                raise
+            if res["status"] in ("rolled-back", "recovery-required"):
+                # The read-back decides: "rolled-back" only when every touched site equals its rollback file
+                # (a failing site may have refused its restore too, yet never changed).
+                bad = restore_readback(c, plan, files, e, res["touched"])
+                res = dict(res, status="recovery-required" if bad else "rolled-back",
+                           log=res["log"] + (bad or ["read-back: every touched site equals its rollback file"]))
             for line in res["log"]:
                 print(line)
-            wj(rel / "apply-log.json", {"transport": "http", "at": datetime.now().astimezone().isoformat(timespec="seconds"), **res})
+            wj(rel / "apply-log.json", {"transport": "http", "at": _now(), **res})
+            plan.update(status="planned" if res["status"] == "refused" else res["status"], apply_finished_at=_now())
+            wj(rel / "plan.json", plan)
             LG.record_metric(sites=len(plan["sites"]), apply_status=res["status"])
             if res["status"] != "applied-unverified":
-                print(f"{a.release}: {res['status']}")
+                print(apply_outcome_message(a.release, plan, res))
                 return 1
             exports = []
             for site in plan["sites"]:
@@ -2186,6 +2272,12 @@ def http_cmd(r: Path, a) -> int:
             if plan.get("status") == "created":
                 raise H.TransportError(f"{a.release} was already created ({plan.get('created')}) — never create twice (S1)")
             done = set(plan.get("created") or {}) | {s for s, v in e["sites"].items() if v.get("id")}
+            unsure = plan.get("uncertain")
+            if unsure and unsure not in done and unsure not in (a.absent or []):
+                raise H.TransportError(
+                    f"{a.release}: the last run got no answer while creating '{unsure}' — it may exist now. A person checks "
+                    f"the folder {plan['parent_id']} in Pleasanter: if it exists, pls bind --env {plan['env']} "
+                    f"--release {a.release} --created {unsure}=<id>; if it does not, pls bootstrap {a.release} --absent {unsure}")
             plan = dict(plan, steps=[s for s in plan["steps"] if s["site"] not in done])
             if not plan["steps"]:
                 print(f"{a.release}: every site already has an id — nothing to create")
@@ -2205,6 +2297,16 @@ def http_cmd(r: Path, a) -> int:
                 print(line)
             if res["created"]:
                 bind(r, plan["env"], a.release, res["created"])
+            if res["status"] == "uncertain" or unsure:   # record the unknown site, or clear the one a person checked
+                rec = rj(bp)
+                if res["status"] == "uncertain":
+                    rec["uncertain"] = res["uncertain"]
+                else:
+                    rec.pop("uncertain", None)
+                wj(bp, rec)
+            if res["status"] == "uncertain":
+                print(f"{a.release}: OUTCOME UNKNOWN for '{res['uncertain']}' — it may have been created. Check the folder "
+                      f"before any re-run; pls bootstrap refuses until it is bound or confirmed absent.")
             return 0 if res["status"] == "created" else 1
 
         if a.cmd == "test":
@@ -2542,6 +2644,8 @@ def _main(argv=None) -> int:
     s = sp.add_parser("bootstrap", help="create the sites of a bootstrap plan over HTTP, then bind (ADR-0007)")
     s.add_argument("release")
     s.add_argument("--yes", action="store_true")
+    s.add_argument("--absent", action="append", metavar="SITE",
+                   help="a person checked that SITE (no answer in the last run) was not created; create it again")
     s = sp.add_parser("test", help="run test specs over HTTP; each spec's as_key picks the role's key")
     s.add_argument("specs", nargs="+")
     s.add_argument("--env", required=True)
@@ -2816,14 +2920,64 @@ def _main(argv=None) -> int:
         if set(exports) != set(plan["sites"]):
             print(f"NOT marked as applied: need --export for exactly {plan['sites']}")
             return 1
-        bad = False
-        for site in plan["sites"]:
-            pl = rj(rel / plan["per_site"][site]["payload_file"])
-            want = payload_model(pl, e, site)
-            diffs = flat_diff(same_meta(logical(rj(Path(exports[site])), e), want), want)
-            if diffs:
-                bad = True
-                print(md_diff(diffs, labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
+        status = plan.get("status")
+        if status in APPLIED:      # re-marking would re-stamp applied_at and could turn drift into the baseline
+            print(f"NOT marked again: {a.release} is already recorded as {status} ({plan.get('applied_at')}). "
+                  f"Compare live with it: pls drift <export> --env {plan['env']} --site <site>")
+            return 1
+        if status == "rolled-back":
+            print(f"NOT marked: {a.release} was rolled back and read back — none of it is live. Make a new release plan.")
+            return 1
+        if status != "planned" and status not in OPEN_STATES:
+            print(f"NOT marked: {a.release} has status {status!r}")
+            return 1
+        log_status = rj(rel / "apply-log.json").get("status") if (rel / "apply-log.json").exists() else None
+        if status == "planned" and log_status not in (None, "refused", "applied-unverified"):
+            print(f"NOT marked: apply-log.json says {log_status!r} but plan.json says planned — read the log and decide "
+                  "with the person; a rolled-back or failed apply is never recorded as applied. If the release was "
+                  "applied again later (browser runner), the person moves apply-log.json aside and runs mark-applied again")
+            return 1
+        started = plan.get("apply_started_at")
+        if status in OPEN_STATES and started:
+            t0 = datetime.fromisoformat(started).timestamp()
+            stale = [s_ for s_, f in exports.items() if Path(f).stat().st_mtime < t0]
+            if stale:
+                print(f"NOT marked: the exports for {stale} are older than the apply ({started}) — export again (pls export)")
+                return 1
+        states, shown = {}, {}
+        for step in plan["steps"]:
+            site, sid = step["site"], plan["per_site"][step["site"]]["site_id"]
+            exp = rj(Path(exports[site]))
+            if site_data(exp).get("SiteId") != sid:
+                print(f"NOT marked: the export for {site} is site {site_data(exp).get('SiteId')}, the release wrote site {sid}")
+                return 1
+            states[site], shown[site] = readback_state(rel, plan, step, exp, e)
+        if set(states.values()) == {"not applied"}:
+            print(f"NOT marked: no site holds the release payload ({', '.join(states)}).")
+            if status == "planned":
+                print(f"{a.release} is still planned — was it applied?")
+                return 1
+            plan.update(status="rolled-back", readback=states, checked_at=_now(),
+                        post_apply_check="read back: every site holds its rollback state (pls mark-applied)")
+            wj(rel / "plan.json", plan)
+            print(f"{a.release}: recorded as rolled-back — make a new release plan")
+            return 1
+        # After a failed restore, "differs" cannot be told apart from a half-restored or hand-repaired site
+        if "not applied" in states.values() or (status == "recovery-required" and "differs" in states.values()):
+            # Partly applied: never a success state and never a baseline; a person restores or completes it.
+            for site, st_ in states.items():
+                print(f"  {site}: {st_}")
+            plan.update(status="recovery-required", readback=states, checked_at=_now(),
+                        post_apply_check="read back: the release is only partly live")
+            wj(rel / "plan.json", plan)
+            print(f"{a.release}: RECOVERY REQUIRED — only partly applied. Restore the applied sites from "
+                  f"rollback-<site>.json (or complete the others), export every site and run mark-applied again.")
+            return 1
+        bad = "differs" in states.values()
+        for site, st_ in states.items():
+            if st_ == "differs":
+                want = payload_model(rj(rel / plan["per_site"][site]["payload_file"]), e, site)
+                print(md_diff(shown[site], labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
         if bad:
             # The release WAS applied; Pleasanter stored some values differently (D8). Record that state as the
             # baseline so the fold-back release (P3 step 6) is not refused as drift (S2).
@@ -2846,9 +3000,17 @@ def _main(argv=None) -> int:
         rel = r / "releases" / a.release
         plan = rj(rel / "plan.json")
         e = env_conf(r, plan["env"])
+        if plan.get("status") in APPLIED or plan.get("status") == "rolled-back":
+            print(f"NOT marked again: {a.release} is already recorded as {plan.get('status')} ({plan.get('applied_at')})")
+            return 1
+        exp = rj(Path(a.export))
+        sid = ((e.get("sites") or {}).get(plan.get("site")) or {}).get("id")
+        if sid and site_data(exp).get("SiteId") not in (None, sid):
+            print(f"NOT marked: the export is site {site_data(exp).get('SiteId')}, the release is for site {sid}")
+            return 1
         pl = rj(rel / "payload.json")
         want = payload_model(pl, e, plan.get("site"))
-        got = same_meta(logical(rj(Path(a.export)), e), want)
+        got = same_meta(logical(exp, e), want)
         diffs = flat_diff(got, want)
         if diffs:
             print(md_diff(diffs, labels(want), f"{plan['env']}/{plan['site']}: live after apply vs release payload"))

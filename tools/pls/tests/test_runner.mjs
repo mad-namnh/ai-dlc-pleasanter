@@ -48,7 +48,8 @@ test('applies in plan order', async () => {
 test('failure on the second site restores both, in reverse order', async () => {
   const s = sites(); const {runner, calls} = fakePleasanter(s, 201);
   const r = await runner.applyRelease(plan, files);
-  assert.equal(r.status, 'rolled-back'); assert.equal(r.failed_site, 'a');
+  // site a refuses its restore too: a failed restore is never reported as rolled-back
+  assert.equal(r.status, 'recovery-required'); assert.equal(r.failed_site, 'a'); assert.equal(JSON.stringify(r.failed_restores), '["a"]');   // array from the runner's vm context
   assert.deepEqual(calls.filter(c => c.startsWith('updatesite')), ['updatesite 202', 'updatesite 201', 'updatesite 201', 'updatesite 202']);
   assert.equal(s[202].SiteSettings.tag, 'old-b');
 });

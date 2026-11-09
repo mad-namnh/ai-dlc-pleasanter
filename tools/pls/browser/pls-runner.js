@@ -123,16 +123,20 @@ var plsRunner = (() => {
     }
     return {env: envName, site_id: siteId, executed_at: new Date().toISOString(), tests: out};
   };
-  const rollbackRelease = async (plan, files, sites) => {
+  // Restore in rollback order; one failing restore never stops the others. failed = sites not answered with 200.
+  const restoreSites = async (plan, files, sites) => {
     const only = sites ? new Set(sites) : null;
-    const log = [];
+    const log = [], failed = [];
     for (const step of plan.rollback) {
       if (only && !only.has(step.site)) continue;
-      const r = await apply(step.site_id, files[step.payload_file]);
+      let r;
+      try { r = await apply(step.site_id, files[step.payload_file]); } catch (e) { r = {http: `error ${e.message || e}`}; }
       log.push(`restore ${step.site} (${step.site_id}) → HTTP ${r.http}`);
+      if (r.http !== 200) failed.push(step.site);
     }
-    return log;
+    return {log, failed};
   };
+  const rollbackRelease = async (plan, files, sites) => (await restoreSites(plan, files, sites)).log;
 
   const applyRelease = async (plan, files) => {
     const log = [];
@@ -156,8 +160,11 @@ var plsRunner = (() => {
       try { r = await apply(step.site_id, files[step.payload_file]); } catch (e) { r = {http: 0, message: String(e)}; }
       log.push(`apply ${step.site} (${step.site_id}) → HTTP ${r.http}`);
       if (r.http !== 200) {
-        const restored = await rollbackRelease(plan, files, touched);
-        return {status: 'rolled-back', failed_site: step.site, log: [...log, ...restored]};
+        // never "rolled-back" after a failed restore; the person exports every site and runs pls mark-applied,
+        // which records what the sites really hold
+        const {log: restored, failed} = await restoreSites(plan, files, touched);
+        return {status: failed.length ? 'recovery-required' : 'rolled-back', failed_site: step.site, touched,
+                failed_restores: failed, log: [...log, ...restored]};
       }
     }
     return {status: 'applied-unverified', log: [...log, 'next: export every site and run `pls mark-applied <release> --export site=file …`']};

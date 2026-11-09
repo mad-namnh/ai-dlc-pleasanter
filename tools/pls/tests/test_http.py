@@ -187,7 +187,9 @@ class HttpTest(unittest.TestCase):
         c = H.Client(self.url, "K-ADMIN")
         self.fake.fail_update_on = LO
         res = H.apply_release(c, plan, files)
-        self.assertEqual(res["status"], "rolled-back")
+        # the failing site refuses its restore too: at the HTTP level that is a failed restore, never "rolled-back"
+        self.assertEqual(res["status"], "recovery-required")
+        self.assertEqual(res["failed_restores"], ["loans"])
         self.assertEqual(self.fake.sites[EQ]["Title"], "old equipment")       # restored in reverse order
         self.assertIn("restore loans", " ".join(res["log"]))
         self.fake.fail_update_on = None
@@ -383,12 +385,13 @@ class HttpTest(unittest.TestCase):
         plan, _ = self.plan()
         self.fake.fail_update_on = LO
         res = H.apply_release(H.Client(self.url, "K-ADMIN"), plan, files)
-        self.assertEqual(res["status"], "rolled-back")
+        self.assertEqual(res["status"], "recovery-required")                     # loans refused its restore too
         self.assertEqual(self.fake.sites[EQ]["Permissions"], ["User,1,511"])
         self.assertEqual(self.fake.sites[EQ]["InheritPermission"], EQ)
         broken = H.Client("http://127.0.0.1:9", "K-ADMIN", timeout=1)
-        out = H.rollback(broken, plan, files)                                             # errors are logged, not raised
+        out, failed = H.rollback(broken, plan, files)                                     # errors are logged, not raised
         self.assertEqual(len(out), 2)
+        self.assertEqual(failed, ["loans", "equipment"])
         self.assertIn("error", out[0])
 
     def test_http_check_accepts_a_restricted_key_without_access(self):                  # B2
