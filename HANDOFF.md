@@ -12,7 +12,7 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 
 | Workstream | Criteria | Report in repo |
 |---|---|---|
-| WS-1 architecture, ADR | A1–A6, B9, D5, H4 | `ws-1-architecture.md` (pending) |
+| WS-1 architecture, ADR | A1–A6, B9, D5, H4 | `ws-1-architecture.md` (done: 0 PASS, 3 PARTIAL, 6 FAIL) |
 | WS-2 security, approval, prod isolation | B3, B4, B7, B10, C1, C4, D1, D2, J2 | `ws-2-security.md` (pending) |
 | WS-3 write safety, recovery | B2, B11, C2, C3, C5–C11 | `ws-3-write-safety.md` (pending) |
 | WS-4 determinism, records, KB | B1, B8, D3, D4, D6, E1–E4, F1–F4 | `ws-4-determinism.md` (pending) |
