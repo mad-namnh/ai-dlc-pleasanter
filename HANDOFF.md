@@ -4,6 +4,24 @@
 
 Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 
+## Design review in progress — 2026-11-09 (read this first if you resume the review)
+
+Standard `docs/review-criteria.md` v2.1; approved plan `docs/reviews/design-review-2026-11-09/00-review-plan.md`. Nam's decisions on the plan: H-1 report format = §5/§6 of the standard (groups A–J; there is no K); H-2 reports are kept in the repo under `docs/reviews/design-review-2026-11-09/` as evidence of the framework's reliability; H-3 isolated Python 3.10 allowed (`uv python install 3.10` into a scratch folder); H-4 Nam runs the method-L scenarios on dev; H-5 reviewers use copies of the tested projects `pls-onboard-playboard-r2`, `demo-equipment`, `pls-demo-equipment` without `.pls/connections.json`, `*.key`, `tests/seed/`; H-6 trust boundaries written as ADR-0014 (Proposed — Nam accepts); H-7 plan approved.
+
+Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its own `git worktree` (detached at `10c328a`) and its own project copies, outside the repository; tests only against the 127.0.0.1 fake server.
+
+| Workstream | Criteria | Report in repo |
+|---|---|---|
+| WS-1 architecture, ADR | A1–A6, B9, D5, H4 | `ws-1-architecture.md` (pending) |
+| WS-2 security, approval, prod isolation | B3, B4, B7, B10, C1, C4, D1, D2, J2 | `ws-2-security.md` (pending) |
+| WS-3 write safety, recovery | B2, B11, C2, C3, C5–C11 | `ws-3-write-safety.md` (pending) |
+| WS-4 determinism, records, KB | B1, B8, D3, D4, D6, E1–E4, F1–F4 | `ws-4-determinism.md` (pending) |
+| WS-5 portability, performance | G1–G6 | `ws-5-portability.md` (pending) |
+| WS-6 skills, agent governance | B5, B6, H6, I1–I6, J5 | `ws-6-skills.md` (pending) |
+| WS-7 evidence check + final verdict | H1, H2, H3, H5, J1, J3, J4 + summary (standard §6) | `99-final-report.md` (pending) |
+
+**To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
+
 ## Current state — 2026-11-09 (read first)
 
 **Resume in a new session / another account:** everything is in this repository; nothing lives only in a chat.
