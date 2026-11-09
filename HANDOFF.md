@@ -17,7 +17,7 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 | WS-3 write safety, recovery | B2, B11, C2, C3, C5–C11 | `ws-3-write-safety.md` (pending) |
 | WS-4 determinism, records, KB | B1, B8, D3, D4, D6, E1–E4, F1–F4 | `ws-4-determinism.md` (pending) |
 | WS-5 portability, performance | G1–G6 | `ws-5-portability.md` (pending) |
-| WS-6 skills, agent governance | B5, B6, H6, I1–I6, J5 | `ws-6-skills.md` (pending) |
+| WS-6 skills, agent governance | B5, B6, H6, I1–I6, J5 | `ws-6-skills.md` (done: 1 PASS, 7 PARTIAL, 2 FAIL) |
 | WS-7 evidence check + final verdict | H1, H2, H3, H5, J1, J3, J4 + summary (standard §6) | `99-final-report.md` (pending) |
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
