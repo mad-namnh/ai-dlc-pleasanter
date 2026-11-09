@@ -62,6 +62,13 @@ How the team works today, and what that means here:
 - Only `site.json` merges semantically; `_index.json`, `meta.json`, `permissions.json` and script files merge as text (two developers adding scripts get a text conflict in `_index.json`).
 - Not built yet: the `ids` section of the slot ledger (point 6) and the daily drift check (point 7, use `pls drift` per sandbox meanwhile).
 
+### Safety: resources shared with the base environment (2026-11-09)
+
+A sandbox shares its base environment's Pleasanter server; see ADR-0010 (mail and jobs) and ADR-0012 (scheduled scripts).
+- Resources shared with the base (the tenant, SMTP) are outside a sandbox's scope: a sandbox never configures them.
+- Scheduled scripts are deployed only through releases of the base environment; a sandbox release does not list them and carries no job deploy step.
+- The effective `mail` / `jobs` state of a sandbox is the riskier of its own copy and the base's current value.
+
 ## Consequences
 
 - Easier: three developers work in parallel; every change is reviewed as a diff; integration dev always equals git.

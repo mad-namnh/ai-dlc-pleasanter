@@ -153,6 +153,39 @@ class SandboxTest(unittest.TestCase):
         self.assertEqual(pls.main(["sandbox", "drop", "--name", "nam"]), 0)
         self.assertNotIn("dev-nam", json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"])
 
+    def set_dev_effects(self, **kw):
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        envs["envs"]["dev"]["side_effects"] = kw
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+
+    def test_sandbox_shares_the_tenant_jobs_go_through_dev_and_the_riskier_state_counts(self):
+        import pls_side_effects as SE
+        self.prepare()
+        d = self.r / SE.JOBS_DIR
+        d.mkdir(parents=True)
+        (d / "nightly.js").write_text("context.Log('x');", encoding="utf-8")
+        (d / SE.JOBS_INDEX).write_text(json.dumps([{"name": "nightly", "schedule": "毎日", "enabled": True}]), encoding="utf-8")
+        self.set_dev_effects(mail="sink", jobs="disabled")
+        self.assertEqual(pls.main(["sandbox", "create", "--name", "nam", "--sites", "loans", "--parent", str(TH.FOLDER)]), 0)
+        boot = next((self.r / "releases").glob("B-*-dev-nam"))
+        self.assertEqual(pls.main(["bootstrap", boot.name, "--yes"]), 0)
+        self.assertEqual(pls.main(["sandbox", "refresh", "--name", "nam"]), 0)
+        rel = next((self.r / "releases").glob("R-*-dev-nam"))
+        jobs = json.loads((rel / "plan.json").read_text(encoding="utf-8"))["jobs"]
+        # a sandbox release never lists or deploys scheduled scripts: they go through dev's releases only
+        self.assertEqual((jobs["changed"], jobs["deploy"], jobs["manual_step"], jobs["fingerprints"]), ([], None, None, None))
+        self.assertFalse((rel / "scheduled-scripts").exists())
+        self.assertNotIn("Scheduled scripts", (rel / "diff-report.operator.md").read_text(encoding="utf-8"))
+        # dev's state changes after the sandbox copied it: the riskier value (dev's unknown) counts
+        self.set_dev_effects(mail="sink", jobs="unknown")
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-1", "steps": [{"op": "create", "site": "${site:loans}", "save": "l",
+                                                                             "data": {}}]}]), encoding="utf-8")
+        n = len(self.fake.records)
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev-nam", "--site", "loans", "--out", "x.json"]), 2)
+        self.assertEqual(len(self.fake.records), n)
+        self.set_dev_effects(mail="sink", jobs="disabled")
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev-nam", "--site", "loans", "--out", "x.json"]), 0)
+
     def test_shared_sites_and_stale_plans_are_never_written(self):
         self.prepare()
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
