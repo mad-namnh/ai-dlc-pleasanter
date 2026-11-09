@@ -13,12 +13,14 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 | Workstream | Criteria | Report in repo |
 |---|---|---|
 | WS-1 architecture, ADR | A1–A6, B9, D5, H4 | `ws-1-architecture.md` (done: 0 PASS, 3 PARTIAL, 6 FAIL) |
-| WS-2 security, approval, prod isolation | B3, B4, B7, B10, C1, C4, D1, D2, J2 | `ws-2-security.md` (pending) |
-| WS-3 write safety, recovery | B2, B11, C2, C3, C5–C11 | `ws-3-write-safety.md` (pending) |
-| WS-4 determinism, records, KB | B1, B8, D3, D4, D6, E1–E4, F1–F4 | `ws-4-determinism.md` (pending) |
-| WS-5 portability, performance | G1–G6 | `ws-5-portability.md` (pending) |
+| WS-2 security, approval, prod isolation | B3, B4, B7, B10, C1, C4, D1, D2, J2 | `ws-2-security.md` (done: 0 PASS, 6 PARTIAL, 3 FAIL) |
+| WS-3 write safety, recovery | B2, B11, C2, C3, C5–C11 | `ws-3-write-safety.md` (done: 1 PASS, 4 PARTIAL, 6 FAIL) |
+| WS-4 determinism, records, KB | B1, B8, D3, D4, D6, E1–E4, F1–F4 | `ws-4-determinism.md` (done: 2 PASS, 6 PARTIAL, 5 FAIL; B1 live part needs Nam, scenario in report §6) |
+| WS-5 portability, performance | G1–G6 | `ws-5-portability.md` (done: G1 FAIL, G2 PARTIAL, G3 PASS, G4 FAIL, G5 PARTIAL, G6 PARTIAL) |
 | WS-6 skills, agent governance | B5, B6, H6, I1–I6, J5 | `ws-6-skills.md` (done: 1 PASS, 7 PARTIAL, 2 FAIL) |
-| WS-7 evidence check + final verdict | H1, H2, H3, H5, J1, J3, J4 + summary (standard §6) | `99-final-report.md` (pending) |
+| WS-7 evidence check + final verdict | H1, H2, H3, H5, J1, J3, J4 + summary (standard §6) | `99-final-report.md` (done: demo / cstg / prod all NOT READY) |
+
+**Progress 2026-11-09 (session 2):** review complete — all reports committed. Verdict: NOT READY at every stage. Open for Nam: accept/fix ADR-0014 (TB-1/2/3/8 compensating controls shown false), WS-7 disputes D-1 (F4→PARTIAL) and D-2 (G2→FAIL), PARTIAL-vs-FAIL rule for standard v2.2, plan says 66 criteria but standard has 65, method-L runs on dev (B1 live, C10). Next: remediation roadmap in `99-final-report.md`.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 
