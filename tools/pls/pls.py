@@ -35,6 +35,7 @@ Commands:
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
   mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
+  jobs-verified <release> --by N --quote "…"     a person deployed and checked the release's scheduled scripts (ADR-0012)
   init <dir> [--stage S --target T --approver N]  new project from templates/project + skills + launcher (run from anywhere)
   skills check | sync                           project skills vs .claude/framework.lock vs the framework
 """
@@ -527,6 +528,8 @@ def lint(r: Path) -> list[dict]:
             SE.effects(ec)
         except ValueError as ex:
             issues.append({"rule": "L-ENV-02", "site": "-", "msg": f"envs.{env_name}.{ex} (ADR-0010)"})
+    for x in SE.job_problems(r):                                  # L-JOB-01: scheduled scripts declared consistently (ADR-0012)
+        issues.append({"rule": "L-JOB-01", "site": "_tenant", "msg": f"{SE.JOBS_DIR.as_posix()}/{x}"})
     for site_dir in sorted((r / "config").iterdir()):
         if not site_dir.is_dir():
             continue
@@ -714,6 +717,60 @@ def releases_for(r: Path, env: str, site: str, status: str | None = None) -> lis
         if plan.get("env") == env and in_plan and (status is None or st == status or (status == "applied" and st in APPLIED)):
             out.append((p.parent, plan))
     return sorted(out, key=lambda x: (_applied_key(x[1].get("applied_at")), x[1]["release"]))
+
+
+def last_applied_jobs(r: Path, env: str) -> dict | None:
+    """Scheduled-script fingerprints of the last applied release of env whose jobs are known to be on the tenant
+    (ADR-0012): it changed none, or a person recorded the manual deploy (`pls jobs-verified`). None when there is no
+    such release (releases made before the jobs check, adoption records, sandboxes, hand-broken records)."""
+    best = None
+    for p in sorted((r / "releases").glob("*/plan.json")) if (r / "releases").exists() else []:
+        plan = rj(p)
+        jobs = plan.get("jobs")
+        if plan.get("env") != env or plan.get("status") not in APPLIED or SE.bad_plan_jobs(jobs) or jobs.get("fingerprints") is None:
+            continue
+        if jobs["changed"] and not jobs.get("verified"):
+            continue                                   # manual deploy not confirmed: its changes are listed again
+        key = (_applied_key(plan.get("applied_at")), plan.get("release") or "")
+        if best is None or key > best[0]:
+            best = (key, jobs["fingerprints"])
+    return best[1] if best else None
+
+
+def jobs_verified(r: Path, release: str, by: str, quote: str) -> int:
+    """Record the person's check of the manual scheduled-script deploy (ADR-0012 option B). Until it is recorded, the
+    release is not a baseline for jobs and the next release lists the same changes again."""
+    p = r / "releases" / release / "plan.json"
+    if not p.exists():
+        raise Fail(f"releases/{release}/plan.json not found")
+    plan = rj(p)
+    jobs = plan.get("jobs")
+    if SE.bad_plan_jobs(jobs) or not jobs["changed"]:
+        raise Fail(f"{release} records no scheduled-script changes — nothing to verify")
+    if plan.get("status") not in APPLIED:
+        raise Fail(f"{release} has status {plan.get('status')!r}: apply and mark-applied it first")
+    if not quote.strip():
+        raise Fail("--quote: the person's own words are required (I4)")
+    try:
+        who = GT._approver_for(r, by, "G4")
+    except GT.GateError as ex:
+        raise Fail(str(ex))
+    jobs["verified"] = {"by": who, "quote": quote.strip(), "at": datetime.now().astimezone().isoformat(timespec="seconds")}
+    wj(p, plan)
+    print(f"{release}: scheduled scripts verified by {who} ({'; '.join(jobs['changed'])})")
+    return 0
+
+
+def rendered_jobs(r: Path, e: dict) -> dict[str, dict]:
+    """The project's scheduled scripts with references resolved for one environment (raises ValueError / Fail)."""
+    return SE.load_jobs(r, lambda x: from_refs(x, e))
+
+
+def env_effects(r: Path, e: dict) -> dict:
+    """Declared side effects of an environment; a sandbox shares its base's server and tenant (ADR-0011), so the riskier
+    of its own copy and the base's current value counts. Raises ValueError on an unknown value."""
+    eff = SE.effects(e)
+    return SE.cautious(eff, SE.effects(env_conf(r, e["sandbox_of"]))) if e.get("sandbox_of") else eff
 
 
 def _applied_key(ts: str | None) -> float:
@@ -914,6 +971,14 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
             print(m)
         failed |= not ok
         results[site] = res
+    jobs_now: dict = {}
+    try:                                               # scheduled scripts travel with every release of the env (ADR-0012)
+        SE.declared_jobs(r)                            # layout checked for every env, sandboxes included
+        if not e.get("sandbox_of"):
+            jobs_now = rendered_jobs(r, e)
+    except (ValueError, Fail) as ex:
+        print(f"JOBS {SE.JOBS_DIR.as_posix()}: {ex} (ADR-0012)")
+        failed = True
     if gate_error:
         print(f"GATE {gate_error}")
     if failed or gate_error:
@@ -964,13 +1029,35 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         "migration": migration if worst == "data-impacting" else None,
         "version_check": version_check(r, env),
     }
+    if e.get("sandbox_of"):                            # the tenant is the base env's: a sandbox never deploys jobs (ADR-0011)
+        jobs_changed: list[str] = []
+        plan["jobs"] = {"fingerprints": None, "changed": [], "deploy": None, "manual_step": None,
+                        "note": f"sandbox: scheduled scripts are tenant-wide; they are deployed through {e['sandbox_of']} releases only"}
+    else:
+        fps = SE.fingerprints(jobs_now)
+        jobs_changed = SE.changed_jobs(last_applied_jobs(r, env), fps)
+        plan["jobs"] = {"fingerprints": fps, "changed": jobs_changed, "deploy": "manual" if jobs_changed else None,
+                        "manual_step": SE.manual_job_step(env, jobs_changed, release)}
+        if jobs_changed:                               # what the operator copies into the tenant, resolved for this env
+            jd = rel / "scheduled-scripts"
+            jd.mkdir(parents=True, exist_ok=True)
+            for n, j in jobs_now.items():
+                if j["body"] is not None:
+                    (jd / f"{n}.js").write_bytes(j["body"].encode("utf-8"))
+            wj(jd / SE.JOBS_INDEX, [j["entry"] for j in jobs_now.values() if j["entry"] is not None])
     for x in plan["version_check"]["differences"]:
         print(f"VERSION {x}")
     wj(rel / "plan.json", plan)
-    if any(per_site[s]["side_effects"] for s in order) and e.get("role") != "prod":
-        eff = SE.effects(e)
-        if eff["mail"] == "unknown":
+    for x in jobs_changed:
+        print(f"JOB {x}")
+    if plan["jobs"]["manual_step"]:
+        print(plan["jobs"]["manual_step"])
+    if e.get("role") != "prod":
+        eff = env_effects(r, e)
+        if any(per_site[s]["side_effects"] for s in order) and eff["mail"] == "unknown":
             print(f"note: envs.{env}.side_effects.mail is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
+        if jobs_changed and eff["jobs"] == "unknown":
+            print(f"note: envs.{env}.side_effects.jobs is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
     LG.record_metric(sites=len(order), changes=sum(p["changes"] for p in per_site.values()), classification=worst)
     (rel / "diff-report.operator.md").write_text(
         RP.operator_report(plan, {n: c.get("title") or n for n, c in e["sites"].items()}), encoding="utf-8")
@@ -1920,7 +2007,7 @@ def http_cmd(r: Path, a) -> int:
             print(f"writes: {'allowed' if e.get('role') in H.WRITABLE_ROLES and conn.get('allow_write') is True else 'refused'} "
                   f"(role {e.get('role')!r}, allow_write {conn.get('allow_write')!r})")
             try:
-                print(SE.describe(a.env, SE.effects(e)))
+                print(SE.describe(a.env, env_effects(r, e)))
             except ValueError as ex:
                 bad += 1
                 print(f"{a.env}: {ex} (ADR-0010)")
@@ -1977,10 +2064,24 @@ def http_cmd(r: Path, a) -> int:
                                            f"release may write in {plan['env']} (stale plan, or a shared site)")
             files = {f.name: rj(f) for f in rel.glob("*.json") if f.name.startswith(("payload-", "rollback-"))}
             try:
-                eff = SE.effects(e)
+                eff = env_effects(r, e)
             except ValueError as ex:
                 raise H.TransportError(f"envs.{plan['env']}.{ex}")
             refusal, warning = SE.apply_refusal(plan["env"], eff, {s: plan["per_site"][s].get("side_effects") for s in plan["sites"]})
+            pj = plan.get("jobs")                            # None: planned before the jobs check
+            if pj is not None and SE.bad_plan_jobs(pj):
+                raise H.TransportError(f"{a.release}: {SE.bad_plan_jobs(pj)} — make a new release plan (ADR-0012)")
+            try:
+                declared = bool(SE.declared_jobs(r))
+                if pj is not None and pj.get("fingerprints") is not None and \
+                        SE.fingerprints(rendered_jobs(r, e)) != pj["fingerprints"]:
+                    raise H.TransportError(f"{a.release}: the scheduled scripts in git (or the environment values they use) "
+                                           "changed since the plan — make a new release plan (ADR-0012)")
+            except (ValueError, Fail) as ex:
+                raise H.TransportError(f"{SE.JOBS_DIR.as_posix()}: {ex} (ADR-0012)")
+            jrefusal, jwarning = SE.jobs_apply_refusal(plan["env"], eff, pj["changed"] if pj is not None else None, declared)
+            refusal = "\n".join(x for x in (refusal, jrefusal) if x)
+            warning = "\n".join(x for x in (warning, jwarning, (pj or {}).get("manual_step")) if x)
             if refusal:
                 raise H.TransportError(refusal)
             if warning:
@@ -2071,9 +2172,19 @@ def http_cmd(r: Path, a) -> int:
                     raise H.TransportError(f"{a.env}: these tests may write to shared {e['sandbox_of']} sites {hit} "
                                            "(a --var record counts for every site) — refused (ADR-0011)")
             try:
-                eff = SE.effects(e)
+                eff = env_effects(r, e)
             except ValueError as ex:
                 raise H.TransportError(f"envs.{a.env}.{ex}")
+            if any(SE.test_writes(sp_) for sp_ in specs):    # jobs first: local files only, no server call (ADR-0012)
+                try:
+                    jobs = SE.declared_jobs(r)
+                except ValueError as ex:
+                    raise H.TransportError(f"{SE.JOBS_DIR.as_posix()}: {ex} (ADR-0012)")
+                refusal, warning = SE.jobs_test_refusal(a.env, eff, jobs)
+                if refusal:
+                    raise H.TransportError(refusal)
+                if warning:
+                    print(warning)
             if eff["mail"] not in SE.MAIL_SAFE:
                 all_sites = {v["id"] for v in e["sites"].values() if v.get("id")}
                 written = sorted({x for sp_ in specs if SE.test_writes(sp_) for x in SE.test_sites(sp_, sid, all_sites)})
@@ -2420,6 +2531,11 @@ def _main(argv=None) -> int:
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
+    s = sp.add_parser("jobs-verified", help="record that a person deployed and checked the scheduled scripts of an applied "
+                                            "release (ADR-0012); never record it yourself")
+    s.add_argument("release")
+    s.add_argument("--by", required=True, help="the person, a G4 approver of the project profile")
+    s.add_argument("--quote", required=True, help="the person's own words")
     s = sp.add_parser("xref", help="which script uses which column and site (ops/xref/<site>.json)")
     s.add_argument("--site", required=True)
     s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
@@ -2598,6 +2714,9 @@ def _main(argv=None) -> int:
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
         print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
         return 0
+
+    if a.cmd == "jobs-verified":
+        return jobs_verified(r, a.release, a.by, a.quote)
 
     if a.cmd == "bootstrap-plan":
         return bootstrap_plan(r, a.env, a.release)

@@ -268,6 +268,43 @@ class PlsTest(unittest.TestCase):
         self.assertIn("202", json.dumps(pa))                              # ${site:b} resolved to stg id
         self.assertNotIn("${site:", json.dumps(pa))
 
+    def test_release_plan_records_scheduled_script_changes_against_the_last_applied_release(self):
+        import pls_side_effects as SE
+        sa, sb = self._two_sites()
+        d = self.r / SE.JOBS_DIR
+        d.mkdir(parents=True)
+        (d / "nightly.js").write_text("const id = ${site:b};", encoding="utf-8")
+        (d / SE.JOBS_INDEX).write_text(json.dumps([{"name": "nightly", "schedule": "毎日", "enabled": True}]), encoding="utf-8")
+        for rel in ("R2", "R3", "R4", "R5"):
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", rel, "--quote", "G3 approved"]), 0)
+        plan_of = lambda rel: json.loads((self.r / f"releases/{rel}/plan.json").read_text(encoding="utf-8"))   # noqa: E731
+        rp = lambda rel: pls.main(["release-plan", "--env", "stg", "--release", rel, "--export", f"a={sa}", "--export", f"b={sb}"])  # noqa: E731
+        self.assertEqual(rp("R1"), 0)
+        plan = plan_of("R1")
+        self.assertEqual(plan["jobs"]["deploy"], "manual")
+        self.assertTrue(plan["jobs"]["changed"][0].startswith("nightly added"))
+        # what the operator copies is resolved for stg (site b = 202 there)
+        self.assertEqual((self.r / "releases/R1/scheduled-scripts/nightly.js").read_text(encoding="utf-8"), "const id = 202;")
+        self.assertIn("Scheduled scripts (manual)", (self.r / "releases/R1/diff-report.operator.md").read_text(encoding="utf-8"))
+        with self.assertRaises(pls.Fail):                                            # not applied yet
+            pls.main(["jobs-verified", "R1", "--by", "Nam", "--quote", "copied and checked"])
+        plan.update(status="applied", applied_at="2026-11-09T10:00:00+09:00")       # as mark-applied records it
+        (self.r / "releases/R1/plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        self.assertEqual(rp("R2"), 0)                                                # deploy not confirmed: listed again
+        self.assertTrue(plan_of("R2")["jobs"]["changed"][0].startswith("nightly added"))
+        with self.assertRaises(pls.Fail):                                            # only a profile approver
+            pls.main(["jobs-verified", "R1", "--by", "Someone", "--quote", "ok"])
+        self.assertEqual(pls.main(["jobs-verified", "R1", "--by", "Nam", "--quote", "copied and checked"]), 0)
+        self.assertEqual(rp("R3"), 0)
+        self.assertEqual(plan_of("R3")["jobs"]["changed"], [])
+        self.assertFalse((self.r / "releases/R3/scheduled-scripts").exists())
+        (d / "nightly.js").write_text("const id = ${site:b}; // v2", encoding="utf-8")
+        self.assertEqual(rp("R4"), 0)
+        self.assertEqual(plan_of("R4")["jobs"]["changed"], ["nightly changed"])
+        (d / SE.JOBS_INDEX).write_text("[{}]", encoding="utf-8")                   # a bad index refuses the plan
+        self.assertEqual(rp("R5"), 1)
+        self.assertFalse((self.r / "releases/R5").exists())
+
     def test_release_plan_writes_nothing_if_one_site_fails(self):
         sa, sb = self._two_sites()
         bad = json.loads(sb.read_text(encoding="utf-8"))

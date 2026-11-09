@@ -31,6 +31,10 @@ def operator_report(plan: dict, titles: dict[str, str]) -> str:
            f"| Preflight | {plan.get('preflight')} |",
            f"| On failure | {plan.get('on_failure')} |",
            f"| After apply | {plan.get('post_apply_check')} |"]
+    jobs = plan.get("jobs") or {}
+    if jobs.get("changed"):
+        cell = f"{'; '.join(map(str, jobs['changed']))} — {jobs.get('manual_step')}".replace("|", "\\|")
+        out.append(f"| Scheduled scripts (manual) | {cell} |")
     vc = plan.get("version_check") or {}
     tgt = vc.get("target") or {}
     out.append(f"| Pleasanter version | target {tgt.get('app')} (build {tgt.get('build')}, schema {tgt.get('schema')})"
