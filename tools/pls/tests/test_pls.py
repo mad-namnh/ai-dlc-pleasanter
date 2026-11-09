@@ -305,6 +305,42 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(rp("R5"), 1)
         self.assertFalse((self.r / "releases/R5").exists())
 
+    def test_jobs_verified_accepts_an_operator_of_the_env_or_a_g4_approver(self):
+        def applied(rel, env):
+            d = self.r / "releases" / rel
+            d.mkdir(parents=True)
+            (d / "plan.json").write_text(json.dumps({"release": rel, "env": env, "status": "applied", "sites": [],
+                                                     "jobs": {"fingerprints": {"nightly": "x"}, "changed": ["nightly added"]}}),
+                                         encoding="utf-8")
+        verified = lambda rel: json.loads((self.r / f"releases/{rel}/plan.json").read_text(encoding="utf-8"))["jobs"].get("verified")  # noqa: E731
+        jv = lambda *a: pls.main(["jobs-verified", *a, "--quote", "copied and compared"])                                # noqa: E731
+        for rel in ("S1", "S2", "S3", "S4", "S5"):
+            applied(rel, "stg")
+        prof = self.r / "CLAUDE.md"
+        # older profile, no Operators row: only G4 approvers
+        with self.assertRaises(pls.Fail):
+            jv("S1", "--by", "Hana")
+        prof.write_text("| Approvers | Nam (all gates) |\n| Operators | dev: Taro; stg: Hana (night shift); prod: <customer operator> |\n",
+                        encoding="utf-8")
+        self.assertEqual(jv("S1", "--by", "hana"), 0)                                 # operator of stg (name matched as written)
+        self.assertEqual({k: verified("S1")[k] for k in ("by", "role", "env", "quote")},
+                         {"by": "Hana", "role": "operator", "env": "stg", "quote": "copied and compared"})
+        self.assertIn("at", verified("S1"))
+        with self.assertRaises(pls.Fail):                                              # dev's operator cannot confirm stg
+            jv("S2", "--by", "Taro")
+        with self.assertRaises(pls.Fail):                                              # nobody of the profile
+            jv("S2", "--by", "Mallory")
+        self.assertIsNone(verified("S2"))
+        self.assertEqual(jv("S3", "--by", "Nam"), 0)
+        self.assertEqual(verified("S3")["role"], "g4-approver")
+        self.assertEqual(jv("S4", "--by", "Hana", "--approved-by", "Nam"), 0)          # copier and approver differ
+        self.assertEqual((verified("S4")["by"], verified("S4")["approved_by"]), ("Hana", "Nam"))
+        with self.assertRaises(pls.Fail):                                              # --approved-by must be a G4 approver
+            jv("S5", "--by", "Hana", "--approved-by", "Taro")
+        import pls_gate as GT
+        self.assertEqual(GT.operators("| Operators | dev: Nam; stg: <name>; prod: <customer operator> |"), {"dev": {"Nam"}})
+        self.assertIsNone(GT.operators("| Approvers | Nam |"))
+
     def test_release_plan_writes_nothing_if_one_site_fails(self):
         sa, sb = self._two_sites()
         bad = json.loads(sb.read_text(encoding="utf-8"))
@@ -571,6 +607,7 @@ class PlsTest(unittest.TestCase):
                   "design/slot-ledger.json", "traceability.json", "requirements/index.md", ".claude/framework.lock"):
             self.assertTrue((proj / f).exists(), f)
         self.assertIn("| Approvers | Nam (all gates) |", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
+        self.assertIn("| Operators | dev: Nam; stg: Nam; prod: <customer operator> |", (proj / "CLAUDE.md").read_text(encoding="utf-8"))
         self.assertTrue((proj / ".claude/skills/pls-x-lifecycle/SKILL.md").exists())
         out = subprocess.run([sys.executable, "pls.py", "lint"], cwd=proj, capture_output=True, text=True)
         self.assertIn("L-ENV-01", out.stdout, out.stderr)                    # launcher runs; setup not finished yet

@@ -89,6 +89,52 @@ def _approver_for(root: Path, name: str, gate: str) -> str:
     return match
 
 
+# ---------------------------------------------------------------- operators (manual deploy steps, ADR-0012)
+
+_OPS_ROW = re.compile(r"^\|\s*Operators\s*\|(.*)\|\s*$", re.M)
+
+
+def operators(profile_text: str) -> dict[str, set[str]] | None:
+    """Environment → names of the people who run its manual deploy steps, from the profile row "Operators"
+    (`dev: Nam; stg: Nam, Taro; prod: <customer operator>`). None when the profile has no such row (older projects);
+    placeholders (`<…>`, empty, "tbd") name nobody."""
+    m = _OPS_ROW.search(profile_text)
+    if not m:
+        return None
+    out: dict[str, set[str]] = {}
+    for seg in m.group(1).split(";"):
+        if ":" not in seg:
+            continue
+        env, names = seg.split(":", 1)
+        for n in re.split(r",|/|\band\b", re.sub(r"\([^)]*\)", "", names)):     # "(note)" is not a name
+            n = n.strip()
+            if n and "<" not in n and n.lower() not in ("tbd", "-", "none"):
+                out.setdefault(env.strip().strip("`"), set()).add(n)
+    return out
+
+
+def job_verifier(root: Path, name: str, env: str, approved_by: str | None = None) -> dict:
+    """Who may confirm the manual deploy of scheduled scripts on `env`: an operator of that environment (profile row
+    Operators) or a G4 approver. Without an Operators row only G4 approvers (older projects). `approved_by`, when
+    given, must be a G4 approver. Returns the record fields; raises GateError for a name the profile does not hold."""
+    prof = root / "CLAUDE.md"
+    ops = operators(prof.read_text(encoding="utf-8")) if prof.exists() else None
+    op = next((n for n in (ops or {}).get(env, set()) if n.casefold() == name.strip().casefold()), None)
+    if op:
+        rec = {"by": op, "role": "operator", "env": env}
+    else:
+        try:
+            rec = {"by": _approver_for(root, name, "G4"), "role": "g4-approver", "env": env}
+        except GateError as ex:
+            if ops is None:
+                raise
+            listed = ", ".join(sorted((ops or {}).get(env, set()))) or "nobody"
+            raise GateError(f"{name!r} is neither an operator of {env} (Operators row: {listed}) nor a G4 approver ({ex})")
+    if approved_by:
+        rec["approved_by"] = _approver_for(root, approved_by, "G4")
+    return rec
+
+
 def load(root: Path) -> list[dict]:
     d = root / "gates"
     return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("*.json"))] if d.exists() else []

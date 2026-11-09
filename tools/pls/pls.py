@@ -35,7 +35,8 @@ Commands:
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
   mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
-  jobs-verified <release> --by N --quote "…"     a person deployed and checked the release's scheduled scripts (ADR-0012)
+  jobs-verified <release> --by N --quote "…" [--approved-by G4]
+                                                an operator (or G4 approver) deployed and checked the release's scheduled scripts (ADR-0012)
   init <dir> [--stage S --target T --approver N]  new project from templates/project + skills + launcher (run from anywhere)
   skills check | sync                           project skills vs .claude/framework.lock vs the framework
 """
@@ -748,9 +749,10 @@ def need_onboarding(r: Path, what: str) -> None:
         raise Fail(str(ex))
 
 
-def jobs_verified(r: Path, release: str, by: str, quote: str) -> int:
-    """Record the person's check of the manual scheduled-script deploy (ADR-0012 option B). Until it is recorded, the
-    release is not a baseline for jobs and the next release lists the same changes again."""
+def jobs_verified(r: Path, release: str, by: str, quote: str, approved_by: str | None = None) -> int:
+    """Record the person's check of the manual scheduled-script deploy (ADR-0012 option B): an operator of the
+    release's environment or a G4 approver, in their own words (I4). Until it is recorded, the release is not a
+    baseline for jobs and the next release lists the same changes again."""
     p = r / "releases" / release / "plan.json"
     if not p.exists():
         raise Fail(f"releases/{release}/plan.json not found")
@@ -763,12 +765,13 @@ def jobs_verified(r: Path, release: str, by: str, quote: str) -> int:
     if not quote.strip():
         raise Fail("--quote: the person's own words are required (I4)")
     try:
-        who = GT._approver_for(r, by, "G4")
+        rec = GT.job_verifier(r, by, plan.get("env") or "", approved_by)
     except GT.GateError as ex:
         raise Fail(str(ex))
-    jobs["verified"] = {"by": who, "quote": quote.strip(), "at": datetime.now().astimezone().isoformat(timespec="seconds")}
+    jobs["verified"] = {**rec, "quote": quote.strip(), "at": datetime.now().astimezone().isoformat(timespec="seconds")}
     wj(p, plan)
-    print(f"{release}: scheduled scripts verified by {who} ({'; '.join(jobs['changed'])})")
+    print(f"{release}: scheduled scripts on {rec['env']} verified by {rec['by']} ({rec['role']})"
+          + (f", approved by {rec['approved_by']}" if rec.get("approved_by") else "") + f": {'; '.join(jobs['changed'])}")
     return 0
 
 
@@ -1834,6 +1837,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     text = re.sub(r"\| Release target \|.*\|", f"| Release target | `{release_target}` |", text, count=1)
     if approver:
         text = re.sub(r"\| Approvers \|.*\|", f"| Approvers | {approver} (all gates) |", text, count=1)
+        text = re.sub(r"\| Operators \|.*\|", f"| Operators | dev: {approver}; stg: {approver}; prod: <customer operator> |", text, count=1)
     text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
     cm.write_text(text, encoding="utf-8")
     (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
@@ -2547,8 +2551,10 @@ def _main(argv=None) -> int:
     s = sp.add_parser("jobs-verified", help="record that a person deployed and checked the scheduled scripts of an applied "
                                             "release (ADR-0012); never record it yourself")
     s.add_argument("release")
-    s.add_argument("--by", required=True, help="the person, a G4 approver of the project profile")
+    s.add_argument("--by", required=True, help="the person who copied and checked: an operator of the release's env "
+                                                "(profile row Operators) or a G4 approver")
     s.add_argument("--quote", required=True, help="the person's own words")
+    s.add_argument("--approved-by", help="optional: the G4 approver, when the operator is another person")
     s = sp.add_parser("xref", help="which script uses which column and site (ops/xref/<site>.json)")
     s.add_argument("--site", required=True)
     s = sp.add_parser("env-compare", help="compare one site across environments (exports, site packages or git), ids mapped; local files only")
@@ -2732,7 +2738,7 @@ def _main(argv=None) -> int:
         return 0
 
     if a.cmd == "jobs-verified":
-        return jobs_verified(r, a.release, a.by, a.quote)
+        return jobs_verified(r, a.release, a.by, a.quote, a.approved_by)
 
     if a.cmd == "bootstrap-plan":
         return bootstrap_plan(r, a.env, a.release)

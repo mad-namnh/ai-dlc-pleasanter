@@ -24,6 +24,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 | Stage | `demo` (one person approves every gate; customer questions are answered with the `[assumed]` defaults unless the approver says otherwise) / `project` (customer owner approves G1 and G4) |
 | Release target | `dev` (P5 records the dev state as released) / `stg` / `prod` (customer-side deploy, ADR-0003) |
 | Approvers | G1, G4: <name>; G2, G3: <name> |
+| Operators | dev: <name>; stg: <name>; prod: <customer operator> |
 | Role tests | `deferred` (one key, the operator's: restrictions are verified in the configuration, not as each role; demo stage) / `per-role keys` (a test user and key per restricted role, TD-11) |
 
 ## Hard rules
