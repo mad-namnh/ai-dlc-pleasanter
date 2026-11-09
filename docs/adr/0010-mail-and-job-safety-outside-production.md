@@ -1,6 +1,6 @@
 # ADR-0010: Mail and scheduled-job safety outside production
 
-- **Status:** Proposed (2026-11-05) — mail part implemented on branch `brownfield-adr` (plan BR1); jobs guard waits for ADR-0012
+- **Status:** Proposed (2026-11-05) — mail part implemented on branch `brownfield-adr` (plan BR1); jobs guard implemented 2026-11-09 (ADR-0012 option B)
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** TD-10 (mail deferred), ADR-0012 (background server scripts), ADR-0003 (production), I3; plan Step 4c
@@ -59,7 +59,14 @@ TD-10 deferred mail for the demo stage. A real project cannot defer it: a test r
 - `apply` refuses a plan that records no mail changes at all (made before this check) unless mail is `sink` or `disabled`: re-run `release-plan`.
 - Every notification and reminder counts, also disabled ones and non-mail notification types (safe side).
 - `release-plan` records the changed mail elements per site (`per_site.<site>.side_effects`, `MAIL …` lines) and notes when `apply` will refuse; plans for prod are not affected (prod is never written by `pls`).
-- `jobs` is validated and shown, but nothing detects scheduled scripts yet (ADR-0012). Reminders count as mail elements.
+- Reminders count as mail elements.
+- **Jobs guard (2026-11-09, audit F-05).** The tool cannot see the tenant (D31), so a project "has jobs" when it declares scheduled scripts in git (`config/_tenant/scheduled-scripts/`, ADR-0012). A scheduled script is tenant-wide, not tied to a site, so every declared job counts for every writing test.
+  - `test`: a spec that writes is refused while the project declares jobs and `jobs` is `unknown`; `live` prints a warning. A project that declares no jobs is not blocked, even with `jobs: unknown` — onboarding asks for the list.
+  - `release-plan`: records `plan.jobs` (fingerprint per job = sha256 of its index entry and body **with `${site:x}` / `${principal:x}` / `${env:x}` resolved for the env**, so a changed environment value is a changed job) and the manual deploy step; when jobs changed, the resolved files the operator copies are written to `releases/<R>/scheduled-scripts/`; operator report row. A bad `_index.json`, a body that is not UTF-8 or an unresolved reference refuses the plan.
+  - Baseline: the last applied release of the env whose job changes a person confirmed with `pls jobs-verified <R> --by <G4 approver> --quote …` (or that changed no job). Until the manual deploy is confirmed, the next release lists the same changes again. None → every job counts as added.
+  - `apply`: refuses a release that changes jobs while `jobs` is `unknown`; a plan without a `jobs` record (made before this check) while the project declares jobs and `jobs` is not `disabled`; a hand-broken `jobs` record; and a plan whose scheduled scripts in git (or their environment values) changed since it was made. Prints the manual step. Lint L-JOB-01 checks the layout.
+  - **Sandboxes** (ADR-0011) share the base environment's SMTP and tenant: their `mail` / `jobs` state is the riskier of their own copy and the base's current value (also for mail), and a sandbox release never lists or deploys scheduled scripts — they go through the base environment's releases only.
+  - Limits: a release plan is made per set of sites, so a change that touches only scheduled scripts still needs a release plan with at least one site. Lint of the job bodies (L-REF-01, L-SEC-01, `node --check`, ADR-0012 item 2) is not built yet.
 - The mail sink step for P4 (`op: "mail"`) is not built yet: it needs a sink on the candidate's dev.
 - **Known limit:** a server script or a summary that writes to **another** site can fire that site's notifications; the guard does not follow such chains. It is safe only when the other site is also in the spec or in the environment's site list (as with `--var` records). Covered fully once mail is `sink` or `disabled`.
 

@@ -26,7 +26,7 @@ Read this first in a new session, then `CLAUDE.md` and `docs/architecture.md`.
 **Next**
 1. Onboarding of the first real project on dev (Nam deploys it first): `pls init <name> --origin existing --stage project --target stg`, then skill `pls-x-onboarding`. Projects created before `pls gate` get L-GATE-01 for past approvals: Nam confirms them again (see lifecycle `references/gates.md`).
 2. After that run: Nam decides ADR-0009/0010/0011 (Proposed).
-3. Later (not started): split `http_cmd` (audit F-06); structured L-LAD-01 (F-08); jobs guard if dev runs jobs; tie a G4 record to an environment; browser e2e runner decision (`pls-p4-e2e-tester`); KB probes for D16/D19/D20/D23; daily drift.
+3. Later (not started): split `http_cmd` (audit F-06); structured L-LAD-01 (F-08); tie a G4 record to an environment; browser e2e runner decision (`pls-p4-e2e-tester`); KB probes for D16/D19/D20/D23; daily drift.
 
 ## What this is
 

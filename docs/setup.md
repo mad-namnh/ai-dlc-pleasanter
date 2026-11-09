@@ -75,7 +75,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `disabled` | the server sends no mail |
 | `live` | real mail is sent — tests on sites with notifications stay refused; releases show a warning |
 
-`jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts; its checks come with ADR-0012. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
+`jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts (ADR-0012). The project declares them in `config/_tenant/scheduled-scripts/` (`<name>.js` + `_index.json`, a list of `{"name", "schedule", "enabled"}`). While the project declares any and `jobs` is `unknown`, `pls test` refuses tests that change records and `pls apply` refuses a release that changes a scheduled script; `live` gives a warning. Every release plan lists changed scheduled scripts with a manual deploy step (files resolved for the environment in `releases/<R>/scheduled-scripts/`); after copying them into tenant management, the person records the check with `pls jobs-verified <R> --by <name> --quote "…"`. A sandbox uses the riskier of its own and dev's values and never deploys scheduled scripts. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
 
 **Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, `python pls.py sandbox refresh --name <you>`, `python pls.py apply <R-…>`.
 

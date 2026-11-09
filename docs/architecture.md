@@ -286,6 +286,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls adopt-package` | onboarding | Every site of a UI site package in one read-only run (names from the project or a person's file) | branch |
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts | branch |
+| `pls jobs-verified` | P5 (ADR-0012) | Record that a G4 approver deployed and checked a release's scheduled scripts by hand; until then the next release lists them again | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4 | branch |
 
 ### 7.2 Lint rule catalogue (seeded from findings)
@@ -305,6 +306,7 @@ One file, `traceability.json`, links the chain in both directions:
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
 | L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
 | L-ENV-02 | ADR-0010 | `side_effects` values are known states |
+| L-JOB-01 | ADR-0012 | Scheduled scripts: `_index.json` is a list with unique names, and every entry has a body (and every body an entry) |
 | L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
 | L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile |
