@@ -75,7 +75,8 @@ class RecordTest(unittest.TestCase):
     def test_require_rechecks_the_approver(self):
         (self.r / "gates").mkdir()
         (self.r / "gates/2026-11-08-G4-x.json").write_text(json.dumps(
-            {"gate": "G4", "decision": "approved", "approver": "Claude", "date": "2026-11-08", "releases": ["R-1"]}), encoding="utf-8")
+            {"gate": "G4", "decision": "approved", "approver": "Claude", "date": "2026-11-08",
+             "at": "2026-11-08T10:00:00.000000+09:00", "releases": ["R-1"]}), encoding="utf-8")
         with self.assertRaisesRegex(GT.GateError, "not an approver"):
             GT.require(self.r, "G4", "R-1", "applying to stg")
 

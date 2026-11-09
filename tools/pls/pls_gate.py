@@ -9,6 +9,8 @@ commands trust:
   (pls_release_digest): a release changed after G4 is refused;
 - lint L-GATE-01: every "G<n> approved" status line in a REQ, DES, G3 or approvals file has its record.
 Only names listed as approvers in the project profile (`CLAUDE.md`, row "Approvers") are accepted.
+The last decision counts: ordered by the instant in `at` (a rejection wins a tie); a record dated in the future or
+of the wrong shape refuses every gate check until a person repairs or removes it.
 """
 from __future__ import annotations
 
@@ -138,9 +140,63 @@ def job_verifier(root: Path, name: str, env: str, approved_by: str | None = None
     return rec
 
 
+# A record may come from another machine whose clock runs a little ahead; anything later than this is not a real
+# decision yet and would outrank every decision recorded after it.
+FUTURE_TOLERANCE = timedelta(minutes=5)
+
+
+def _instant(value) -> datetime | None:
+    """`at` of a record as an aware datetime (an instant), or None when it is not an ISO time with a UTC offset."""
+    if not isinstance(value, str):
+        return None
+    try:
+        t = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return t if t.tzinfo is not None and t.utcoffset() is not None else None
+
+
+def _record_problem(g, now: datetime) -> str | None:
+    """Why a gate record cannot be trusted as written; None when its fields have the shapes the guards read."""
+    if not isinstance(g, dict):
+        return "is not a JSON object"
+    if g.get("gate") not in GATES:
+        return f"gate {g.get('gate')!r} is not one of {', '.join(GATES)}"
+    if g.get("decision") not in DECISIONS:
+        return f"decision {g.get('decision')!r} is not one of {', '.join(DECISIONS)}"
+    if not isinstance(g.get("approver"), str) or not g["approver"].strip():
+        return "approver is not a name"
+    for k in ("items", "releases"):        # a string would match ids by substring ("R-30" contains "R-3")
+        v = g.get(k, [])
+        if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
+            return f"{k} is not a list of ids"
+    t = _instant(g.get("at"))
+    if t is None:
+        return f"at {g.get('at')!r} is not an ISO time with a UTC offset"
+    if t > now + FUTURE_TOLERANCE:
+        return f"at {g['at']} is in the future"
+    return None
+
+
 def load(root: Path) -> list[dict]:
+    """Every record under gates/, each with its instant in "_t". A record that cannot be read or has the wrong shape
+    raises GateError naming the file: a guard never decides from a record it cannot interpret (fail closed)."""
     d = root / "gates"
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("*.json"))] if d.exists() else []
+    if not d.exists():
+        return []
+    now, out = datetime.now().astimezone(), []
+    for p in sorted(d.glob("*.json")):
+        rel = p.relative_to(root).as_posix()
+        try:
+            g = json.loads(p.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, ValueError) as ex:
+            raise GateError(f"{rel} is not a readable JSON record ({ex}) — a person repairs or removes it; "
+                            f"gate checks refuse until then")
+        why = _record_problem(g, now)
+        if why:
+            raise GateError(f"{rel}: {why} — a person repairs or removes the record; gate checks refuse until then")
+        out.append(dict(g, _t=_instant(g["at"])))
+    return out
 
 
 def record(root: Path, gate: str, decision: str, approver: str, quote: str, items: list[str], releases: list[str],
@@ -162,7 +218,7 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
     now = datetime.now().astimezone()
     # the clock can repeat a value (coarse on Windows): a new record is always later than every record already there,
     # so "the last decision wins" never depends on the random file suffix
-    prev = [datetime.fromisoformat(g["at"]) for g in load(root) if g.get("at")]
+    prev = [g["_t"] for g in load(root)]
     if prev and now <= max(prev):
         now = max(prev) + timedelta(microseconds=1)
     at = now.isoformat(timespec="microseconds")
@@ -184,12 +240,13 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
 
 
 def latest(root: Path, gate: str, *, item: str | None = None, release: str | None = None) -> dict | None:
-    """The last decision of this gate that covers the item or release (a later rejection overrides an approval)."""
-    def ids(v):                       # a hand-edited string must not match by substring ("R-30" contains "R-3")
-        return v if isinstance(v, list) else []
-    hits = [g for g in load(root) if g.get("gate") == gate and
-            (item is None or item in ids(g.get("items"))) and (release is None or release in ids(g.get("releases")))]
-    return sorted(hits, key=lambda g: (g.get("date", ""), g.get("at", "")))[-1] if hits else None
+    """The last decision of this gate that covers the item or release (a later rejection overrides an approval).
+
+    Ordered by the instant in `at`, not by the recorder's local date (approvers in different time zones); on the
+    same instant any decision other than "approved" wins, so a tie never lets an approval through."""
+    hits = [g for g in load(root) if g["gate"] == gate and
+            (item is None or item in g.get("items", [])) and (release is None or release in g.get("releases", []))]
+    return max(hits, key=lambda g: (g["_t"], g["decision"] != "approved")) if hits else None
 
 
 def require(root: Path, gate: str, release: str, why: str) -> None:
@@ -247,6 +304,11 @@ def lint(root: Path) -> list[dict]:
             issues.append({"rule": "L-ONB-01", "site": "-", "msg": f"Origin `existing` without an onboarding summary "
                            f"({ONBOARDING_SUMMARY}), but change documents exist: {', '.join(docs[:5])}"
                            f"{' …' if len(docs) > 5 else ''} — onboarding comes first (lifecycle section 0)"})
+    try:
+        load(root)
+    except GateError as ex:            # a damaged record is itself the finding; the checks below would all refuse
+        issues.append({"rule": "L-GATE-01", "site": "-", "msg": str(ex)})
+        return issues
     prof = root / "CLAUDE.md"
     names = {n.casefold() for n in approvers(prof.read_text(encoding="utf-8"))} if prof.exists() else set()
 

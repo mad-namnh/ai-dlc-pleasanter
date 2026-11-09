@@ -96,7 +96,11 @@ class G4BindingTest(unittest.TestCase):
         (self.r / "gates/2026-11-08-G4-x.json").write_text(json.dumps(
             {"gate": "G4", "decision": "approved", "approver": "Nam", "date": "2026-11-08", "at": "2026-11-08T10:00:00+09:00",
              "releases": R + "0"}), encoding="utf-8")
-        self.assertIsNone(GT.latest(self.r, "G4", release=R))
+        n = len(self.fake.calls)
+        with self.assertRaisesRegex(GT.GateError, "releases is not a list"):      # refused, never read as a match
+            GT.latest(self.r, "G4", release=R)
+        self.assertEqual(pls.main(["apply", R, "--yes"]), 2)
+        self.assertEqual(self.writes(n), [])
 
 
 class PlanStepsMatchPerSiteTest(unittest.TestCase):
