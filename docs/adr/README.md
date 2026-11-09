@@ -15,5 +15,6 @@
 | [0011](0011-parallel-development-sandboxes-harvest-merge.md) | Parallel development: sandboxes, harvest and semantic merge | Proposed (2026-11-05) |
 | [0013](0013-observability-and-tool-first.md) | Observability (run log, token usage) and tool-first work | Proposed (2026-11-08) |
 | [0012](0012-scheduled-server-scripts-scope.md) | Scope of scheduled (background) server scripts | Accepted (2026-11-05) — option B: files in git, manual deploy, person verifies (no API) |
+| [0014](0014-trust-boundaries.md) | Trust boundaries — what `pls` enforces and what it trusts | Proposed (2026-11-09) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".
