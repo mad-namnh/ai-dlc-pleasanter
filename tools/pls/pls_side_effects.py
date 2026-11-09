@@ -23,6 +23,8 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from pls_adopt import SAFE_NAME
+
 MAIL_STATES = ("unknown", "sink", "disabled", "live")
 JOB_STATES = ("unknown", "disabled", "live")
 MAIL_SAFE = ("sink", "disabled")          # a test or release may fire mail only into these
@@ -211,6 +213,9 @@ def _job_index(d: Path) -> dict[str, dict]:
         name = it.get("name") if isinstance(it, dict) else None
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"{JOBS_INDEX}[{i}] has no 'name'")
+        if not SAFE_NAME.fullmatch(name):                  # the name is also the body's file stem (Windows: case-blind)
+            raise ValueError(f"{JOBS_INDEX}[{i}]: name {name!r} must be lowercase letters, digits, '-' or '_' "
+                             "(it names <name>.js; keep the Japanese title in another field)")
         if name in out:
             raise ValueError(f"{JOBS_INDEX}: name {name!r} is used twice")
         out[name] = it
@@ -231,7 +236,8 @@ def job_problems(r: Path) -> list[str]:
     except ValueError as ex:
         return [str(ex)]
     bodies = set(_bodies(d))
-    return ([f"{n}: listed in {JOBS_INDEX} but {n}.js is missing" for n in sorted(set(idx) - bodies)] +
+    return ([f"{n}.js: file name must be lowercase letters, digits, '-' or '_'" for n in sorted(bodies) if not SAFE_NAME.fullmatch(n)] +
+            [f"{n}: listed in {JOBS_INDEX} but {n}.js is missing" for n in sorted(set(idx) - bodies)] +
             [f"{n}.js: not listed in {JOBS_INDEX} (schedule and enabled flag unknown)" for n in sorted(bodies - set(idx))])
 
 
@@ -346,4 +352,6 @@ def bad_plan_jobs(pj: Any) -> str | None:
         return "plan.jobs.changed is not a list of strings"
     if pj.get("fingerprints") is not None and not valid_fingerprints(pj["fingerprints"]):
         return "plan.jobs.fingerprints is not an object of name → sha256"
+    if pj.get("manual_step") is not None and not isinstance(pj["manual_step"], str):
+        return "plan.jobs.manual_step is not text"
     return None

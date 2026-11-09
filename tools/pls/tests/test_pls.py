@@ -5,6 +5,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -87,6 +88,60 @@ class PlsTest(unittest.TestCase):
         rules = sorted({i["rule"] for i in pls.lint(self.r)})
         # 202 is a stg id → not converted by dev unpack → hard-coded reference
         self.assertEqual(rules, ["L-LAD-01", "L-REF-01", "L-SCR-01", "L-SEC-01"])
+
+    def job_files(self, jobs: dict, entries: list | None = None):
+        import pls_side_effects as SE
+        d = self.r / SE.JOBS_DIR
+        d.mkdir(parents=True, exist_ok=True)
+        for f in d.iterdir():
+            f.unlink()
+        for name, body in jobs.items():
+            (d / f"{name}.js").write_text(body, encoding="utf-8")
+        (d / SE.JOBS_INDEX).write_text(json.dumps(entries or [{"name": n} for n in jobs]), encoding="utf-8")
+
+    def job_rules(self) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
+        for i in pls.lint(self.r):
+            if i["site"] == "_tenant":
+                out.setdefault(i["rule"], []).append(i["msg"])
+        return out
+
+    def test_scheduled_script_bodies_follow_the_server_script_rules(self):
+        self.job_files({"clean": "var t = items.Get(${site:a}, '{}');"})
+        self.assertEqual(self.job_rules(), {})
+        self.job_files({"rawid": "items.Get(202, '{}');"})                                 # L-REF-01: stg id written raw
+        self.assertIn("202", self.job_rules()["L-REF-01"][0])
+        self.job_files({"secret": "var k = 'sk-ant-abcdefghijklmnop';"})                   # L-SEC-01
+        self.assertEqual(list(self.job_rules()), ["L-SEC-01"])
+        self.job_files({"shared": "const U = 1;", "own": "const V = 2;"},
+                       [{"name": "shared", "shared": True}, {"name": "own"}])            # L-SCR-01 only when shared (D7)
+        self.assertEqual(self.job_rules()["L-SCR-01"], ["scheduled script shared: shared script declares top-level const/let (D7)"])
+        self.job_files({"unres": "var u = '${env:NOPE}';"})                               # resolved per env, not guessed
+        self.assertTrue(any("NOPE" in m for m in self.job_rules()["L-REF-02"]))
+        self.job_files({"Bad Name": "var a = 1;"})                                          # L-JOB-01: file stem rule
+        self.assertIn("L-JOB-01", self.job_rules())
+
+    def test_scheduled_script_syntax_is_checked_on_the_resolved_body(self):
+        import pls_scripts as SX
+        if not SX.node_available():
+            self.skipTest("node not installed")
+        self.job_files({"ok": "var u = '${env:URL}'; return;"})          # wrapped like a server script: return allowed
+        self.assertNotIn("L-SCR-02", self.job_rules())
+        self.job_files({"broken": "var a = ;"})
+        msgs = self.job_rules()["L-SCR-02"]
+        self.assertEqual(len(msgs), 1)                                    # same text on every env → checked once
+        self.assertIn("broken (dev)", msgs[0])
+
+    def test_scheduled_script_syntax_check_is_skipped_with_a_warning_without_node(self):
+        import contextlib
+        import io
+        import pls_scripts as SX
+        self.job_files({"broken": "var a = ;"})
+        err = io.StringIO()
+        with mock.patch.object(SX, "node_available", return_value=False), contextlib.redirect_stderr(err):
+            rules = self.job_rules()
+        self.assertNotIn("L-SCR-02", rules)
+        self.assertIn("node not found", err.getvalue())
 
     def test_slot_ledger(self):
         self.unpack_dev()

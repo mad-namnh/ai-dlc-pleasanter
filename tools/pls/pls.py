@@ -513,6 +513,57 @@ def unconditioned_processes(settings: dict, view_missing_only: bool = False) -> 
     return out
 
 
+TOP_LEVEL_DECL = re.compile(r"(?m)^\s*(const|let)\s+\w")
+
+
+def lint_jobs(r: Path, e_all: dict, all_ids: set) -> list[dict]:
+    """The server-script rules on the bodies of scheduled scripts (ADR-0012 decision 2): L-REF-01 (no raw site id in
+    an id context), L-SEC-01, L-SCR-01 (top-level const/let in a shared script, D7) and L-SCR-02 (`node --check` of
+    the body as deployed: resolved for every environment that can receive it; sandboxes never do). A bad layout is
+    L-JOB-01's job, so it is skipped here."""
+    issues: list[dict] = []
+
+    def add(rule: str, msg: str) -> None:
+        issues.append({"rule": rule, "site": "_tenant", "msg": f"scheduled script {msg}"})
+    try:
+        raw = SE.load_jobs(r)
+    except ValueError:
+        return issues
+    for name, j in raw.items():
+        body = j["body"] or ""
+        for i in sorted(all_ids):
+            if SX.literal_left(body, i):
+                add("L-REF-01", f"{name}: site id {i} written as a site id; use ${{site:…}}")
+        blob = json.dumps(j, ensure_ascii=False)
+        for sname, rx in SECRET_RES.items():
+            if rx.search(blob):
+                add("L-SEC-01", f"{name}: secret-like value ({sname})")
+        entry = j["entry"] if isinstance(j["entry"], dict) else {}
+        if (entry.get("shared") or entry.get("Shared")) and TOP_LEVEL_DECL.search(body):
+            add("L-SCR-01", f"{name}: shared script declares top-level const/let (D7)")
+    code: dict[str, list[str]] = {}                               # resolved body → "<name> (<env>)" labels
+    for env_name, ec in sorted(e_all["envs"].items()):
+        if ec.get("sandbox_of"):
+            continue
+        try:
+            jobs = SE.load_jobs(r, lambda x, ec=ec: from_refs(x, ec))
+        except Fail as ex:
+            add("L-REF-02", f"references cannot be resolved for env '{env_name}': {ex}")
+            continue
+        for name, j in jobs.items():
+            if j["body"] is not None:
+                code.setdefault(j["body"], []).append(f"{name} ({env_name})")
+    if code and not SX.node_available():
+        print("warning: _tenant: L-SCR-02 skipped for scheduled scripts — node not found", file=sys.stderr)
+    elif code:
+        try:
+            for err in SX.syntax_errors([(f"scheduled/{', '.join(labels)}", body, True) for body, labels in code.items()]):
+                add("L-SCR-02", f"{err['label']} line {err['line']}: {err['message']}")
+        except RuntimeError as ex:
+            add("L-SCR-02", f"syntax check not run: {ex}")
+    return issues
+
+
 def lint(r: Path) -> list[dict]:
     issues: list[dict] = []
     e_all = envs(r)
@@ -531,6 +582,7 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-ENV-02", "site": "-", "msg": f"envs.{env_name}.{ex} (ADR-0010)"})
     for x in SE.job_problems(r):                                  # L-JOB-01: scheduled scripts declared consistently (ADR-0012)
         issues.append({"rule": "L-JOB-01", "site": "_tenant", "msg": f"{SE.JOBS_DIR.as_posix()}/{x}"})
+    issues += lint_jobs(r, e_all, all_ids)
     for site_dir in sorted((r / "config").iterdir()):
         if not site_dir.is_dir():
             continue
@@ -563,7 +615,7 @@ def lint(r: Path) -> list[dict]:
                     issues.append({"rule": "L-REF-03", "site": site, "msg": f"{kind}/{nm}: ${{site:{name}}} outside a site-id context "
                                    "becomes a plain number on the next unpack; write it as a site id (…SiteId = ${site:…}) "
                                    "or record it (pls refs --ref)"})
-                if kind == "ServerScripts" and it.get("Shared") and re.search(r"(?m)^\s*(const|let)\s+\w", body):
+                if kind == "ServerScripts" and it.get("Shared") and TOP_LEVEL_DECL.search(body):
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
                 if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
