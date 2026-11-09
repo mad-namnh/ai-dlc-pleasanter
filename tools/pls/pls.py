@@ -250,6 +250,8 @@ def logical(export: Any, e: dict) -> dict:
     acl_to_refs(model["settings"], e)
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
+    if "Title" in d:      # per environment (environments.json title): compared on read-back, never written to git
+        model["title"] = d["Title"]
     return model
 
 
@@ -393,9 +395,28 @@ def flat_diff(a: Any, b: Any, path: str = "") -> list[dict]:
                 out += flat_diff(a[k], b[k], p)
     elif isinstance(a, list) and isinstance(b, list) and all(isinstance(x, dict) for x in a + b) and \
             any(("ColumnName" in x or "Id" in x or "Name" in x) for x in a + b):
-        def key(x):
+        def k0(x):
             return str(x.get("ColumnName", x.get("Name", x.get("Id"))))
-        ka, kb = {key(x): x for x in a}, {key(x): x for x in b}
+        # Names can repeat (server scripts, processes in real sites). A repeated name is keyed "Name@Id" when every
+        # item with that name on both sides has an Id (stable within a site), else by occurrence "Name#2", "Name#3" …
+        # Decided on both lists together, so both sides use the same keys; no item is ever hidden behind another.
+        repeated = {k for lst in (a, b) for k, n in Counter(map(k0, lst)).items() if n > 1}
+        by_id = {k for k in repeated if all("Id" in x for x in a + b if k0(x) == k)}
+
+        def keyed(items):
+            out_, seen = {}, Counter()
+            for x in items:
+                k = k0(x)
+                seen[k] += 1
+                if k in by_id:
+                    k = f"{k}@{x['Id']}"
+                elif k in repeated and seen[k] > 1:
+                    k = f"{k}#{seen[k]}"
+                while k in out_:                 # a real name such as "init#2" must not overwrite a suffixed one
+                    k += "#"
+                out_[k] = x
+            return out_
+        ka, kb = keyed(a), keyed(b)
         for k in sorted(set(ka) | set(kb), key=str):
             p = f"{path}[{k}]"
             if k not in kb:
@@ -404,8 +425,8 @@ def flat_diff(a: Any, b: Any, path: str = "") -> list[dict]:
                 out.append({"path": p, "kind": "added", "before": None, "after": kb[k]})
             else:
                 out += flat_diff(ka[k], kb[k], p)
-        if [key(x) for x in a if key(x) in kb] != [key(x) for x in b if key(x) in ka]:
-            out.append({"path": path, "kind": "reordered", "before": [key(x) for x in a], "after": [key(x) for x in b]})
+        if [k for k in ka if k in kb] != [k for k in kb if k in ka]:
+            out.append({"path": path, "kind": "reordered", "before": list(ka), "after": list(kb)})
     elif a != b:
         out.append({"path": path, "kind": "changed", "before": a, "after": b})
     return out
@@ -856,6 +877,8 @@ def payload_model(pl: dict, e: dict, site: str | None) -> dict:
     script numbers (pls refs --ref / --keep) are keyed by the site, so its id in `e` is passed along — without it a
     recorded reference renders as a plain number and every round trip shows false differences."""
     d = {"SiteSettings": pl["SiteSettings"], "ReferenceType": pl.get("ReferenceType"), "Body": pl.get("Body", "")}
+    # everything the payload writes is read back: the title and, when git manages them, the permissions (D15)
+    d.update({k: pl[k] for k in ("Title", "InheritPermission", "Permissions") if k in pl})
     sid = ((e.get("sites") or {}).get(site) or {}).get("id") if site else None
     if sid:
         d["SiteId"] = sid
@@ -950,6 +973,8 @@ def same_meta(live: dict, base: dict) -> dict:
     out = dict(live, meta={k: v for k, v in live["meta"].items() if k in base["meta"]})
     if base.get("permissions") is None:
         out.pop("permissions", None)   # permissions not managed in git for this site (opt-in)
+    if base.get("title") is None:
+        out.pop("title", None)         # git holds no title; a release payload does (environments.json)
     return out
 
 
@@ -963,7 +988,9 @@ def drift_report(r: Path, e: dict, env: str, site: str, export: Any, explicit: s
         rev = classify(diffs)
         text += (f"\n**Reverting this drift would be: {rev['classification']}.**"
                  + ("".join(f"\n- {x}" for x in rev["data_impacting"] + rev["permission_impacting"]))
-                 + "\nResolve by accepting (fold into git + requirement) or reverting (via a release with its own gate); see D11.\n")
+                 + "\nResolve by accepting (fold into git + requirement) or reverting (via a release with its own gate); see D11.\n"
+                 + ("A title lives in environments.json (envs.<env>.sites.<site>.title), not in config/: accept a title "
+                    "change there.\n" if any(d["path"] == "title" for d in diffs) else ""))
     return diffs, text
 
 
@@ -2983,7 +3010,10 @@ def _main(argv=None) -> int:
             # baseline so the fold-back release (P3 step 6) is not refused as drift (S2).
             for site in plan["sites"]:
                 d = site_data(rj(Path(exports[site])))
-                wj(rel / f"live-{site}.json", {k: d[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in d})
+                pl = rj(rel / plan["per_site"][site]["payload_file"])
+                perms = ("InheritPermission", "Permissions") if ("Permissions" in pl or "InheritPermission" in pl) else ()
+                managed = ("Title", "Body", "ReferenceType", "SiteSettings") + perms     # what the release wrote
+                wj(rel / f"live-{site}.json", {k: d[k] for k in managed if k in d})
             plan.update(status="applied-differs", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                         post_apply_check="live differs from the payload; live-<site>.json is the baseline — fold the "
                                          "differences into config/ and plan a follow-up release")

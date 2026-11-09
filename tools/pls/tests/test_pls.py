@@ -374,6 +374,10 @@ class PlsTest(unittest.TestCase):
             pls.main(["jobs-verified", "R1", "--by", "Nam", "--quote", "copied and checked"])
         plan.update(status="applied", applied_at="2026-11-09T10:00:00+09:00")       # as mark-applied records it
         (self.r / "releases/R1/plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        for site, exp in (("a", sa), ("b", sb)):                                    # live after R1: it wrote the titles
+            doc = json.loads(exp.read_text(encoding="utf-8"))
+            doc["Response"]["Data"]["Title"] = json.loads((self.r / f"releases/R1/payload-{site}.json").read_text(encoding="utf-8"))["Title"]
+            exp.write_text(json.dumps(doc), encoding="utf-8")
         self.assertEqual(rp("R2"), 0)                                                # deploy not confirmed: listed again
         self.assertTrue(plan_of("R2")["jobs"]["changed"][0].startswith("nightly added"))
         with self.assertRaises(pls.Fail):                                            # only a profile approver

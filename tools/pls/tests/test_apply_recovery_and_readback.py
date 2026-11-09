@@ -146,6 +146,20 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(before, json.loads((d / "plan.json").read_text(encoding="utf-8")))
         self.assertFalse(list(d.glob("live-*.json")))
 
+    def test_applied_differs_baseline_keeps_the_permissions_the_release_wrote(self):
+        plan, d = self.plan()
+        for s in ("equipment", "loans"):
+            (d / f"payload-{s}.json").write_text(json.dumps({"Title": f"new {s}", "ReferenceType": "Results",
+                                                             "SiteSettings": {"X": 1, "Dflt": True},
+                                                             "InheritPermission": EQ if s == "equipment" else LO,
+                                                             "Permissions": ["User,1,511"]}), encoding="utf-8")
+        self.fake.drop_on_save = "Dflt"                         # Pleasanter canonicalises on save (D8)
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
+        self.assertEqual(self.status(d), "applied-differs")
+        live = json.loads((d / "live-loans.json").read_text(encoding="utf-8"))
+        self.assertEqual(live["Permissions"], ["User,1,511"])
+        self.assertEqual(live["InheritPermission"], LO)
+
     def set_state(self, d, **kw):
         plan = json.loads((d / "plan.json").read_text(encoding="utf-8"))
         (d / "plan.json").write_text(json.dumps(dict(plan, **kw)), encoding="utf-8")
