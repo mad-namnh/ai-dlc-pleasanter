@@ -142,9 +142,44 @@ def require(root: Path, gate: str, release: str, why: str) -> None:
                         f"after the person approves, record it with `pls gate {gate} --approver <name> --release {release} --quote …`")
 
 
+# ---------------------------------------------------------------- onboarding before change work (Origin `existing`)
+
+_ORIGIN = re.compile(r"^\|\s*Origin\s*\|\s*`?(new|existing)`?\s*\|", re.M)
+ONBOARDING_SUMMARY = "ops/onboarding/*-summary.md"
+
+
+def origin(root: Path) -> str | None:
+    """Origin of the project profile (`new` / `existing`); None when the row is missing or still the template text."""
+    prof = root / "CLAUDE.md"
+    m = _ORIGIN.search(prof.read_text(encoding="utf-8")) if prof.exists() else None
+    return m.group(1) if m else None
+
+
+def onboarding_missing(root: Path) -> bool:
+    """True for a taken-over app (Origin `existing`) whose onboarding has not been recorded yet."""
+    return origin(root) == "existing" and not any(root.glob(ONBOARDING_SUMMARY))
+
+
+def require_onboarding(root: Path, what: str) -> None:
+    """Refuse change work on a taken-over app before its onboarding (lifecycle section 0): the as-is state, the
+    environments and the open decisions are unknown until then."""
+    if onboarding_missing(root):
+        raise GateError(f"{what}: the profile says Origin `existing` and there is no onboarding summary ({ONBOARDING_SUMMARY}). "
+                        "Run the onboarding first (skill pls-x-onboarding, read only); save a change request that arrives "
+                        "before it as requirements/sources/<date>-pending-<slug>.md without analysis")
+
+
 def lint(root: Path) -> list[dict]:
-    """L-GATE-01: an approval written in a document has a matching record by a profile approver."""
+    """L-GATE-01: an approval written in a document has a matching record by a profile approver.
+    L-ONB-01: no REQ / DES documents for a taken-over app before its onboarding."""
     issues = []
+    if onboarding_missing(root):
+        docs = [p.relative_to(root).as_posix() for d, pat in (("requirements", "REQ-*.md"), ("design/decisions", "DES-*.md"))
+                if (root / d).exists() for p in sorted((root / d).glob(pat))]
+        if docs:
+            issues.append({"rule": "L-ONB-01", "site": "-", "msg": f"Origin `existing` without an onboarding summary "
+                           f"({ONBOARDING_SUMMARY}), but change documents exist: {', '.join(docs[:5])}"
+                           f"{' …' if len(docs) > 5 else ''} — onboarding comes first (lifecycle section 0)"})
     prof = root / "CLAUDE.md"
     names = {n.casefold() for n in approvers(prof.read_text(encoding="utf-8"))} if prof.exists() else set()
 

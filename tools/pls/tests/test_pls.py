@@ -534,6 +534,36 @@ class PlsTest(unittest.TestCase):
                 self.assertIn(f"| Origin | `{origin}` |", text)
                 self.assertIn("No P1 before the onboarding summary exists", text)
 
+    def test_change_work_on_an_existing_app_waits_for_the_onboarding_summary(self):
+        import pls_gate as GT
+        proj = self.r / "takeover"
+        pls.init_project(proj, "project", "stg", "Nam", origin="existing")
+        os.chdir(proj)
+        try:
+            self.assertEqual(GT.origin(proj), "existing")
+            self.assertEqual(pls.main(["step", "onboarding", "adopt site 1"]), 0)      # onboarding itself is allowed
+            self.assertEqual(pls.main(["step", "P6", "incident"]), 0)
+            for argv in (["step", "P1", "analyse the request"], ["step", "G1", "ask"],
+                         ["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok"],
+                         ["bootstrap-plan", "--env", "dev", "--release", "B-1"],
+                         ["release-plan", "--env", "dev", "--release", "R-1", "--export", "a=x.json"]):
+                with self.assertRaises(pls.Fail, msg=argv) as cm:
+                    pls.main(argv)
+                self.assertIn("onboarding", str(cm.exception))
+            (proj / "requirements/REQ-001-x.md").write_text("# REQ-001\n", encoding="utf-8")
+            self.assertIn("L-ONB-01", {i["rule"] for i in pls.lint(proj)})
+            (proj / "ops/onboarding").mkdir(parents=True, exist_ok=True)
+            (proj / "ops/onboarding/2026-11-09-summary.md").write_text("# Onboarding\n", encoding="utf-8")
+            self.assertNotIn("L-ONB-01", {i["rule"] for i in pls.lint(proj)})
+            self.assertEqual(pls.main(["step", "P1", "analyse the request"]), 0)
+            self.assertEqual(pls.main(["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok"]), 0)
+        finally:
+            os.chdir(self.r)
+        new = self.r / "fresh"
+        pls.init_project(new, "project", "stg", "Nam", origin="new")
+        self.assertFalse(GT.onboarding_missing(new))
+        self.assertIsNone(GT.origin(self.r))                                       # no Origin row: not blocked
+
     def test_init_creates_a_working_project(self):
         proj = self.r / "newapp"
         self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam"]), 0)

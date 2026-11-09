@@ -16,7 +16,7 @@ Commands:
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01, L-JOB-01, L-ONB-01)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -737,6 +737,17 @@ def last_applied_jobs(r: Path, env: str) -> dict | None:
     return best[1] if best else None
 
 
+CHANGE_PHASES = ("P1", "P2", "P3", "P4", "P5", "G1", "G2", "G3", "G4")   # change work; onboarding, P6 and other are not
+
+
+def need_onboarding(r: Path, what: str) -> None:
+    """Change work on a taken-over app (Origin `existing`) waits for its onboarding summary (lifecycle section 0)."""
+    try:
+        GT.require_onboarding(r, what)
+    except GT.GateError as ex:
+        raise Fail(str(ex))
+
+
 def jobs_verified(r: Path, release: str, by: str, quote: str) -> int:
     """Record the person's check of the manual scheduled-script deploy (ADR-0012 option B). Until it is recorded, the
     release is not a baseline for jobs and the next release lists the same changes again."""
@@ -943,6 +954,7 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
 
 def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None,
                  accept_unverified: str | None = None) -> int:
+    need_onboarding(r, "release-plan")
     e = env_conf(r, env)
     if (r / "releases" / release / "plan.json").exists():
         raise Fail(f"releases/{release}/plan.json exists — a release id is used once; choose the next id (S3)")
@@ -1623,6 +1635,7 @@ def bootstrap_plan(r: Path, env: str, release: str) -> int:
     """Phase 1 of a first release: empty skeleton sites for every managed site that has no id in `env` yet.
     Phase 2 is the normal release-plan (updatesite with the complete payload) once the ids are bound, so every
     ${site:x} reference — also between new sites and inside scripts (D3) — resolves before anything is configured."""
+    need_onboarding(r, "bootstrap-plan")
     e = env_conf(r, env)
     if e.get("role") == "prod":
         raise Fail("production sites are created by the customer-side runner (ADR-0003)")
@@ -2701,11 +2714,14 @@ def _main(argv=None) -> int:
         return 0
 
     if a.cmd == "step":
+        if a.phase in CHANGE_PHASES:
+            need_onboarding(r, f"step {a.phase}")
         f = LG.step(r, a.phase, a.title)
         print(f"step {a.phase}: {a.title} → {f.relative_to(r).as_posix()}")
         return 0
 
     if a.cmd == "gate":
+        need_onboarding(r, f"gate {a.gate}")
         try:
             out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
                             datetime.now().astimezone().date().isoformat())
