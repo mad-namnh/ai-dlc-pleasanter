@@ -2150,7 +2150,10 @@ def http_cmd(r: Path, a) -> int:
                 raise H.TransportError(f"{SE.JOBS_DIR.as_posix()}: {ex} (ADR-0012)")
             jrefusal, jwarning = SE.jobs_apply_refusal(plan["env"], eff, pj["changed"] if pj is not None else None, declared)
             refusal = "\n".join(x for x in (refusal, jrefusal) if x)
-            warning = "\n".join(x for x in (warning, jwarning, (pj or {}).get("manual_step")) if x)
+            manual = (pj or {}).get("manual_step")
+            # the manual step comes after the sites are applied: if the apply is rolled back, nothing is copied
+            warning = "\n".join(x for x in (warning, jwarning, manual and "after the sites are applied, this release has a "
+                                             "manual step for scheduled scripts (ADR-0012); pls prints it then") if x)
             if refusal:
                 raise H.TransportError(refusal)
             if warning:
@@ -2171,7 +2174,10 @@ def http_cmd(r: Path, a) -> int:
                 out = r / ".pls" / "exports" / f"{plan['env']}-{site}-after-{a.release}.json"
                 wj(out, c.export_site(plan["per_site"][site]["site_id"]))
                 exports += ["--export", f"{site}={out}"]
-            return main(["mark-applied", a.release, *exports])
+            rc = main(["mark-applied", a.release, *exports])
+            if manual:
+                print(manual)
+            return rc
 
         if a.cmd == "bootstrap":
             bp = r / "releases" / a.release / "bootstrap.json"

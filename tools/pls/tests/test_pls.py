@@ -121,6 +121,29 @@ class PlsTest(unittest.TestCase):
         self.job_files({"Bad Name": "var a = 1;"})                                          # L-JOB-01: file stem rule
         self.assertIn("L-JOB-01", self.job_rules())
 
+    def test_job_layout_problems_reach_pls_lint(self):
+        self.job_files({"orphan": "var a = 1;"}, [{"name": "orphan"}, {"name": "missing"}])
+        self.assertTrue(any("missing.js is missing" in m for m in self.job_rules()["L-JOB-01"]))
+
+    def test_jobs_baseline_is_the_last_verified_applied_release_of_the_same_env(self):
+        def rel(name, env, status, at, jobs):
+            d = self.r / "releases" / name
+            d.mkdir(parents=True)
+            (d / "plan.json").write_text(json.dumps({"release": name, "env": env, "status": status, "applied_at": at,
+                                                     **({"jobs": jobs} if jobs is not None else {})}), encoding="utf-8")
+        ok = {"fingerprints": {"j": "old"}, "changed": []}
+        rel("R1", "stg", "applied", "2026-11-01T10:00:00+09:00", ok)
+        rel("R2", "stg", "applied-differs", "2026-11-02T10:00:00+09:00", {"fingerprints": {"j": "differs"}, "changed": []})
+        rel("R3", "dev", "applied", "2026-11-09T10:00:00+09:00", {"fingerprints": {"j": "dev"}, "changed": []})   # other env
+        rel("R4", "stg", "applied", "2026-11-03T10:00:00+09:00", None)                     # made before the jobs check
+        rel("R5", "stg", "planned", "2026-11-04T10:00:00+09:00", {"fingerprints": {"j": "planned"}, "changed": []})
+        rel("R6", "stg", "applied", "2026-11-05T10:00:00+09:00",
+            {"fingerprints": {"j": "unverified"}, "changed": ["j changed"]})                # manual deploy not confirmed
+        rel("R7", "stg", "applied", "2026-11-06T10:00:00+09:00", {"fingerprints": ["broken"], "changed": []})   # hand-broken
+        rel("R8", "stg", "applied", "2026-11-01T01:00:00+00:00", {"fingerprints": {"j": "utc-earlier"}, "changed": []})
+        self.assertEqual(pls.last_applied_jobs(self.r, "stg"), {"j": "differs"})
+        self.assertIsNone(pls.last_applied_jobs(self.r, "prod"))
+
     def test_scheduled_script_syntax_is_checked_on_the_resolved_body(self):
         import pls_scripts as SX
         if not SX.node_available():
@@ -334,7 +357,13 @@ class PlsTest(unittest.TestCase):
             self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", rel, "--quote", "G3 approved"]), 0)
         plan_of = lambda rel: json.loads((self.r / f"releases/{rel}/plan.json").read_text(encoding="utf-8"))   # noqa: E731
         rp = lambda rel: pls.main(["release-plan", "--env", "stg", "--release", rel, "--export", f"a={sa}", "--export", f"b={sb}"])  # noqa: E731
-        self.assertEqual(rp("R1"), 0)
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(rp("R1"), 0)
+        self.assertIn("envs.stg.side_effects.jobs is 'unknown' — `pls apply` will refuse", out.getvalue())
+        self.assertIn("JOB nightly added", out.getvalue())
         plan = plan_of("R1")
         self.assertEqual(plan["jobs"]["deploy"], "manual")
         self.assertTrue(plan["jobs"]["changed"][0].startswith("nightly added"))

@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -77,6 +78,25 @@ class JobsPureTest(unittest.TestCase):
                          {"mail": "disabled", "jobs": "disabled"})                 # tie → the base's value
         self.assertIsNotNone(SE.bad_plan_jobs({"changed": ""}))
         self.assertIsNone(SE.bad_plan_jobs({"changed": [], "fingerprints": None}))
+
+    def test_index_must_be_utf8_with_safe_names(self):
+        write_job(self.r)
+        idx = self.r / SE.JOBS_DIR / SE.JOBS_INDEX
+        idx.write_bytes(b'[{"name": "\x82\xa0"}]')                           # cp932, not UTF-8
+        with self.assertRaises(ValueError):
+            SE.declared_jobs(self.r)
+        for bad in (" nightly", "Nightly", "a|b", "../x"):
+            idx.write_text(json.dumps([{"name": bad}]), encoding="utf-8")
+            with self.assertRaises(ValueError, msg=bad):
+                SE.declared_jobs(self.r)
+        self.assertIsNotNone(SE.bad_plan_jobs({"changed": [], "manual_step": 5}))
+
+    def test_operator_report_escapes_table_cells(self):
+        import pls_report as RP
+        out = RP.operator_report({"release": "R", "env": "dev", "sites": [], "per_site": {},
+                                  "jobs": {"changed": ["a|b added"], "manual_step": "copy | compare"}}, {})
+        row = next(x for x in out.splitlines() if x.startswith("| Scheduled scripts"))
+        self.assertEqual(row.count("|") - row.count("\\|"), 3)
 
     def test_rendered_bodies_and_directories_named_js(self):
         write_job(self.r, body="x = ${site:a};")
@@ -250,9 +270,88 @@ class HttpSideEffectsTest(unittest.TestCase):
     # ---------------------------------------------------------- scheduled server scripts (jobs, ADR-0012)
 
     def set_effects(self, **kw):
+        """Change only the named keys, so the mail and jobs guards are tested together, not one by accident."""
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
-        envs["envs"]["dev"]["side_effects"] = kw
+        envs["envs"]["dev"]["side_effects"] = {**(envs["envs"]["dev"].get("side_effects") or {}), **kw}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+
+    def run_out(self, argv) -> tuple[int, str]:
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            try:
+                rc = pls.main(argv)
+            except pls.Fail as ex:
+                rc, _ = 2, out.write(str(ex))
+        return rc, out.getvalue()
+
+    def test_jobs_refusal_comes_before_any_server_call(self):
+        write_job(self.r)
+        self.fake.sites[TH.EQ]["SiteSettings"]["Notifications"] = NOTIFY     # mail would need a getsite
+        self.write_spec([{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}])
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 2)
+        self.assertEqual(self.fake.calls[n:], [])
+
+    def test_mail_and_jobs_guards_hold_each_on_their_own(self):
+        write_job(self.r)
+        self.fake.sites[TH.EQ]["SiteSettings"]["Notifications"] = NOTIFY
+        self.write_spec([{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}])
+        test = ["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]
+        self.set_effects(mail="sink")                                          # mail safe, jobs unknown
+        rc, out = self.run_out(test)
+        self.assertEqual(rc, 2)
+        self.set_effects(mail="unknown", jobs="disabled")                      # jobs safe, mail unknown
+        self.assertEqual(pls.main(test), 2)
+        self.assertEqual(self.fake.records, {})
+        self.set_effects(mail="sink")
+        self.assertEqual(pls.main(test), 0)
+
+    def test_a_writing_spec_among_read_only_ones_and_an_exec_only_spec_are_refused(self):
+        write_job(self.r)
+        self.set_effects(mail="sink")
+        self.fake.records[555] = {"site": TH.EQ, "ResultId": 555, "Status": 100}
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-1", "steps": [{"op": "siteConfig", "expect": {}}]},
+                                                   {"id": "T-2", "steps": [{"op": "create", "save": "e", "data": {}}]}]),
+                                       encoding="utf-8")
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 2)
+        self.write_spec([{"op": "exec", "record": "$E", "process": "approve"}])
+        self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--var", "E=555", "--out", "x.json"]), 2)
+        self.assertEqual(self.fake.records[555]["Status"], 100)
+
+    def test_apply_without_job_changes_passes_while_jobs_are_unknown(self):
+        write_job(self.r)
+        self.job_plan({"changed": [], "deploy": None, "manual_step": None})
+        rc, out = self.run_out(["apply", "R-1", "--yes"])
+        self.assertTrue(any(p.endswith("/updatesite") for p, _ in self.fake.calls))
+        self.assertNotIn("MANUAL", out)
+
+    def test_live_jobs_warn_and_the_manual_step_comes_after_the_sites_are_applied(self):
+        write_job(self.r)
+        self.set_effects(mail="sink", jobs="live")
+        self.job_plan()
+        rc, out = self.run_out(["apply", "R-1", "--yes"])
+        self.assertIn("WARNING (ADR-0010): scheduled scripts run on dev", out)
+        self.assertTrue(any(p.endswith("/updatesite") for p, _ in self.fake.calls))
+        self.assertGreater(out.index("MANUAL (ADR-0012)"), out.index("apply loans"))       # printed after the apply
+        with mock.patch("builtins.input", return_value="no"):                              # the confirmation names it
+            (self.r / "releases/R-1").rename(self.r / "releases/R-2")
+            plan = json.loads((self.r / "releases/R-2/plan.json").read_text(encoding="utf-8"))
+            plan.update(release="R-2", status="planned")
+            (self.r / "releases/R-2/plan.json").write_text(json.dumps(plan), encoding="utf-8")
+            rc, out = self.run_out(["apply", "R-2"])
+        self.assertIn("manual step for scheduled scripts", out)
+        self.assertIn("not confirmed", out)
+
+    def test_manual_step_is_not_printed_when_the_apply_is_rolled_back(self):
+        write_job(self.r)
+        self.set_effects(mail="sink", jobs="live")
+        self.job_plan()
+        self.fake.fail_update_on = TH.LO                                       # second site fails → both restored
+        rc, out = self.run_out(["apply", "R-1", "--yes"])
+        self.assertNotEqual(rc, 0)
+        self.assertNotIn("MANUAL (ADR-0012)", out)
 
     def test_writing_tests_are_refused_while_jobs_are_unknown_and_the_project_declares_any(self):
         self.write_spec([{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}])

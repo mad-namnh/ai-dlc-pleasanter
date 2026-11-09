@@ -336,7 +336,8 @@ def manual_job_step(env: str, changed: list[str], release: str = "<release>") ->
     """The manual deploy and verification step of a release that changes scheduled scripts (ADR-0012 option B)."""
     if not changed:
         return None
-    return (f"MANUAL (ADR-0012): scheduled scripts are not deployed by pls. On {env}, tenant management → サーバスクリプト: "
+    return (f"MANUAL (ADR-0012): scheduled scripts are not deployed by pls. After the sites of this release are applied "
+            f"(never if the apply was rolled back), on {env}, tenant management → サーバスクリプト: "
             f"{'; '.join(changed)} — copy each body from releases/{release}/scheduled-scripts/<name>.js (references resolved "
             f"for {env}) with its schedule and enabled flag from {JOBS_INDEX} there. Then a person compares the tenant scripts "
             f"with those files and records it: pls jobs-verified {release} --by <name> --quote \"<their words>\". Until then the "
