@@ -911,6 +911,22 @@ def _now() -> str:
 OPEN_STATES = ("applying", "applied-unverified", "uncertain", "recovery-required")
 
 
+def plan_steps_problem(plan: dict) -> str | None:
+    """`apply` writes plan["steps"] and plan["rollback"]; the environment check reads plan["per_site"]. Both must
+    name the same sites, ids and files, each site once, in the planned order, so no edited step writes elsewhere."""
+    sites, per = plan.get("sites") or [], plan.get("per_site") or {}
+    for part, file_key, order in (("steps", "payload_file", sites), ("rollback", "rollback_file", sites[::-1])):
+        steps = plan.get(part)
+        if not isinstance(steps, list) or [s.get("site") if isinstance(s, dict) else None for s in steps] != order:
+            return f"plan.json {part} do not list exactly the sites {order}"
+        for s in steps:
+            ps = per.get(s["site"]) or {}
+            if s.get("op") != "updatesite" or s.get("site_id") != ps.get("site_id") or \
+                    (ps.get(file_key) and s.get("payload_file") != ps[file_key]):
+                return f"plan.json {part} entry for {s['site']} does not match per_site (site id, file or op)"
+    return None
+
+
 def readback_state(rel: Path, plan: dict, step: dict, export: Any, e: dict) -> tuple[str, list[dict]]:
     """Classify one site of a multi-site release from its export: "applied" (live == payload), "not applied"
     (live == rollback file, or the site was not written since the plan) or "differs" (written, equals neither)."""
@@ -1179,7 +1195,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
             print(f"MAIL {s}: {x}")
         per_site[s].update(payload_file=f"payload-{s}.json", rollback_file=f"rollback-{s}.json", depends_on=sorted(res["deps"] & set(results)))
     plan = {
-        "release": release, "env": env, "status": "planned", "sites": order,
+        "release": release, "env": env, "env_role": e.get("role"), "status": "planned", "sites": order,
         "classification": worst, "dependency_cycle": cyc, "per_site": per_site,
         "steps": [{"op": "updatesite", "site": s, "site_id": per_site[s]["site_id"], "payload_file": per_site[s]["payload_file"],
                    "expect_updated_time": per_site[s]["snapshot_updated_time"]} for s in order],
@@ -1815,7 +1831,7 @@ def bootstrap_plan(r: Path, env: str, release: str) -> int:
     if not steps:
         print(f"{env}: every managed site already has an id — nothing to bootstrap")
         return 0
-    plan = {"release": release, "env": env, "status": "planned", "parent_id": parent, "steps": steps,
+    plan = {"release": release, "env": env, "env_role": e.get("role"), "status": "planned", "parent_id": parent, "steps": steps,
             "next": f"pls bootstrap {release} (HTTP; binds the ids) — or runner bootstrapSites + pls bind --env {env} --release {release} --created SITE=ID …",
             "undo": "a person deletes the created sites in Pleasanter (agents never delete); then remove their ids"}
     wj(r / "releases" / release / "bootstrap.json", plan)
@@ -2225,6 +2241,9 @@ def http_cmd(r: Path, a) -> int:
                         (e.get("sandbox_of") and not conf.get("sandbox")):
                     raise H.TransportError(f"{a.release}: {s_} → site {plan['per_site'][s_].get('site_id')} is not a site this "
                                            f"release may write in {plan['env']} (stale plan, or a shared site)")
+            bad_step = plan_steps_problem(plan)          # the writes use steps/rollback, not per_site
+            if bad_step:
+                raise H.TransportError(f"{a.release}: {bad_step} — make a new release plan")
             files = {f.name: rj(f) for f in rel.glob("*.json") if f.name.startswith(("payload-", "rollback-"))}
             try:
                 eff = env_effects(r, e)
@@ -2924,6 +2943,10 @@ def _main(argv=None) -> int:
             raise Fail(str(ex))
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
         print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
+        for rel_id, b in (rj(out).get("bound") or {}).items():
+            print(f"  {rel_id}: " + (f"bound to its content for {b['env']} (sha256 {b['sha256'][:12]}…) — any later change "
+                                     f"to the plan or its files needs a new G4" if b else
+                                     "NOT PLANNED YET — apply/bootstrap will refuse; record G4 again after release-plan"))
         return 0
 
     if a.cmd == "jobs-verified":

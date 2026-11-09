@@ -41,7 +41,7 @@ The app is already on dev from P3/P4. The release makes that state official.
    - **Refused for slots:** go back to P2.
    - **Data-impacting without a migration:** go back to P2/G2. Migrations run through the browser runner today; tell the person.
 2. **Write `diff-report.md`** — the Japanese summary only — from `raw-diff-<site>.md`; the operator part (order, classification, checks, rollback) is `diff-report.operator.md`, written by `release-plan`. Write `approvals.md`. **Stop at G4.**
-3. After G4 — recorded with `pls gate G4 --release R-… [--release B-…]`; `apply` and `bootstrap` on stg refuse without it — the person runs `pls apply R-…`, or tells you to use `--yes` for that target.
+3. After G4 — recorded with `pls gate G4 --release R-… [--release B-…]` **after** `release-plan` (the record binds the plan and its files; any later change to them needs a new G4); `apply` and `bootstrap` on stg refuse without it — the person runs `pls apply R-…`, or tells you to use `--yes` for that target.
    - It runs a preflight on `UpdatedTime`, applies in order and restores every touched site on failure. Then it exports and runs `mark-applied`.
    - `mark-applied` must report 0 differences. Otherwise stop: the release is applied but not verified. Explain the differences and fold them back (P3 step 6) with the person's agreement.
    - **If `apply` does not end applied**, `plan.json` says why. Only `planned` can be applied, so never re-run `apply` for these:

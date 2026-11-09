@@ -5,7 +5,8 @@ under `gates/`, named by date, gate, time and a random suffix, so records of par
 name and a record is never overwritten. The record is what other
 commands trust:
 - `release-plan` for a stg target needs a G3 approval of that release;
-- `apply` / `bootstrap` on stg need a G4 approval naming that release or bootstrap id;
+- `apply` / `bootstrap` on stg need a G4 approval naming that release or bootstrap id, bound to its content
+  (pls_release_digest): a release changed after G4 is refused;
 - lint L-GATE-01: every "G<n> approved" status line in a REQ, DES, G3 or approvals file has its record.
 Only names listed as approvers in the project profile (`CLAUDE.md`, row "Approvers") are accepted.
 """
@@ -16,6 +17,8 @@ import re
 import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import pls_release_digest as RD
 
 GATES = ("G1", "G2", "G3", "G4")
 DECISIONS = ("approved", "rejected", "changes-requested")
@@ -163,18 +166,29 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
     if prev and now <= max(prev):
         now = max(prev) + timedelta(microseconds=1)
     at = now.isoformat(timespec="microseconds")
+    rec = {"gate": gate, "decision": decision, "approver": who, "date": today, "at": at,
+           "quote": quote.strip(), "items": items, "releases": releases, "recorded_by": "pls gate"}
+    if gate == "G4" and decision == "approved":
+        # what the person approved: the content of each planned release (unplanned ids stay unbound → apply refuses)
+        bound = {}
+        for rel in releases:
+            try:
+                bound[rel] = RD.digest(root, rel)
+            except RD.DigestError:
+                bound[rel] = None
+        rec["bound"] = bound
     out = d / f"{today}-{gate}-{at[11:19].replace(':', '')}-{secrets.token_hex(3)}.json"
     with out.open("x", encoding="utf-8") as f:          # "x": an existing record is never overwritten
-        f.write(json.dumps({"gate": gate, "decision": decision, "approver": who, "date": today, "at": at,
-                            "quote": quote.strip(), "items": items, "releases": releases, "recorded_by": "pls gate"},
-                           ensure_ascii=False, indent=2) + "\n")
+        f.write(json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return out
 
 
 def latest(root: Path, gate: str, *, item: str | None = None, release: str | None = None) -> dict | None:
     """The last decision of this gate that covers the item or release (a later rejection overrides an approval)."""
+    def ids(v):                       # a hand-edited string must not match by substring ("R-30" contains "R-3")
+        return v if isinstance(v, list) else []
     hits = [g for g in load(root) if g.get("gate") == gate and
-            (item is None or item in (g.get("items") or [])) and (release is None or release in (g.get("releases") or []))]
+            (item is None or item in ids(g.get("items"))) and (release is None or release in ids(g.get("releases")))]
     return sorted(hits, key=lambda g: (g.get("date", ""), g.get("at", "")))[-1] if hits else None
 
 
@@ -186,6 +200,13 @@ def require(root: Path, gate: str, release: str, why: str) -> None:
         raise GateError(f"{why} needs a recorded {gate} approval of {release} "
                         f"({'last decision: ' + g['decision'] if g else 'none recorded'}) — "
                         f"after the person approves, record it with `pls gate {gate} --approver <name> --release {release} --quote …`")
+    if gate == "G4":
+        try:
+            why_not = RD.check(root, release, (g.get("bound") or {}).get(release))
+        except RD.DigestError as ex:
+            why_not = str(ex)
+        if why_not:
+            raise GateError(f"{why}: {why_not}")
 
 
 # ---------------------------------------------------------------- onboarding before change work (Origin `existing`)

@@ -1,6 +1,7 @@
 // pls browser runner — transport between the pls toolchain (files) and a Pleasanter environment.
 // Runs in a browser tab that is logged in to the TARGET Pleasanter (session auth, no API key).
-// Only for dev/stg-like environments driven by a person; production uses the customer-side runner (ADR-0003).
+// Only for dev, driven by a person (ADR-0014 TB-7): applyRelease, rollbackRelease and bootstrapSites refuse a plan
+// whose env_role (written by pls release-plan / bootstrap-plan) is not "dev"; stg and prod go through pls over HTTP.
 //
 //   await plsRunner.exportSite(siteId)                 → getsite response (save as export JSON)
 //   await plsRunner.apply(siteId, payload)             → updatesite with a COMPLETE payload (I2)
@@ -22,6 +23,18 @@ var plsRunner = (() => {
     const text = await r.text();
     let json = null; try { json = JSON.parse(text); } catch (e) { /* not JSON */ }
     return {http: r.status, json, text};
+  };
+  // The runner has no environments.json and no gate records, so it writes only plans made for dev (ADR-0014 TB-7).
+  const planRefusal = plan => {
+    if (!plan || plan.env_role !== 'dev') {
+      return `plan for ${plan && plan.env} has env_role ${JSON.stringify(plan && plan.env_role)}: the browser runner ` +
+        'writes only dev (ADR-0014 TB-7); use pls apply / pls bootstrap over HTTP, or re-plan with a current pls';
+    }
+    for (const s of [...(plan.steps || []), ...(plan.rollback || [])]) {     // writes use steps, not per_site
+      const ps = plan.per_site && plan.per_site[s.site];
+      if (plan.per_site && (!ps || ps.site_id !== s.site_id)) return `step for ${s.site} does not match per_site — re-plan`;
+    }
+    return null;
   };
   const exportSite = async id => {
     const r = await call(`/api/items/${id}/getsite`);
@@ -136,9 +149,15 @@ var plsRunner = (() => {
     }
     return {log, failed};
   };
-  const rollbackRelease = async (plan, files, sites) => (await restoreSites(plan, files, sites)).log;
+  const rollbackRelease = async (plan, files, sites) => {
+    const no = planRefusal(plan);
+    if (no) throw new Error(no);
+    return (await restoreSites(plan, files, sites)).log;
+  };
 
   const applyRelease = async (plan, files) => {
+    const no = planRefusal(plan);
+    if (no) return {status: 'refused', log: [no]};
     const log = [];
     for (const step of plan.steps) {           // files present before anything is written
       if (!files[step.payload_file]) return {status: 'refused', log: [`missing ${step.payload_file}`]};
@@ -172,6 +191,8 @@ var plsRunner = (() => {
 
   const bootstrapSites = async plan => {
     const created = {}, log = [];
+    const no = planRefusal(plan);
+    if (no) return {status: 'refused', created, log: [no]};
     const parent = await call(`/api/items/${plan.parent_id}/getsite`);
     if (parent.http !== 200 || !parent.json || parent.json.Response.Data.ReferenceType !== 'Sites') {
       return {status: 'refused', created, log: [`parent ${plan.parent_id} is not a reachable folder (HTTP ${parent.http})`]};

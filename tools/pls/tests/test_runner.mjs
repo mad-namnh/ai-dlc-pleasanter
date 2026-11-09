@@ -28,6 +28,7 @@ function fakePleasanter(sites, failOn = null) {
 }
 
 const plan = {
+  env: 'dev', env_role: 'dev',
   steps: [{site: 'b', site_id: 202, payload_file: 'payload-b.json', expect_updated_time: 'tb'},
           {site: 'a', site_id: 201, payload_file: 'payload-a.json', expect_updated_time: 'ta'}],
   rollback: [{site: 'a', site_id: 201, payload_file: 'rollback-a.json'},
@@ -59,6 +60,22 @@ test('preflight refuses when a target changed since the plan; nothing written', 
   const r = await runner.applyRelease(plan, files);
   assert.equal(r.status, 'refused');
   assert.equal(calls.filter(c => c.startsWith('updatesite')).length, 0);
+});
+
+test('writes only plans made for dev (ADR-0014 TB-7)', async () => {
+  for (const role of ['stg', 'prod', undefined]) {
+    const {runner, calls} = fakePleasanter(sites());
+    const r = await runner.applyRelease({...plan, env_role: role}, files);
+    assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
+    await assert.rejects(runner.rollbackRelease({...plan, env_role: role}, files));
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('refuses a step whose site id differs from per_site', async () => {
+  const {runner, calls} = fakePleasanter(sites());
+  const r = await runner.applyRelease({...plan, per_site: {a: {site_id: 201}, b: {site_id: 999}}}, files);
+  assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
 });
 
 test('refuses when a payload or rollback file is missing', async () => {
