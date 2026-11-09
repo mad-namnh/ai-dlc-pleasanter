@@ -19,7 +19,7 @@ State of branch `brownfield-adr` (2026-11-08). `main` is the demo baseline.
 | Architecture (lifecycle P1–P6, gates G1–G4, invariants I1–I9) | ✅ v0.3 — `docs/architecture.md` |
 | ADRs | 0001–0012: 0004, 0006, 0012 accepted; 0005 partly; 0001–0003, 0007–0011 proposed (`docs/adr/README.md`) |
 | Vertical slices | ✅ #1–#3 (`docs/slices/`), demo run D5 (`demo-equipment`, released on dev) |
-| `pls` toolchain | ✅ stdlib Python, HTTP transport — unpack/pack/canon/lint/diff/drift/classify/coverage, release-plan/apply/mark-applied, bootstrap, test, init/setup/skills; brownfield: version, adopt, env-compare, refs, xref, sandbox, harvest, merge-site, kb-verify. 186 Python + 6 node tests, write-path inventory test, gate records (`pls gate`) |
+| `pls` toolchain | ✅ stdlib Python, HTTP transport — unpack/pack/canon/lint/diff/drift/classify/coverage, release-plan/apply/mark-applied, bootstrap, test, init/setup/skills; brownfield: version, adopt, env-compare, refs, xref, sandbox, harvest, merge-site, kb-verify. 214 Python + 6 node tests, write-path inventory test, gate records (`pls gate`) |
 | Skills | ✅ 12 — KB, P1–P5, lifecycle (routes new / existing apps), onboarding, spec-recovery, script-engineer, maintenance-triage; evals in `evals/` |
 | Brownfield readiness (plan Step 4c) | 🟡 BR1–BR9 built and run on MADLAB dev; waiting for the first real project (onboarding) |
 | AI gateway (Bedrock) | ⏸ Parked reference pattern (`patterns/ai-gateway/`), not framework core |

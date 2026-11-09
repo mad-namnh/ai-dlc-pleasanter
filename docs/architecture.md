@@ -286,7 +286,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls adopt-package` | onboarding | Every site of a UI site package in one read-only run (names from the project or a person's file) | branch |
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts | branch |
-| `pls jobs-verified` | P5 (ADR-0012) | Record that a G4 approver deployed and checked a release's scheduled scripts by hand; until then the next release lists them again | branch |
+| `pls jobs-verified` | P5 (ADR-0012) | Record that an operator of the release's env (profile row `Operators`) or a G4 approver deployed and checked its scheduled scripts by hand; until then the next release lists them again | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4 | branch |
 
 ### 7.2 Lint rule catalogue (seeded from findings)
