@@ -18,7 +18,7 @@ Read **Origin** in the project profile (`CLAUDE.md`) together with the repositor
 
 | Origin | Onboarding summary `ops/onboarding/*-summary.md` | Next |
 |---|---|---|
-| `existing` | missing | `pls-x-onboarding` (read only), then `pls-x-spec-recovery`. **Do not start P1**, do not write `REQ-*` files, do not bootstrap — even when the person's first message reads like a specification. Save such a request verbatim as `requirements/sources/<date>-pending-<slug>.md` with the line "Pending: change request after onboarding" (no analysis), so it is not lost |
+| `existing` | missing | `pls-x-onboarding` (read only), then `pls-x-spec-recovery`. **Do not start P1**, do not write `REQ-*` files, do not bootstrap — even when the person's first message reads like a specification. Save such a request verbatim as `requirements/sources/<date>-pending-<slug>.md` with the line "Pending: change request after onboarding" (no analysis), so it is not lost. `pls` enforces it: `step` P1–P5 / G1–G4, `gate`, `bootstrap-plan` and `release-plan` refuse, lint L-ONB-01 flags REQ/DES files — never write a placeholder summary to get past it |
 | `existing` | present | open decisions in it? → settle them with the person first; otherwise the request is a **change request** → P1 (section 4) |
 | `new` | — | a specification → P1 (section 3) |
 | missing (older project) | — | ask the person once whether the app already runs in Pleasanter; record the answer as `Origin` in the profile |

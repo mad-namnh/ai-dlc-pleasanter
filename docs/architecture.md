@@ -307,6 +307,7 @@ One file, `traceability.json`, links the chain in both directions:
 | L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
 | L-ENV-02 | ADR-0010 | `side_effects` values are known states |
 | L-JOB-01 | ADR-0012 | Scheduled scripts: `_index.json` is a list with unique names, and every entry has a body (and every body an entry) |
+| L-ONB-01 | lifecycle §0 | Origin `existing` without `ops/onboarding/*-summary.md`: no `REQ-*` / `DES-*` documents. The same check refuses `pls step` P1–P5 / G1–G4, `pls gate`, `bootstrap-plan` and `release-plan` |
 | L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
 | L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile |
