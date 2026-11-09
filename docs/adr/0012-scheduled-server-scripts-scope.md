@@ -47,6 +47,15 @@ In every case:
 4. **Release:** a release that changes a scheduled script lists it in `plan.json` and in the diff report, with the deploy method (API or manual) and the verification step.
 5. **KB:** the probe results become KB entries (storage, API, schedule, timeout) with `verified_on` (ADR-0009).
 
+### Implementation notes (2026-11-09) — how the verification step is recorded
+
+The decision above is unchanged; these notes say how `pls` carries it out (details of the guards: ADR-0010, "Jobs guard").
+- `release-plan` writes the scripts resolved for the environment to `releases/<R>/scheduled-scripts/` and the manual step to `plan.jobs.manual_step`; a sandbox release never lists scheduled scripts (ADR-0011).
+- **Verification:** after copying the scripts into tenant management, the person who copied and compared them states it, and only then it is recorded: `pls jobs-verified <R> --by <name> --quote "<their words>" [--approved-by <G4 approver>]`. `--by` must be an **operator of the release's environment** (profile row `Operators`, e.g. `dev: Nam; stg: Nam; prod: <customer operator>`) or a **G4 approver**; profiles without an `Operators` row accept G4 approvers only. Any other name is refused, as with `pls gate`. The record `plan.jobs.verified` holds `by`, `role` (`operator` / `g4-approver`), `env`, `quote`, `at` and, when given, `approved_by`.
+- An agent never runs `jobs-verified` before the person has said the words it records (I4).
+- Until a release's job changes are verified, it is not the jobs baseline: the next release lists the same changes again.
+- Lint (decision item 2) applies the server-script rules to the bodies: L-REF-01, L-SEC-01, L-SCR-01 (top-level `const` / `let`) and L-SCR-02 (`node --check` on the body resolved for each environment).
+
 ## Consequences
 
 - Easier: scheduled jobs become reviewable and part of releases instead of hand-copied text.

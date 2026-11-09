@@ -44,6 +44,7 @@ The app is already on dev from P3/P4. The release makes that state official.
 3. After G4 — recorded with `pls gate G4 --release R-… [--release B-…]`; `apply` and `bootstrap` on stg refuse without it — the person runs `pls apply R-…`, or tells you to use `--yes` for that target.
    - It runs a preflight on `UpdatedTime`, applies in order and restores every touched site on failure. Then it exports and runs `mark-applied`.
    - `mark-applied` must report 0 differences. Otherwise stop: the release is applied but not verified. Explain the differences and fold them back (P3 step 6) with the person's agreement.
+   - **Scheduled scripts** (`JOB` / `MANUAL` lines of the plan, ADR-0012): `pls` does not deploy them. Hand the person `releases/<R>/scheduled-scripts/` and the manual step; an operator of the environment (profile row `Operators`) or a G4 approver copies them into tenant management and compares. Only after that person says they did it, record it with their words: `pls jobs-verified R-… --by <name> --quote "<their words>" [--approved-by <G4 approver>]`. **Never run it before the person has said it, and never with your own words** (I4). Until it is recorded, the next release lists the same changes again.
 4. **Migrations**, if any, in the release window. Follow the dry-run notes; the backup must exist first (ADR-0004).
 5. **Smoke tests:** `pls test` with the specs named in the plan, on the target, as the roles that matter. Then record the release lines in REQs/index, the drift baseline and the commit, as for dev.
 
