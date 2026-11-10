@@ -263,6 +263,7 @@ One file, `traceability.json`, links the chain in both directions:
 |---|---|---|---|
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |
 | `pls http-check` | all | Check connection, key and role of an environment | **0.5** |
+| `pls package` | P5 (ADR-0003) | Zip a G4-approved release for the customer's operator: release files, migration folders without `backup/`, the G4 record, a manifest of sha256, `CHECKLIST.md` and a standard-library `verify.py` that refuses an altered file, an added file, a wrong target or release, or content the G4 record did not approve; deterministic zip | branch |
 | `pls migrate` | P5 (ADR-0004) | Send the explicit data of each migration folder of a release with one `bulkupsert`: write guard, G4 on non-dev (digest covers the folder), mail / job checks, typed confirmation, run recorded in `plan.json` before the call; `--rollback` sends `rollback.data` prepared by a person | branch |
 | `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback for a person on dev (ADR-0014 TB-7) |
 | `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework | **0.6** |

@@ -37,6 +37,7 @@ Commands:
                                                 site, reverse-order rollback; nothing is written if any site fails
   bootstrap-plan --env E --release R            new sites (ADR-0007): createsite plan for managed sites without an id in E
   migrate <release> [--rollback] [--yes]        data migrations of a data-impacting release over HTTP, before apply (ADR-0004)
+  package <release>                             G4-approved release → dist/<R>-<env>.zip with manifest, CHECKLIST and verify.py (ADR-0003)
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
   mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
@@ -71,6 +72,8 @@ import pls_gate as GT                                       # noqa: E402 — gat
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
+import pls_package as PK                                    # noqa: E402 — release package for the customer (ADR-0003)
+import pls_release_digest as RD                             # noqa: E402 — content a G4 approval covers
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
@@ -2896,6 +2899,8 @@ def _main(argv=None) -> int:
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
+    s = sp.add_parser("package", help="zip a G4-approved release for the customer's operator, with a stdlib verify.py (ADR-0003)")
+    s.add_argument("release")
     s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
     s.add_argument("action", choices=["set"])
     s.add_argument("field", choices=PR.FIELDS + (PR.ROLE,))
@@ -3004,6 +3009,31 @@ def _main(argv=None) -> int:
 
     if a.cmd in ("http-check", "export", "apply", "migrate", "bootstrap", "test", "backup", "version", "adopt", "adopt-package", "kb-verify"):
         return http_cmd(r, a)
+
+    if a.cmd == "package":
+        rel = r / "releases" / a.release
+        if not (rel / "plan.json").exists():
+            raise Fail(f"{a.release} has no plan.json — make a release plan first (release-plan)")
+        plan = rj(rel / "plan.json")
+        if not plan.get("sites"):
+            raise Fail("only multi-site release plans (release-plan) are packaged")
+        if plan.get("status") != "planned":
+            raise Fail(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+        bad_step = plan_steps_problem(plan)
+        if bad_step:
+            raise Fail(f"{a.release}: {bad_step} — make a new release plan")
+        try:                                             # a package is an approved release: G4 bound to its content
+            GT.require(r, "G4", a.release, f"packaging {a.release}")
+            g4 = GT.latest(r, "G4", release=a.release)
+            out, man = PK.build(r, a.release, plan, g4, sorted(
+                n for n, gates in GT.approvers(PR.effective_profile_text(r)).items() if "G4" in gates))
+        except (GT.GateError, PK.PackageError, RD.DigestError) as ex:
+            raise Fail(str(ex))
+        wj(rel / "package-manifest.json", man)
+        print(f"{a.release} → {plan['env']}: {out.relative_to(r).as_posix()} (sha256 {man['zip_sha256']})")
+        print(f"release digest {man['digest']['sha256']} — the operator compares it with the approved one (verify.py prints it)")
+        print(f"manifest recorded in releases/{a.release}/package-manifest.json; hand the zip to the customer's operator")
+        return 0
 
     if a.cmd == "refs":
         return refs_cmd(r, a)

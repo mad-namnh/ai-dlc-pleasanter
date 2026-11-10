@@ -20,6 +20,7 @@ PLAN_MUTABLE = {"status", "applied_at", "apply_started_at", "apply_finished_at",
 JOBS_MUTABLE = {"verified"}
 BOOTSTRAP_MUTABLE = {"status", "created", "created_at", "uncertain"}
 JOBS_FOLDER = "scheduled-scripts"
+BACKUP_FOLDER = "backup"
 
 
 class DigestError(Exception):
@@ -77,8 +78,11 @@ def digest(root: Path, release: str) -> dict:
             if not d.is_dir():
                 raise DigestError(f"{release}: migration folder {mig} named in plan.json is missing")
             for p in sorted(d.rglob("*")):
-                if p.is_file():
-                    files[f"migration:{mig}/{p.relative_to(d).as_posix()}"] = _sha(p.read_bytes())
+                rel_ = p.relative_to(d)
+                # backup/ holds business data of the target (I7, gitignored, taken where the release runs): not
+                # part of what is approved or shipped
+                if p.is_file() and rel_.parts[0] != BACKUP_FOLDER:
+                    files[f"migration:{mig}/{rel_.as_posix()}"] = _sha(p.read_bytes())
     body = json.dumps({"file": f.name, "content": _content(doc, bootstrap), "files": files},
                       ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return {"env": doc.get("env"), "sha256": _sha(body.encode("utf-8"))}

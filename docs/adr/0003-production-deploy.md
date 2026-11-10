@@ -46,6 +46,15 @@ Initial proposal: **C**. The deploy package is designed so that the runner in op
 - The AI working environment (MADLAB local/CI) has no route to the customer network — enforced at the network layer.
 - Audit log: who approved, who ran it, which version, when.
 
+## Note (2026-11-10, design review P0-9)
+
+Built, usable by options B and C (and the input of a later runner, option A):
+- `pls package <R>` — only for a release whose G4 record is bound to its content (ADR-0014 TB-1): a deterministic zip with the release files, the migration folders without `backup/` (business data is backed up on the target), the G4 record, a sha256 manifest, `CHECKLIST.md` and `verify.py`.
+- `verify.py` — standard library only, no network, no keys: recomputes the release digest with the code that bound G4 and refuses an altered or added file, a wrong target or release id, a G4 record that does not approve this content, or a site without rollback. It prints the digest the operator compares with the approved one. Limit: a verifier shipped inside the package can be changed with it; the operator keeps a reviewed copy and runs that.
+- `templates/project/handover/customer-responsibilities.md` — approval, execution, incidents, backup, recovery, keys and network, signed per customer.
+
+**Still open (Nam with customer IT, TD-02 / TD-16):** the decision between A, B and C, and the apply method for the package. A runner (option A) must take only a verified package as input, hold only a customer key, have no route to an AI service, and run from its own entry point: `pls apply` keeps refusing `role: prod` for everyone (I3), so the runner does not loosen the guard agents run under. Until then a production release stops at the package.
+
 ## Note (2026-11-05)
 
 ADR-0008 gives `pls apply` an HTTP transport with operator-local connections and keys. Option A can run exactly that command inside the customer network; the agent never holds the keys (I3).

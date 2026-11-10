@@ -6,3 +6,6 @@ tests/seed/
 # Migration backups hold business data (I7) — never committed; keep the folder only
 migrations/*/backup/*
 !migrations/*/backup/.keep
+
+# Release packages for the customer (pls package): built from releases/, the manifest stays in releases/<R>/
+dist/

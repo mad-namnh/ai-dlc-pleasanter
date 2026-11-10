@@ -52,7 +52,7 @@ The app is already on dev from P3/P4. The release makes that state official.
 4. **Migrations**, if any, ran with `pls migrate` before `apply` (step 1; ADR-0004 order). The backup and the dry run on a copy must exist first.
 5. **Smoke tests:** `pls test` with the specs named in the plan, on the target, as the roles that matter. Then record the release lines in REQs/index, the drift baseline and the commit, as for dev.
 
-**prod:** you prepare the same package (plan, payloads, rollback, report). The customer side applies it (ADR-0003). You never connect to prod.
+**prod:** you prepare the same release (plan, payloads, rollback, report) from the exports or site packages the customer sends; G3 and G4 as for stg, G4 by the customer's approver on the report and its release digest. After G4, `pls package R-…` writes `dist/<R>-prod.zip` (manifest, `CHECKLIST.md`, standard-library `verify.py`) and records `releases/<R>/package-manifest.json`; commit it. The customer's operator verifies and applies it inside their network (ADR-0003, `handover/customer-responsibilities.md`). You never connect to prod; the release is recorded applied only from the exports they send back (`mark-applied`).
 
 ## Checklist before G4
 

@@ -57,6 +57,8 @@ Filled in when the project is created; the lifecycle skill reads it.
 | `tests/api/` | test specs; `tests/results/` results |
 | `releases/` | bootstrap and release plans, reports, approvals |
 | `gates/` | one record per gate decision (`pls gate`): approver, their words, items or release |
+| `handover/customer-responsibilities.md` | who approves, runs, backs up and recovers on customer environments — filled in and signed before the first cstg / prod release |
+| `dist/` | release packages for the customer (`pls package`, gitignored); the manifest stays in `releases/<R>/` |
 | `ops/drift/` | drift baselines and decisions |
 | `traceability.json` | REQ → design → config → tests |
 | `.pls/` | gitignored: connection, exports, local files |
