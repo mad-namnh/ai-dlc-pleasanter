@@ -898,23 +898,58 @@ def config_path_exists(r: Path, ref: str) -> bool:
     return False
 
 
-def coverage(r: Path) -> dict:
-    tr = rj(r / "traceability.json")
-    results = {}
+def test_results(r: Path, env: str) -> dict:
+    """Latest status per test id among the result files of ONE environment. A pass on dev never stands in for a
+    failure on stg. Latest = `executed_at` of the file, then the file name (files without it sort first)."""
+    files = []
     for f in sorted((r / "tests/results").glob("*.json")) if (r / "tests/results").exists() else []:
-        for t in rj(f).get("tests", []):
-            results[t["id"]] = t["status"]
-    rows, ok = [], True
+        doc = rj(f)
+        if isinstance(doc, dict) and doc.get("env") == env and isinstance(doc.get("tests"), list):
+            files.append((str(doc.get("executed_at") or ""), f.name, doc["tests"]))
+    results = {}
+    for _, _, tests in sorted(files, key=lambda x: x[:2]):
+        for t in tests:
+            if isinstance(t, dict) and t.get("id"):
+                results[str(t["id"])] = t.get("status")
+    return results
+
+
+def design_link_exists(r: Path, ref: str) -> bool:
+    """'DES-001' → a decision document design/decisions/DES-001*.md exists."""
+    return bool(re.fullmatch(r"DES-\d+", str(ref))) and any((r / "design/decisions").glob(f"{ref}*.md"))
+
+
+def coverage(r: Path, env: str = "dev") -> dict:
+    """REQ → design → configuration → tests, for one environment. A requirement is covered only when its design
+    documents and configuration elements exist and every linked test passed in that environment. Failed, errored
+    and never-run tests are counted apart; `pass-api-only` (UI step skipped over HTTP) counts as passed and is shown."""
+    tr = rj(r / "traceability.json")
+    if not isinstance(tr, dict) or not all(isinstance(v, dict) for v in tr.values()):
+        raise BadFile("traceability.json: must be an object of requirement id → {design, config, tests}")
+    results = test_results(r, env)
+    rows = []
     for req, links in sorted(tr.items()):
-        cfg = links.get("config", [])
-        tests = links.get("tests", [])
-        passed = [t for t in tests if results.get(t) in ("pass", "pass-api-only")]   # api-only: UI check skipped (HTTP transport)
+        des, cfg, tests = (list(links.get(k) or []) for k in ("design", "config", "tests"))
+        count = {k: 0 for k in ("passed", "api_only", "failed", "error", "not_run")}
+        for t in tests:
+            st = results.get(str(t))
+            count["passed" if st == "pass" else "api_only" if st == "pass-api-only" else "failed" if st == "fail"
+                  else "not_run" if st is None else "error"] += 1
         missing_cfg = [c for c in cfg if not config_path_exists(r, c)]
-        good = bool(cfg) and not missing_cfg and bool(tests) and len(passed) == len(tests)
-        ok &= good
-        rows.append({"req": req, "config": len(cfg), "missing_config": missing_cfg, "tests": len(tests),
-                     "passed": len(passed), "status": "covered" if good else "GAP"})
-    return {"ok": ok, "rows": rows}
+        missing_des = [d for d in des if not design_link_exists(r, d)]
+        why = []
+        if not des:
+            why.append("no design link")
+        if not cfg:
+            why.append("no config path")
+        if not tests:
+            why.append("no test")
+        good = not why and not missing_cfg and not missing_des and count["passed"] + count["api_only"] == len(tests)
+        rows.append({"req": req, "design": len(des), "missing_design": missing_des, "config": len(cfg),
+                     "missing_config": missing_cfg, "tests": len(tests), **count, "why": why,
+                     "status": "covered" if good else "GAP"})
+    # no requirement traced is not "everything covered"
+    return {"ok": bool(rows) and all(x["status"] == "covered" for x in rows), "env": env, "rows": rows}
 
 
 # ---------------------------------------------------------------- releases and drift baseline (S2, S3, D11)
@@ -2747,6 +2782,8 @@ def http_cmd(r: Path, a) -> int:
             res = H.run_tests(clients, sid, specs, a.env)
             res["executed_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
             res["specs"] = [str(Path(f)) for f in a.specs]
+            # same form as the browser runner (UTC), so coverage orders the result files of both transports
+            res["executed_at"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
             for t in res["tests"]:
                 print(f"{t['status']:13} {t['id']:6} as {t['as']:8} {t.get('title') or ''}")
                 if t["status"] not in ("pass", "pass-api-only"):
@@ -3125,7 +3162,8 @@ def _main(argv=None) -> int:
     s.add_argument("--export", dest="exports", action="append", metavar="SITE=EXPORT", help="multi-site plan: one per site")
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
-    sp.add_parser("coverage")
+    s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
+    s.add_argument("--env", default="dev", help="environment whose test results count (default dev)")
     s = sp.add_parser("init", help="create a new project repository (templates/project + skills + launcher)")
     s.add_argument("dir")
     s.add_argument("--origin", choices=["new", "existing"], default="new",
@@ -3501,10 +3539,19 @@ def _main(argv=None) -> int:
         return 1 if issues else 0
 
     if a.cmd == "coverage":
-        c = coverage(r)
+        env_conf(r, a.env)
+        c = coverage(r, a.env)
+        print(f"coverage for env {a.env} (test results of other environments are not counted)")
         for row in c["rows"]:
-            print(f"{row['status']:8} {row['req']:10} config={row['config']} tests={row['passed']}/{row['tests']}"
+            other = [f"{k.replace('_', '-')}: {row[k]}" for k in ("api_only", "failed", "error", "not_run") if row[k]]
+            print(f"{row['status']:8} {row['req']:10} design={row['design']} config={row['config']} "
+                  f"tests={row['passed'] + row['api_only']}/{row['tests']}"
+                  + (f" ({', '.join(other)})" if other else "")
+                  + (f" {'; '.join(row['why'])}" if row["why"] else "")
+                  + (f" missing design={row['missing_design']}" if row["missing_design"] else "")
                   + (f" missing={row['missing_config']}" if row["missing_config"] else ""))
+        if not c["rows"]:
+            print("GAP      traceability.json lists no requirement — nothing is covered")
         return 0 if c["ok"] else 1
 
     e = env_conf(r, a.env)

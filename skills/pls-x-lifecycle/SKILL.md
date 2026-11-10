@@ -135,7 +135,7 @@ Skill: `pls-p4-test-writer`.
 
   Never edit a test to make it pass without saying why.
 - Add the test ids to `traceability.json` (`"tests": ["T-…"]` per REQ).
-- `pls lint`, `pls coverage` → 100 % of in-scope REQs covered.
+- `pls lint`, `pls coverage` → 100 % of in-scope REQs covered on dev (coverage counts one environment; after stg smoke tests, `pls coverage --env stg` shows what passed there).
 - Write `releases/<release>/g3-verification.md`. **Stop at G3.**
 
 ### P5 Release → G4

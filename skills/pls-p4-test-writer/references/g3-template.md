@@ -13,7 +13,7 @@
 |---|---|
 | Build | dev releases R-…-dev applied; round trip **0 differences** (after canonicalisation: list what was folded back, if anything) |
 | `pls lint` | 0 issues |
-| `pls coverage` | n/n in-scope REQs with config and passing tests |
+| `pls coverage` (dev) | n/n in-scope REQs with design, config and passing tests; api-only: n (UI step not checked over HTTP) |
 | API tests as <role> | T-… pass — `tests/results/<file>` |
 | Role tests as <role> | T-… pass / pass-api-only — `tests/results/<file>`; or **deferred** (project profile): restrictions verified in the configuration by T-… (`siteConfig`) |
 | Manual checks | what was checked on the screen, by whom (pending until the person confirms) |
