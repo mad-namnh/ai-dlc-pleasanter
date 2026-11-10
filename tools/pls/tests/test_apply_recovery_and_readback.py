@@ -205,6 +205,30 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(pls.main(["mark-applied", "R-1", *self.exports()]), 1)
         self.assertEqual(self.status(d), "planned")
 
+    def edit_by_someone_else(self, after_write_of, site_id):
+        """Someone saves `site_id` in the UI right after our write of `after_write_of` (i.e. after the preflight)."""
+        real = self.fake.handle
+
+        def handle(path, body):
+            res = real(path, body)
+            if path == f"/api/items/{after_write_of}/updatesite":
+                self.fake.sites[site_id].update(Title="edited by someone else", UpdatedTime="t-other")
+            return res
+        self.fake.handle = handle
+
+    def test_a_site_changed_between_the_preflight_and_its_write_is_not_overwritten(self):
+        plan, d = self.plan()
+        first, second = plan["steps"][0], plan["steps"][1]
+        self.edit_by_someone_else(first["site_id"], second["site_id"])
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
+        self.assertEqual(self.fake.sites[second["site_id"]]["Title"], "edited by someone else")   # their change is kept
+        self.assertNotEqual(self.status(d), "applied")
+        log = json.loads((d / "apply-log.json").read_text(encoding="utf-8"))
+        self.assertEqual((log["status"], log["failed_site"]), ("rolled-back", second["site"]))
+        self.assertIn("changed by someone else", " ".join(log["log"]))
+        restored = json.loads((d / f"rollback-{first['site']}.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.fake.sites[first["site_id"]]["Title"], restored["Title"])           # our first write is undone
+
     def bootstrap_plan(self):
         d = self.r / "releases/B-1"
         d.mkdir(parents=True)

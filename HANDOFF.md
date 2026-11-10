@@ -7,8 +7,8 @@
 **Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus all of P1 (P1-1…P1-8); details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): coverage per environment…` (P2-2); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **323 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): each site is read again right before its own write…` (P2-4); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **324 OK**; `node --test tests/test_runner.mjs` → **14 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. `main` was fast-forwarded to `brownfield-adr` on 2026-11-10 and pushed to GitHub at Nam's request (the earlier demo baseline was `d0c27f1`). Work continues on `brownfield-adr`; `main` is fast-forwarded and pushed only when Nam asks. `demo-equipment` runs the framework working tree, so it now runs the remediated `pls`: expect the new lint findings and refusals listed under "Remediation progress".
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P2-3…P2-12, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P2-3 and P2-5…P2-12, then P3. Nam's choices (2026-11-10): P2-5 writing commands refuse when the run log cannot be written; P2-12 tighten the spike guard (role check before the localhost exemption, permission given to edit `spike/round-trip/scripts/common.py` for that); P2-11 records only (read-back digest, executor, confirmation mode), `pls rollback` as a Proposed ADR. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -78,7 +78,9 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 - Done, committed: **P2-2** — `pls coverage [--env E]` (default dev) counts only that environment's result files, the latest run per test (`executed_at`, now also written by `pls test`; then the file name); rows carry `passed`, `api_only`, `failed`, `error`, `not_run`; `design` links must name an existing `design/decisions/DES-nnn*.md`; a REQ without design, config or tests, and an empty `traceability.json`, are gaps. architecture.md, test-writer 0.8, lifecycle 0.17, G3 template. Tests `test_coverage_per_environment.py` (all 7 fail on the parent commit).
   - **Not done (review suggestion):** `pass-api-only` is shown but still counts as passed for a UI requirement; a REQ cannot yet say that a UI check is required.
   - **Action for existing projects:** a REQ whose `traceability.json` row has no `design` id, or names a DES file that does not exist, is now a GAP; result files of stg no longer count for dev.
-- Not started: P2-3…P2-12 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
+- Done, committed: **P2-4** — `apply` (HTTP and browser runner) reads each site again right before its own write; a changed `UpdatedTime` (or a failed read) stops the release, the site is not written and the sites already written are restored (`rolled-back` / `recovery-required`, or `refused` when nothing was written yet). ADR-0014 TB-8 text corrected (the remaining moment is stated, not "caught by the read-back"), KB D4a (0.14), P5 0.9, ADR-0008 table row. Tests: one in `test_apply_recovery_and_readback.py`, one in `test_runner.mjs` (both fail on the parent commit). Suite: 324 Python OK, 14 node pass.
+  - **Open question (ADR-0014):** whether `updatesite` on one site changes another site's `UpdatedTime` on 1.5.x is not verified; if it does, multi-site releases stop at the second site (safely). Watch the first multi-site release on dev.
+- Not started: P2-3, P2-5…P2-12 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 

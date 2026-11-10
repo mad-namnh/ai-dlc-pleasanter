@@ -207,6 +207,19 @@ var plsRunner = (() => {
     }
     const touched = [];
     for (const step of plan.steps) {
+      // read again right before this site's own write (same rule as pls apply): a change by someone else since the
+      // preflight is not overwritten; the sites already written are restored
+      let changed = null;
+      try {
+        const now = (await exportSite(step.site_id)).Response.Data.UpdatedTime;
+        if (now !== step.expect_updated_time) changed = `UpdatedTime ${now} ≠ plan ${step.expect_updated_time}`;
+      } catch (e) { changed = `could not be read again before its write (${e.message || e})`; }
+      if (changed) {
+        const {log: restored, failed} = await restoreSites(plan, files, touched);
+        return {status: failed.length ? 'recovery-required' : touched.length ? 'rolled-back' : 'refused', failed_site: step.site,
+                touched, failed_restores: failed,
+                log: [...log, `${step.site}: ${changed} — changed by someone else since the preflight; not written — re-plan`, ...restored]};
+      }
       touched.push(step.site);                 // a failed updatesite may still have changed the site → restore it too
       let r;
       try { r = await apply(step.site_id, files[step.payload_file]); } catch (e) { r = {http: 0, message: String(e)}; }

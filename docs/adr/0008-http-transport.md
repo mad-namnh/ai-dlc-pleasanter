@@ -57,6 +57,7 @@ The runner is a fallback for a person on dev. Both read the same plan, payload, 
 | `editPage` (button shown?) | skipped, test becomes `pass-api-only` | real check of the edit screen | UI checks need the runner (see Limits) |
 | Write guards | role, `allow_write`, G4 outside dev, mail / jobs checks, confirmation | only "the plan was made for dev" (`env_role`) and the plan-steps rule | The runner never writes stg or prod (ADR-0014 TB-7) |
 | Records of a run | `apply-log.json`, plan status, run log, read-back with `mark-applied` state | returns JSON only | After a runner apply the person exports every site and runs `pls mark-applied` |
+| Read before each write | each site read again right before its own write | same | — |
 | Restore after a failed apply | each restore read back; `rolled-back` only when verified | restore answered 200 = restored, not read back | A runner `rolled-back` is confirmed by export + `mark-applied` |
 | Request timeout | per connection (1–600 s); a timeout after sending is `uncertain` | the browser's own | No `uncertain` state in the runner |
 | Migrations | `pls migrate` (guards, recorded in `plan.json`) | `bulkUpsert` for a dev plan, nothing recorded | Guarded runs use `pls migrate` |

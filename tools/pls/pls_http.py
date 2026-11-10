@@ -225,6 +225,21 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         log.append(f"preflight {step['site']} ok")
     touched: list[str] = []
     for step in plan["steps"]:
+        # updatesite has no conditional write, so the site is read again right before its own write: the preflight
+        # above is as old as the writes of the sites before this one. A change by someone else found here is not
+        # overwritten; the sites already written are restored. (A change in the moment between this read and the
+        # write still cannot be seen — ADR-0014 TB-8.)
+        try:
+            now = client.export_site(step["site_id"])["Response"]["Data"].get("UpdatedTime")
+            changed = None if now == step["expect_updated_time"] else f"UpdatedTime {now} ≠ plan {step['expect_updated_time']}"
+        except TransportError as ex:
+            changed = f"could not be read again before its write ({ex})"
+        if changed:
+            lines, failed = rollback(client, plan, files, touched)
+            return {"status": "recovery-required" if failed else "rolled-back" if touched else "refused",
+                    "failed_site": step["site"], "touched": touched, "failed_restores": failed,
+                    "log": log + [f"{step['site']}: {changed} — changed by someone else since the preflight; not written"
+                                  + (", the sites already written are restored" if touched else "") + " — re-plan"] + lines}
         touched.append(step["site"])          # a failed updatesite may still have changed the site → restore it too
         try:
             st, msg = client.apply(step["site_id"], files[step["payload_file"]])

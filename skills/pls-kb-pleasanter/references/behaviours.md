@@ -6,6 +6,7 @@ Each entry: what happens, why it matters, what to do. IDs refer to `docs/review-
 |---|---|---|---|
 | D3 | SiteIds hard-coded in script strings are not remapped by site packages or the API (1.5.2) | A copied site's script silently reads another environment's data (seen in slice #1: stg read dev) | Use `${site:<name>}` in git; `pls pack` resolves per environment; lint L-REF-01 |
 | D4 | `updatesite` replaces SiteSettings entirely (1.5.2) | Partial payloads delete settings; deploys overwrite customer UI edits | Complete payloads only (L-DEP-01); drift check before every deploy |
+| D4a | `updatesite` has no conditional write: the API cannot say "only if unchanged since …" (design limit, not a probe result) | A UI edit saved between pls reading a site and writing it is overwritten without a trace | pls reads `UpdatedTime` in the preflight and again right before each site's write; release when nobody edits the sites (ADR-0014 TB-8) |
 | D5 | Secrets in scripts are visible through `getsite` | Anyone with site-settings read access gets the key | No secret values in configuration; gateway pattern; L-SEC-01 |
 | D7 | Shared server script with top-level `const`/`let` → every save fails `ServerScriptExecutionFailed` when combined with another script (1.5.2) | Whole site unusable for record saves | `var` in shared scripts; L-SCR-01 |
 | D8 | Save-time normalisation: defaults added, default values dropped (1.5.2) | False drift if git is not canonical | `pls canon`; after first deploy, export → unpack; L-CAN-01 |

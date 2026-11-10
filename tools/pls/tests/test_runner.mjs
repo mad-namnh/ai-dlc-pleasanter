@@ -205,3 +205,25 @@ test('applyRelease: a restore that throws does not stop the other restores', asy
   assert.deepEqual([...out.failed_restores], ['a']);
   assert.equal(live[202].SiteSettings.tag, 'old-b');                                    // b was still restored
 });
+
+test('applyRelease: a site changed between the preflight and its own write is not overwritten', async () => {
+  const live = sites(); const calls = [];
+  const fetch = async (path, opts) => {
+    const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/);
+    calls.push(`${op} ${id}`);
+    if (op === 'getsite') return {status: 200, text: async () => JSON.stringify({Response: {Data: live[id]}})};
+    live[id].SiteSettings = JSON.parse(opts.body).SiteSettings;
+    if (id === '202' && live[201].UpdatedTime === 'ta') {                 // right after our write of b, someone saves a
+      Object.assign(live[201], {UpdatedTime: 'other', SiteSettings: {tag: 'someone-else'}});
+    }
+    return {status: 200, text: async () => '{}'};
+  };
+  const ctx = {fetch, console}; vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  const out = await ctx.plsRunner.applyRelease(plan, files);
+  assert.equal(out.status, 'rolled-back', JSON.stringify(out.log));
+  assert.equal(out.failed_site, 'a');
+  assert.equal(live[201].SiteSettings.tag, 'someone-else');               // their change is kept
+  assert.equal(live[202].SiteSettings.tag, 'old-b');                      // our first write is undone
+  assert.ok(!calls.includes('updatesite 201'));
+});
