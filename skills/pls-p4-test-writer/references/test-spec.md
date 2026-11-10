@@ -1,6 +1,6 @@
 # Test spec format (`tests/api/*.json`)
 
-`pls test` (HTTP) and the browser runner `runTests` read the same format. Before running, `${site:x}` and `${principal:x}` are resolved for the environment.
+`pls test` (HTTP) and the browser runner `runTests` read the same format; the runner refuses a spec or step with `as_key` (it cannot switch users), so role tests run with `pls test`. Before running, `${site:x}` and `${principal:x}` are resolved for the environment.
 
 A file holds a JSON **list of tests**:
 

@@ -141,3 +141,67 @@ test('runTests: create on another site with $var, update/delete with expected HT
   assert.equal(out.tests[0].status, 'pass', JSON.stringify(out.tests[0].log));
   assert.ok(calls.includes('create 2'));
 });
+
+// One fake for the test-spec probes: process "approve" answers with `execStatus`; every call is recorded.
+function testRunner(execStatus = 200) {
+  const calls = []; let next = 100;
+  const fetch = async path => {
+    const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/);
+    calls.push(`${op} ${id}`);
+    const res = (status, obj) => ({status, text: async () => JSON.stringify(obj)});
+    if (op === 'getsite') return res(200, {Response: {Data: {SiteSettings: {Processes: [{Id: 1, Name: 'approve'}]}}}});
+    if (op === 'create') return res(200, {Id: next++});
+    if (op === 'update') return res(execStatus, {});
+    return res(200, {});
+  };
+  const ctx = {fetch, console, DOMParser: class {}}; vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  return {runner: ctx.plsRunner, calls};
+}
+const execSpec = extra => [{id: 'T', steps: [{op: 'create', save: 'r', data: {}}, {op: 'exec', record: '$r', process: 'approve', ...extra}]}];
+
+test('runTests: exec answered with an unexpected status is a failure, as in pls test', async () => {
+  const failed = await testRunner(500).runner.runTests(1, execSpec({}), 'dev');
+  assert.equal(failed.tests[0].status, 'fail', JSON.stringify(failed.tests[0].log));
+  const refused = await testRunner(403).runner.runTests(1, execSpec({expectHttp: 403}), 'dev');
+  assert.equal(refused.tests[0].status, 'pass');
+  const ok = await testRunner(200).runner.runTests(1, execSpec({}), 'dev');
+  assert.equal(ok.tests[0].status, 'pass');
+});
+
+test('runTests: a spec or step with as_key is refused unsent — the runner cannot switch users', async () => {
+  for (const spec of [{id: 'T', as_key: 'staff', steps: [{op: 'create', expectHttp: 403, data: {}}]},
+                      {id: 'T', steps: [{op: 'create', save: 'r', data: {}}, {op: 'delete', as_key: 'staff', record: '$r', expectHttp: 403}]}]) {
+    const {runner, calls} = testRunner();
+    const out = await runner.runTests(1, [spec], 'dev');
+    assert.equal(out.tests[0].status, 'error', JSON.stringify(out.tests[0].log));
+    assert.match(out.tests[0].log.join(' '), /as_key staff/);
+    assert.deepEqual(calls.filter(c => !c.startsWith('getsite')), []);
+  }
+});
+
+test('runTests: results say which transport ran them and as whom', async () => {
+  const out = await testRunner().runner.runTests(1, execSpec({}), 'dev');
+  assert.equal(out.transport, 'browser');
+  assert.equal(out.tests[0].as, 'session-user');
+});
+
+test('applyRelease: a restore that throws does not stop the other restores', async () => {
+  const live = sites(); const calls = []; let updates = 0;
+  const fetch = async (path, opts) => {
+    const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/);
+    calls.push(`${op} ${id}`);
+    if (op === 'getsite') return {status: 200, text: async () => JSON.stringify({Response: {Data: live[id]}})};
+    updates += 1;
+    if (updates === 2) return {status: 500, text: async () => '{"Message":"boom"}'};     // apply of a fails
+    if (updates === 3) throw new Error('network down');                                 // restore of a throws
+    live[id].SiteSettings = JSON.parse(opts.body).SiteSettings;
+    return {status: 200, text: async () => '{}'};
+  };
+  const ctx = {fetch, console}; vm.createContext(ctx);
+  vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+  const out = await ctx.plsRunner.applyRelease(plan, files);
+  assert.equal(out.status, 'recovery-required');
+  assert.deepEqual([...out.failed_restores], ['a']);
+  assert.equal(live[202].SiteSettings.tag, 'old-b');                                    // b was still restored
+});

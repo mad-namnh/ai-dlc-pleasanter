@@ -196,10 +196,10 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Gate:** G3.
 - **Role tests (TD-11, TD-13):** each restricted role is tested with a user of that role, through the API and, for buttons, the edit screen. Slice #2 T-015 caught a wrong KB entry this way.
   - Over HTTP, `pls test` picks the key per step (`as_key`).
-  - Over the browser runner, a person switches the login.
+  - The browser runner sends every request as the logged-in user and refuses a spec or step with `as_key`: role tests run with `pls test`.
 - **Status:** **in use.**
   - `pls lint` and `pls coverage` run.
-  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`. `pls test` writes only to the sites `environments.json` lists as the environment's own (never another application's site id, never a sandbox's shared site; ADR-0011). Outside dev, tests that change records need the G4 of the release under test (`--release`) or the person's confirmation (ADR-0008).
+  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests` (differences: ADR-0008). `pls test` writes only to the sites `environments.json` lists as the environment's own (never another application's site id, never a sandbox's shared site; ADR-0011). Outside dev, tests that change records need the G4 of the release under test (`--release`) or the person's confirmation (ADR-0008).
   - Not built: reviewer agents, Playwright smoke, CI.
 
 ### P5 — Release (リリース)

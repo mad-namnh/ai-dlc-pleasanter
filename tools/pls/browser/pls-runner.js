@@ -8,6 +8,8 @@
 //   await plsRunner.apply(siteId, payload)             → updatesite with a COMPLETE payload (I2)
 //   await plsRunner.runTests(siteId, specs, envName)   → results JSON for tests/results/
 //     ops: create (expectHttp for refusals), exec, update, delete, get, list (view contains/excludes), editPage, siteConfig
+//     runs as the logged-in user: specs or steps with as_key are refused (role tests run with `pls test`);
+//     results carry transport: "browser" and as: "session-user". Differences from pls test: ADR-0008
 //   await plsRunner.applyRelease(plan, files)          → multi-site release (pls release-plan): preflight, ordered apply,
 //                                                        automatic reverse-order restore on failure (A3)
 //   await plsRunner.rollbackRelease(plan, files, sites) → restore the given sites (default: all) in reverse order
@@ -84,6 +86,13 @@ var plsRunner = (() => {
       const subst = v => typeof v === 'string' && /^\$\w+$/.test(v) && v.slice(1) in vars ? String(vars[v.slice(1)])
         : Array.isArray(v) ? v.map(subst) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)])) : v;
       try {
+        // Every request here is sent as the logged-in user. A spec that names a role's key would run as that user
+        // (usually an administrator) and its expected refusals could pass or delete fixtures: refuse it unsent.
+        const keys = [spec.as_key, ...spec.steps.map(st => st.as_key)].filter(Boolean);
+        if (keys.length) {
+          throw new Error(`as_key ${[...new Set(keys)].join(', ')}: the browser runner cannot switch users — ` +
+            'run this spec with pls test over HTTP (ADR-0008); nothing sent');
+        }
         for (const st of spec.steps) {
           const rid = st.record ? vars[st.record.replace('$', '')] : null;
           if (st.op === 'create') {
@@ -101,7 +110,8 @@ var plsRunner = (() => {
             if (!p) throw new Error(`process '${st.process}' not found`);
             const r = await call(`/api/items/${rid}/update`, {ProcessId: p.Id, ...(st.data || {})});
             log.push(`exec ${st.process}(Id ${p.Id}) → HTTP ${r.http}`);
-            if (st.expectHttp && r.http !== st.expectHttp) { status = 'fail'; log.push(`expected HTTP ${st.expectHttp}`); }
+            const want = st.expectHttp || 200;   // same rule as pls test: an unexpected status is never a pass
+            if (r.http !== want) { status = 'fail'; log.push(`expected HTTP ${want}`); }
           } else if (st.op === 'update' || st.op === 'delete') {
             const r = await call(`/api/items/${rid}/${st.op}`, st.op === 'update' ? subst(st.data || {}) : undefined);
             log.push(`${st.op} ${rid} → HTTP ${r.http}`);
@@ -155,9 +165,9 @@ var plsRunner = (() => {
           } else throw new Error(`unknown op ${st.op}`);
         }
       } catch (e) { status = 'error'; log.push(String(e.message || e)); }
-      out.push({id: spec.id, reqs: spec.reqs, title: spec.title, status, log});
+      out.push({id: spec.id, reqs: spec.reqs, title: spec.title, as: 'session-user', status, log});
     }
-    return {env: envName, site_id: siteId, executed_at: new Date().toISOString(), tests: out};
+    return {env: envName, site_id: siteId, transport: 'browser', executed_at: new Date().toISOString(), tests: out};
   };
   // Restore in rollback order; one failing restore never stops the others. failed = sites not answered with 200.
   const restoreSites = async (plan, files, sites) => {
