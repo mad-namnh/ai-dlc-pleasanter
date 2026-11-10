@@ -83,8 +83,11 @@ class PlsTest(unittest.TestCase):
 
     def test_lint_rules(self):
         scripts = [{"Id": 1, "Name": "env", "Shared": True, "Body": "const U = 'x';"},
-                   {"Id": 2, "Name": "s1", "Body": "var k = 'sk-ant-abcdefghijklmnop'; items.Get(202, '{}');"}]
+                   {"Id": 2, "Name": "s1", "Body": "var k = 'KEY'; items.Get(202, '{}');"}]
         self.unpack_dev(scripts=scripts)
+        # unpack refuses secrets (P0 test below), so the secret arrives by a hand edit of config/ — lint still finds it
+        for f in (self.r / "config/a").rglob("*.js"):
+            f.write_text(f.read_text(encoding="utf-8").replace("'KEY'", "'sk-ant-abcdefghijklmnop'"), encoding="utf-8")
         rules = sorted({i["rule"] for i in pls.lint(self.r)})
         # 202 is a stg id → not converted by dev unpack → hard-coded reference;
         # L-PRF-01: the fixture's Approvers row and stg role were written by hand, not through pls profile set

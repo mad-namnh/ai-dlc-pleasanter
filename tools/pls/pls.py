@@ -93,6 +93,21 @@ SECRET_RES = {
 }
 
 
+def secrets_in(obj: Any) -> list[str]:
+    """Names of the secret-like patterns (L-SEC-01) found in obj, read as its JSON text."""
+    blob = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
+    return [n for n, rx in SECRET_RES.items() if rx.search(blob)]
+
+
+def refuse_secrets(obj: Any, what: str, then: str) -> None:
+    """L-SEC-01 as a refusal: commands that write configuration or payloads into the repository stop before writing,
+    so a secret-like literal from a live export never lands in config/ or releases/ (I7, ADR-0005)."""
+    found = secrets_in(obj)
+    if found:
+        raise Fail(f"{what}: secret-like values in the configuration ({', '.join(found)}) — nothing written. Secrets must "
+                   f"not reach git (I7, ADR-0005): {then}")
+
+
 # Output is UTF-8 on every console: a Windows console with cp932 cannot encode "—" and labels in other
 # scripts, which made pls (and its tests) fail before printing (TD-12).
 for _stream in (sys.stdout, sys.stderr):
@@ -562,9 +577,7 @@ def lint_jobs(r: Path, e_all: dict, all_ids: set) -> list[dict]:
         for i in sorted(all_ids):
             if SX.literal_left(body, i):
                 add("L-REF-01", f"{name}: site id {i} written as a site id; use ${{site:…}}")
-        blob = json.dumps(j, ensure_ascii=False)
-        for sname, rx in SECRET_RES.items():
-            if rx.search(blob):
+        for sname in secrets_in(j):
                 add("L-SEC-01", f"{name}: secret-like value ({sname})")
         entry = j["entry"] if isinstance(j["entry"], dict) else {}
         if (entry.get("shared") or entry.get("Shared")) and TOP_LEVEL_DECL.search(body):
@@ -629,9 +642,8 @@ def lint(r: Path) -> list[dict]:
                                    f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
         for path, addr in SE.literal_addresses(m["settings"]):     # L-MAIL-01: no literal addresses (ADR-0010)
             issues.append({"rule": "L-MAIL-01", "site": site, "msg": f"{path}: literal mail address {addr}; use ${{env:…}} or ${{principal:…}}"})
-        for name, rx in SECRET_RES.items():
-            if rx.search(blob):
-                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
+        for name in secrets_in(blob):
+            issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
         for kind, items in m["scripts"].items():
             for it in items:
                 body, nm = it.get("Body", ""), it.get("Name")
@@ -1116,6 +1128,14 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
     if missing:
         return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
+    rollback = {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
+                + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
+                if k in live_site}
+    found = {part: secrets_in(obj) for part, obj in (("payload (config/)", new), ("rollback (live)", rollback))}
+    if any(found.values()):
+        return False, [f"{site}: REFUSED — L-SEC-01 secret-like values in the " + "; ".join(
+            f"{part}: {', '.join(n)}" for part, n in found.items() if n) + " — nothing written to releases/. Secrets must "
+            "not reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"], {}
     diffs = flat_diff(same_meta(live, git), git)
     snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
     return True, msgs, {
@@ -1127,9 +1147,7 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
                        "accepted_by": accept_unverified, "unverified": scope,
                        "record_sha256": hashlib.sha256(Path(accept_unverified).read_bytes()).hexdigest()}},
         "payload": new,
-        "rollback": {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
-                     + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
-                     if k in live_site},
+        "rollback": rollback,
         "raw_diff": md_diff(diffs, labels(git) | labels(live), f"{env}/{site}: live (before) vs git (after)"),
         "deps": site_deps(git, site, set(e["sites"])),
         "side_effects": SE.changed_mail_elements(live["settings"], git["settings"]),
@@ -1393,11 +1411,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     model = logical(export, e_new)
     model["settings"] = canonicalize(model["settings"])
     ss = d.get("SiteSettings") or {}
-    blob = json.dumps(ss, ensure_ascii=False)
-    secrets = [n for n, rx in SECRET_RES.items() if rx.search(blob)]
-    if secrets:
-        raise Fail(f"site {sid}: secret-like values in its configuration ({', '.join(secrets)}) — nothing written. Secrets must "
-                   "not reach git (I7, ADR-0005): move them out of the site configuration first, then adopt")
+    refuse_secrets(ss, f"site {sid}", "move them out of the site configuration first, then adopt")
     placed = slots_in_use({k: v for k, v in ss.items() if k != "FilterColumns"})
     entries = AD.slot_entries(slots_in_use(ss), today, set(slots_in_use(ss)) - set(placed))
     nf = sum(1 for v in entries.values() if v.get("placement") == "filter-only")
@@ -1777,6 +1791,7 @@ def harvest(r: Path, env: str, site: str) -> int:
     pf = r / "config" / site / "permissions.json"
     perms_before = pf.read_bytes() if pf.exists() else None
     model["permissions"] = None             # permissions are designed (P2) and opt-in (ADR-0006): never harvested
+    refuse_secrets(model, f"harvest {site} from {env}", f"move them out of the site configuration on {env}, then harvest")
     write_tree(model, r / "config" / site)
     if perms_before is not None:
         pf.write_bytes(perms_before)
@@ -3134,7 +3149,9 @@ def _main(argv=None) -> int:
 
     if a.cmd == "unpack":
         e = env_conf(r, a.env)
-        write_tree(logical(rj(Path(a.export)), e), r / "config" / a.site)
+        model = logical(rj(Path(a.export)), e)
+        refuse_secrets(model, f"unpack {a.site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
+        write_tree(model, r / "config" / a.site)
         print(f"unpacked {a.export} → config/{a.site}")
         return 0
 
