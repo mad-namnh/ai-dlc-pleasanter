@@ -252,7 +252,9 @@ def rollback(client: Client, plan: dict, files: dict, sites: list | None = None)
     return out, failed
 
 
-def bootstrap(client: Client, plan: dict) -> dict:
+def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None = None) -> dict:
+    """Create the planned sites in order. `before(site)` runs just before each createsite is sent, so the caller can
+    record which site is in flight: if the process dies there, the record still names the site that may exist."""
     created, log = {}, []
     st, js, _ = client.call(f"/api/items/{plan['parent_id']}/getsite")
     if st != 200 or not js or js["Response"]["Data"].get("ReferenceType") != "Sites":
@@ -260,6 +262,8 @@ def bootstrap(client: Client, plan: dict) -> dict:
     for s in plan["steps"]:
         if s["op"] != "createsite" or s["parent_id"] != plan["parent_id"]:
             return {"status": "refused", "created": created, "log": log + [f"bad step {s.get('site')}"]}
+        if before:
+            before(s["site"])
         try:
             st, sid, text = client.create_site(s["parent_id"], s["payload"])
         except UncertainOutcome as ex:

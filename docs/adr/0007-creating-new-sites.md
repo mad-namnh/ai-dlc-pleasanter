@@ -42,6 +42,11 @@ Until now every release updated sites that already existed (`updatesite`). A new
 - `createsite` with `SiteSettings {}`: accepted? Response shape (`Id`)? Default SiteSettings created by Pleasanter (to be unpacked)?
 - Does the skeleton inherit the parent folder's permissions (`InheritPermission` = parent)?
 
+## A site is never created twice (2026-11-10, design review WS4-F7 / C10)
+
+- `pls bootstrap` sends each `createsite` once. Sites answered with an id are bound at once, also when a later step fails. Before each request the site is written to `bootstrap.json` as `uncertain` and cleared when the request is answered; so an unanswered request (timeout) and a run that dies between the server creating the site and pls binding its id leave the same record. While it is there, a re-run is refused until a person looks at the folder and either binds the site (`pls bind --created <site>=<id>`) or confirms it is absent (`pls bootstrap <R> --absent <site>`).
+- **Open question (not built, not assumed):** the design review asked for an automatic look-up "by title under the parent folder" before a re-create. Whether the 1.5.x API can list the child sites of a folder (and with which call and rights) is not verified in the KB, and titles are not unique in Pleasanter. Until a probe on dev shows it, the check stays with the person as above. Probe to add to `pls kb-verify`: create two sites under the probe folder, then try to read the folder's children through the API.
+
 ## Consequences
 
 - `environments.json`: per environment `parent_id` (folder for new sites); a site entry may have a `title` and no `id` until it is bound.

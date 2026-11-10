@@ -2521,18 +2521,23 @@ def http_cmd(r: Path, a) -> int:
             if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
                                              f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)"):
                 return 1
-            res = H.bootstrap(c, plan)
+            def in_flight(site: str) -> None:
+                # Written before the request: a run that dies between the server creating the site and pls binding
+                # its id (killed process, power loss) leaves the same record as an unanswered request, and the
+                # re-run waits for a person instead of creating the site a second time.
+                wj(bp, dict(rj(bp), uncertain=site))
+
+            res = H.bootstrap(c, plan, before=in_flight)
             for line in res["log"]:
                 print(line)
             if res["created"]:
                 bind(r, plan["env"], a.release, res["created"])
-            if res["status"] == "uncertain" or unsure:   # record the unknown site, or clear the one a person checked
-                rec = rj(bp)
-                if res["status"] == "uncertain":
-                    rec["uncertain"] = res["uncertain"]
-                else:
-                    rec.pop("uncertain", None)
-                wj(bp, rec)
+            rec = rj(bp)                                 # every request was answered: no site is in flight any more
+            if res["status"] == "uncertain":
+                rec["uncertain"] = res["uncertain"]
+            else:
+                rec.pop("uncertain", None)
+            wj(bp, rec)
             if res["status"] == "uncertain":
                 print(f"{a.release}: OUTCOME UNKNOWN for '{res['uncertain']}' — it may have been created. Check the folder "
                       f"before any re-run; pls bootstrap refuses until it is bound or confirmed absent.")

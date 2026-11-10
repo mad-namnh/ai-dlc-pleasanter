@@ -4,11 +4,11 @@
 
 ## Resume here — 2026-11-10 (read this first)
 
-**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3 and P1-6…P1-8; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
+**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3 and P1-5…P1-8; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): browser runner test parity…` (P1-8); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **302 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): bootstrap records the site in flight…` (P1-5); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **304 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. Switch back to `main` when done: `demo-equipment` runs the framework working tree and must stay on the demo baseline.
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P2, then P3 (P1-4 and P1-5 are done only in part: check their roadmap rows first). Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P2, then P3 (P1-4 is done only in part: the reverse mapping of `${env:x}` waits for Nam's choice). Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -70,7 +70,9 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 - Adaptive Model Routing section added to the framework `CLAUDE.md` (`fdb0270`): subagent model / effort by task tier; the main session's model is the user's.
 - Done, committed: **P1-8** — browser runner `runTests`: `exec` without `expectHttp` fails on any status other than 200 (was reported `pass`); a spec or step with `as_key` is refused unsent with status `error` (the runner cannot switch users); results carry `transport: "browser"` and `as: "session-user"`. The per-restore catch was already in place since P1-1 and now has its own test. ADR-0008 has the differences table (11 rows); architecture.md, test-writer 0.7. Runner tests: 4 new (3 fail on the parent commit). Suite: 302 Python OK, 13 node pass.
   - **Decided without asking, Nam may change:** `as_key` specs are refused rather than run and labelled `as: session-user`.
-- Not started: all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded); P1-4 and P1-5 are done in part. All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
+- Done, committed: **P1-5** (rest; the per-step catch and binding came with `5e5cda5`) — `bootstrap` writes the site to `bootstrap.json` as `uncertain` before each `createsite` and clears it once the request is answered, so a run killed between the server creating the site and pls binding it is refused on re-run like a timeout (person binds it or passes `--absent`). ADR-0007 section added. Tests in `test_apply_recovery_and_readback.py` (the killed-run test fails on the parent commit). Suite: 304 Python OK, 13 node pass.
+  - **Not built, open question in ADR-0007:** the automatic look-up by title under the parent folder. The KB does not verify that the 1.5.x API lists a folder's child sites; needs a `kb-verify` probe on dev first.
+- Not started: all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded); P1-4 is done in part. All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 

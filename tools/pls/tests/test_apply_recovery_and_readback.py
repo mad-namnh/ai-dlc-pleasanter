@@ -236,6 +236,39 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(rec["status"], "created")
         self.assertNotIn("uncertain", rec)
 
+    def test_bootstrap_killed_after_the_server_created_a_site_never_creates_it_twice(self):
+        import pls_http as H
+        d = self.bootstrap_plan()
+        real = H.Client.create_site
+
+        def dies(client, parent_id, payload):
+            real(client, parent_id, payload)                                        # the server created the site …
+            raise KeyboardInterrupt                                                 # … and the process stopped before binding
+
+        n = len(self.fake.sites)
+        H.Client.create_site = dies
+        try:
+            with self.assertRaises(KeyboardInterrupt):
+                pls.main(["bootstrap", "B-1", "--yes"])
+        finally:
+            H.Client.create_site = real
+        self.assertEqual(len(self.fake.sites), n + 1)
+        self.assertEqual(json.loads((d / "bootstrap.json").read_text(encoding="utf-8"))["uncertain"], "x1")
+        self.assertEqual(pls.main(["bootstrap", "B-1", "--yes"]), 2)                 # refused: never a second x1
+        self.assertEqual(len(self.fake.sites), n + 1)
+
+    def test_bootstrap_answered_with_an_error_leaves_no_site_in_flight(self):
+        d = self.bootstrap_plan()
+        import pls_http as H
+        real = H.Client.create_site
+        H.Client.create_site = lambda client, parent_id, payload: (500, None, "boom")
+        try:
+            self.assertEqual(pls.main(["bootstrap", "B-1", "--yes"]), 1)
+        finally:
+            H.Client.create_site = real
+        self.assertNotIn("uncertain", json.loads((d / "bootstrap.json").read_text(encoding="utf-8")))
+        self.assertEqual(pls.main(["bootstrap", "B-1", "--yes"]), 0)                 # answered "not created": a re-run may create
+
     def test_bootstrap_rerun_with_absent_confirmed_creates_the_site(self):
         d = self.bootstrap_plan()
         rec = json.loads((d / "bootstrap.json").read_text(encoding="utf-8"))
