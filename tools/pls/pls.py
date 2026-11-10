@@ -1479,7 +1479,18 @@ def version_check(r: Path, env: str, tested_env: str = "dev") -> dict:
         diffs = [f"application version not known for {env} — record it with `pls version --env {env} --app …` (ADR-0009)"]
     else:
         diffs = []
-    return {"target": target, "tested_on": {tested_env: tested}, "differences": diffs}
+    labels = {e_: (v_ or {}).get("app") for e_, v_ in ((tested_env, tested), (env, target))}
+    kb, lines = kb_check(labels)
+    return {"target": target, "tested_on": {tested_env: tested}, "differences": diffs + lines, "kb_unverified": kb}
+
+
+def kb_check(labels: dict) -> tuple[dict, list[str]]:
+    """KB entries not verified on the application version of each environment (ADR-0009 point 5)."""
+    f = FRAMEWORK / "skills" / "pls-kb-pleasanter" / "references" / "probes" / "index.json"
+    try:
+        return PV.kb_lines(rj(f), labels)
+    except ValueError as ex:                           # BadFile included: say so, never treat the version as verified
+        return {}, [f"knowledge base index not readable ({ex}) — which entries are verified on these versions is unknown"]
 
 
 def _adopted(r: Path, site: str) -> bool:
@@ -2961,6 +2972,7 @@ def http_cmd(r: Path, a) -> int:
             e["pleasanter"] = new
             wj(r / "environments.json", ev)
             print(f"{a.env}: app {new['app']}, schema {new['schema']}, build {new['build']} (from {new['source']})")
+            msgs = msgs + kb_check({a.env: new["app"]})[1]
             for m_ in msgs:
                 print(f"  {m_}")
             return 0 if new["app"] != PV.UNKNOWN else 1
@@ -2988,6 +3000,7 @@ def http_cmd(r: Path, a) -> int:
             e["pleasanter"] = new
             wj(r / "environments.json", ev)
             print(f"{a.env}: app {new['app']}, build {new['build']}, schema {new['schema']}")
+            msgs = msgs + kb_check({a.env: new["app"]})[1]
             for m in msgs:
                 print(f"  {m}")
             return 1 if new["app"] == PV.UNKNOWN or not build or schema is None else 0

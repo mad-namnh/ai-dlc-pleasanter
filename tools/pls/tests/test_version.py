@@ -64,6 +64,26 @@ class PureTest(unittest.TestCase):
         self.assertIn("not known for stg", PV.compare({"app": "unknown", "build": "201520", "schema": 1.017}, dev, "stg", "dev")[0])
         self.assertIn("not recorded", PV.compare(None, dev, "stg", "dev")[0])
 
+    def test_a_kb_version_label_covers_the_same_numbers_only(self):
+        self.assertTrue(PV.covers("1.5.2", "1.5.2"))
+        self.assertTrue(PV.covers("1.5.2", "1.5.2.0"))
+        for app in ("1.5.20", "1.5.3.0", "1.6.0.0", "1.5", "11.5.2"):
+            self.assertFalse(PV.covers("1.5.2", app), app)
+
+    def test_kb_entries_not_verified_on_a_version_are_named(self):
+        index = {"entries": {"D3": {"verified_on": ["1.5.2"]}, "D8": {"verified_on": ["1.5.2", "1.6.0"]}, "D9": {"verified_on": []},
+                             "D10": {}}}
+        self.assertEqual(PV.kb_unverified(index, "1.5.2.0"), ["D9", "D10"])
+        self.assertEqual(PV.kb_unverified(index, "1.6.0.0"), ["D3", "D9", "D10"])
+        self.assertIsNone(PV.kb_unverified(index, "unknown"))            # nothing can be said, and compare() says so
+        self.assertIsNone(PV.kb_unverified(index, None))
+        kb, msgs = PV.kb_lines(index, {"dev": "1.6.0.0", "stg": "unknown"})
+        self.assertEqual(kb, {"dev": ["D3", "D9", "D10"]})
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("3 entries not verified on dev 1.6.0.0 (D3, D9, D10)", msgs[0])
+        with self.assertRaises(ValueError):
+            PV.kb_unverified(["not an index"], "1.5.2")
+
 
 class CliTest(unittest.TestCase):
     setUp = TH.HttpTest.setUp
@@ -112,6 +132,29 @@ class CliTest(unittest.TestCase):
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         diffs = pls.version_check(self.r, "prod")["differences"]
         self.assertTrue(any(d.startswith("application: prod 1.5.1.0 ≠ dev 1.5.2.0") for d in diffs))
+
+    def test_an_upgraded_dev_with_a_recorded_label_is_not_shown_as_tested(self):
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        envs["envs"]["dev"]["pleasanter"] = {"app": "1.6.0.0", "build": "201600", "schema": 1.018}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        check = pls.version_check(self.r, "dev")
+        self.assertTrue(check["kb_unverified"]["dev"])                    # every entry is verified on 1.5.2 only
+        line = [d for d in check["differences"] if d.startswith("knowledge base:")]
+        self.assertEqual(len(line), 1)
+        self.assertIn("not verified on dev 1.6.0.0", line[0])
+        self.assertIn("D4", line[0])
+
+    def test_pls_version_names_the_unverified_kb_entries(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.run_version("--app", "1.6.0.0")
+        self.assertIn("knowledge base:", out.getvalue())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.run_version("--app", "1.5.2.0")
+        self.assertNotIn("knowledge base:", out.getvalue())
 
 
 if __name__ == "__main__":

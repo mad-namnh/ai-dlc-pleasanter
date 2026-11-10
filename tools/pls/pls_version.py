@@ -108,3 +108,38 @@ def compare(target: dict | None, tested: dict | None, target_env: str, tested_en
         elif a != b:
             out.append(f"{what}: {target_env} {a} ≠ {tested_env} {b} — behaviour the release relies on was verified on {tested_env} only")
     return out
+
+
+def covers(verified: str, app: str) -> bool:
+    """True when the KB version label `verified` covers the application version `app`: the same dotted numbers, where
+    the KB label may be shorter (1.5.2 covers 1.5.2 and 1.5.2.0, not 1.5.20 or 1.6.0)."""
+    a, b = str(verified).strip().split("."), str(app).strip().split(".")
+    return bool(verified) and len(a) <= len(b) and a == b[:len(a)]
+
+
+def kb_unverified(index: Any, app: str | None) -> list[str] | None:
+    """KB entries (ids, in KB order) whose `verified_on` does not cover `app`; None when the application version
+    is not known (nothing can be said). `index` = references/probes/index.json of the knowledge base."""
+    if app in (None, "", UNKNOWN):
+        return None
+    entries = index.get("entries") if isinstance(index, dict) else None
+    if not isinstance(entries, dict):
+        raise ValueError("the KB index has no `entries` object")
+    return [k for k, e in entries.items()
+            if not any(covers(x, app) for x in ((e or {}).get("verified_on") or []) if isinstance(x, str))]
+
+
+def kb_lines(index: Any, labels: dict) -> tuple[dict, list[str]]:
+    """({env: [unverified entry ids]}, messages) for the environments in `labels` (env → application version).
+    An untested version is never shown as tested: every entry not verified on it is named."""
+    out, msgs = {}, []
+    for env, app in labels.items():
+        ids = kb_unverified(index, app)
+        if ids is None:
+            continue
+        out[env] = ids
+        if ids:
+            msgs.append(f"knowledge base: {len(ids)} entr{'y' if len(ids) == 1 else 'ies'} not verified on {env} {app} "
+                        f"({', '.join(ids)}) — what the tools and skills assume there is untested; run "
+                        f"`pls kb-verify --env <dev env on that version>` and update the KB (ADR-0009)")
+    return out, msgs
