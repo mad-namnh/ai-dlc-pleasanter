@@ -95,6 +95,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `principals`: `MISSING …` | Create that group in Pleasanter (name exactly as listed), then run it again. |
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |
+| `L-REF-04` from `lint` | An environment value that is a number or shorter than 6 characters is used inside longer text. Use it as the whole value of its field, or put the surrounding text into the value (`values` in `environments.json`). |
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |
 | `REFUSED (ADR-0010)` from `test` or `apply` | The site sends mail and `side_effects.mail` is not safe. Check SMTP with the server operator and set `mail` in `environments.json` (see above). |
 | `L-MAIL-01` from `lint` | A notification or reminder holds a literal mail address. Put it in `values` and use `${env:NAME}`, or use a principal. |

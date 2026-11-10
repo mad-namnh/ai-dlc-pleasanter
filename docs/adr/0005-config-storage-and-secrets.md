@@ -54,6 +54,17 @@ Regardless of the storage option, the following principles are **mandatory**:
 
 **Pleasanter → gateway authentication:** network-based (internal ALB + security group), no token — avoids re-creating a secret inside Pleasanter.
 
+## Environment values: how `${env:NAME}` maps back at unpack (2026-11-10, design review WS4-F4 / F5, WS3-F12; rule chosen by Nam)
+
+`pack` / `release-plan` replace `${env:NAME}` with `envs.<env>.values.NAME`; `unpack`, `drift` and the read-back replace the value with the reference again. That reverse step used to replace every substring equal to a value, so a value `12` turned the label `Item 4123` into `Item 4773` on the next environment.
+
+- A string that **is** a value (the whole string) always becomes the reference.
+- Inside longer text (a URL in a script body, one address in a list) a value becomes the reference only when it is **distinctive** — text of at least 6 characters that is not all digits — and stands as a **whole token** (no letter, digit or `_` directly before or after it).
+- A number in `values` is never mapped back (it resolves as text when packed).
+- Lint **L-REF-04**: `${env:NAME}` written inside longer text whose value in some environment is a number or shorter than 6 characters — every export of that site would differ from git. Make the reference the whole value of its field, or put the surrounding text into the value.
+- `values` are checked when an environment is loaded: text, a number or null (not set yet). A list, an object or true/false is refused with the name of the value, before any command reads or writes with it.
+- Limits, stated: a field whose whole content happens to equal a value (a count `12` next to a value `12`) becomes the reference; an occurrence followed by `.` or `-` still counts as a whole token (`dev.example` inside `dev.example.com`). Choose values that do not occur as other configuration text.
+
 ## Consequences
 
 - CLI unpack needs a secret scanner + replacement; pack needs per-environment reference resolution.

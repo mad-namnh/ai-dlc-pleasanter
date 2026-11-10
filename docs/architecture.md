@@ -300,6 +300,7 @@ One file, `traceability.json`, links the chain in both directions:
 | L-SEC-01 | D5 | No secret-like values in configuration or scripts. Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
 | L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
 | L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |
+| L-REF-04 | E4 | No `${env:x}` inside longer text when its value is a number or shorter than 6 characters: unpack maps such a value back only as a whole value (ADR-0005) |
 | L-SCR-01 | D7 | No top-level `const`/`let` in shared server scripts |
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |

@@ -304,5 +304,74 @@ class EnvValueTypesTest(unittest.TestCase):
         self.assertEqual(pls.from_refs("${env:kb_probe_parent}", e), "44708")
 
 
+class EnvValueReverseMappingTest(unittest.TestCase):
+    """unpack maps an environment value back to ${env:x} as a whole value, or inside longer text only when the value
+    is distinctive and stands as a whole token — never as a chance substring."""
+
+    def refs(self, text, **values):
+        ids, vals = pls.id_maps({"sites": {}, "values": values})
+        return pls.to_refs(text, ids, vals)
+
+    def test_a_short_or_numeric_value_never_rewrites_text_that_contains_it(self):
+        self.assertEqual(self.refs("Item 4123", n="12"), "Item 4123")
+        self.assertEqual(self.refs("Room 12", n="12"), "Room 12")
+        self.assertEqual(self.refs("var limit = 120000;", n="120000"), "var limit = 120000;")     # all digits: never embedded
+        self.assertEqual(self.refs("dev team", tag="dev"), "dev team")
+
+    def test_the_whole_value_always_maps_back(self):
+        self.assertEqual(self.refs("12", n="12"), "${env:n}")
+        self.assertEqual(self.refs("dev", tag="dev"), "${env:tag}")
+
+    def test_a_distinctive_value_maps_back_inside_text_as_a_whole_token_only(self):
+        url = "http://dev.internal"
+        self.assertEqual(self.refs("var u = 'http://dev.internal/api';", URL=url), "var u = '${env:URL}/api';")
+        self.assertEqual(self.refs("[Manager],soumu@dev.example", MAIL="soumu@dev.example"), "[Manager],${env:MAIL}")
+        self.assertEqual(self.refs("http://dev.internals.example", URL=url), "http://dev.internals.example")
+        self.assertEqual(self.refs("xsoumu@dev.example", MAIL="soumu@dev.example"), "xsoumu@dev.example")
+
+    def test_round_trip_to_another_environment_keeps_unrelated_text(self):
+        dev = {"sites": {}, "values": {"n": "12", "URL": "http://dev.internal"}}
+        stg = {"sites": {}, "values": {"n": "77", "URL": "http://stg.internal"}}
+        live = {"Label": "Item 4123", "Count": "12", "Body": "fetch('http://dev.internal/x')"}
+        ids, vals = pls.id_maps(dev)
+        self.assertEqual(pls.from_refs(pls.to_refs(live, ids, vals), stg),
+                         {"Label": "Item 4123", "Count": "77", "Body": "fetch('http://stg.internal/x')"})
+
+
+class EnvValueLoadTest(unittest.TestCase):
+    setUp = T.HttpTest.setUp
+    tearDown = T.HttpTest.tearDown
+
+    def set_values(self, values):
+        envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        envs["envs"]["dev"]["values"] = values
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+
+    def test_a_value_that_is_not_text_or_a_number_is_refused_by_name(self):
+        for bad in (["a"], {"a": 1}, True):
+            self.set_values({"ok": "text", "broken": bad})
+            with self.assertRaises(pls.Fail) as cm:
+                pls.env_conf(self.r, "dev")
+            self.assertIn("values.broken", str(cm.exception))
+        self.set_values({"ok": "text", "n": 950, "later": None})
+        self.assertEqual(pls.env_conf(self.r, "dev")["values"]["n"], 950)
+
+    def test_lint_reports_a_weak_value_written_inside_longer_text(self):
+        exp = self.r / "eq.json"
+        pls.wj(exp, {"Response": {"Data": dict(self.fake.sites[EQ], Body="", SiteSettings={})}})
+        self.assertEqual(pls.main(["unpack", str(exp), "--env", "dev", "--site", "equipment"]), 0)
+        f = self.r / "config/equipment/site.json"
+        site = json.loads(f.read_text(encoding="utf-8"))
+
+        def rules(grid_guide):
+            f.write_text(json.dumps(dict(site, GridGuide=grid_guide), ensure_ascii=False), encoding="utf-8")
+            return {i["rule"] for i in pls.lint(self.r)}
+
+        self.set_values({"n": "12", "URL": "http://dev.internal"})
+        self.assertIn("L-REF-04", rules("up to ${env:n} items"))                 # short value inside text
+        self.assertNotIn("L-REF-04", rules("${env:n}"))                          # the whole value
+        self.assertNotIn("L-REF-04", rules("see ${env:URL}/help"))               # distinctive value inside text
+
+
 if __name__ == "__main__":
     unittest.main()

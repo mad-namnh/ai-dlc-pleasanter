@@ -28,7 +28,7 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 ## Values and old ids
 
 - A new `${env:x}` needs a value in `values` of **every** environment, sandboxes included (a sandbox copies dev's values when it is created; add it there too). The person supplies the values; lint L-REF-02 and `pack` fail without them.
-- `${env:x}` is replaced as raw text: write `'${env:x}'` where the code needs a string, bare `${env:x}` only for a number the person confirmed.
+- `${env:x}` is replaced as raw text: write `'${env:x}'` where the code needs a string. Inside a body a value comes back as `${env:x}` at the next unpack only when it is text of 6+ characters that is not all digits (a URL, a mail address); a number or a short value there is lint L-REF-04, because every export would differ from git. For such a value ask the person: a longer value that includes the surrounding text, or a literal the design records.
 - An old hard-coded id the design does not cover: do not mix its fix into this change. Ask the person — a separate reviewed change to `${site:x}`, a literal decision (`pls refs --keep`, theirs), or a ticket for later. L-REF-01 then stays listed in the hand-over, and a release to another environment is blocked until it is settled.
 
 ## Editing legacy scripts

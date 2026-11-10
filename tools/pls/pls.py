@@ -153,7 +153,25 @@ def env_conf(r: Path, env: str) -> dict:
     e = envs(r)["envs"].get(env)
     if not e:
         raise Fail(f"unknown environment '{env}'")
+    bad = env_values_problem(e)
+    if bad:
+        raise Fail(f"environments.json envs.{env}.{bad}")
     return e
+
+
+def env_values_problem(e: dict) -> str | None:
+    """`values` hold text or a number (null = not set yet: the reference stays unresolved). Anything else (a list, an
+    object, true/false) would be written into the configuration as Python text by ${env:x}; refuse it by name before
+    any command reads or writes with it."""
+    vals = e.get("values")
+    if vals is None:
+        return None
+    if not isinstance(vals, dict):
+        return "values must be an object of name → text or number"
+    for k, v in sorted(vals.items()):
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (str, int, float))):
+            return f"values.{k} must be text or a number, not {type(v).__name__}"
+    return None
 
 
 def site_data(export: Any) -> dict:
@@ -187,11 +205,35 @@ def to_refs(obj: Any, ids: dict, vals: dict, key: str = "", literal: dict | None
     if isinstance(obj, int) and not isinstance(obj, bool) and key.endswith("SiteId") and str(obj) in ids:
         return "${site:%s}" % ids[str(obj)]
     if isinstance(obj, str):
+        if obj in vals:                                     # the whole value: always the reference
+            return "${env:%s}" % vals[obj]
         s = obj
         for v, name in sorted(vals.items(), key=lambda x: -len(x[0])):
-            s = s.replace(v, "${env:%s}" % name)
+            if env_value_embeddable(v):                     # inside longer text: distinctive values, whole tokens only
+                s = re.sub(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])" % re.escape(v), lambda _m, n=name: "${env:%s}" % n, s)
         return SX.replace_ids(s, ids, literal, reference)   # id contexts only; a person's decisions (BR7)
     return obj
+
+
+ENV_VALUE_MIN = 6
+
+
+def env_value_embeddable(v: Any) -> bool:
+    """True when a value may be mapped back to ${env:x} where it appears inside longer text (a URL in a script body,
+    one address in a list). A short or all-digit value also occurs by chance inside labels, numbers and code, where
+    replacing it would rewrite them on the next environment; such a value maps back only as a whole value."""
+    return isinstance(v, str) and len(v) >= ENV_VALUE_MIN and not v.isdigit()
+
+
+def embedded_env_refs(obj: Any) -> set:
+    """Names of ${env:x} references written inside longer text (not as the whole value)."""
+    if isinstance(obj, dict):
+        return set().union(*[embedded_env_refs(v) for v in obj.values()]) if obj else set()
+    if isinstance(obj, list):
+        return set().union(*[embedded_env_refs(v) for v in obj]) if obj else set()
+    if isinstance(obj, str) and not REF_RE.fullmatch(obj):
+        return {m.group(2) for m in REF_RE.finditer(obj) if m.group(1) == "env"}
+    return set()
 
 
 def from_refs(obj: Any, e: dict, key: str = "") -> Any:
@@ -645,6 +687,14 @@ def lint(r: Path) -> list[dict]:
                 if name_ not in known:
                     issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
                                    f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
+        for name_ in sorted(embedded_env_refs(m)):                 # L-REF-04: an embedded value must map back at unpack
+            weak = sorted(env_name for env_name, ec in e_all["envs"].items()
+                          if name_ in (ec.get("values") or {}) and not env_value_embeddable(ec["values"][name_]))
+            if weak:
+                issues.append({"rule": "L-REF-04", "site": site, "msg": f"${{env:{name_}}} is written inside longer text, but its "
+                               f"value for {', '.join(weak)} is a number or shorter than {ENV_VALUE_MIN} characters: unpack maps "
+                               "such a value back only as a whole value, so every export of this site will differ from git. "
+                               "Make the reference the whole value of its field, or put the surrounding text into the value"})
         for path, addr in SE.literal_addresses(m["settings"]):     # L-MAIL-01: no literal addresses (ADR-0010)
             issues.append({"rule": "L-MAIL-01", "site": site, "msg": f"{path}: literal mail address {addr}; use ${{env:…}} or ${{principal:…}}"})
         for name in secrets_in(blob):
