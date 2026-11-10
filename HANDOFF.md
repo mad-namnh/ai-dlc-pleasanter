@@ -19,6 +19,10 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
+**Agent-team permission checks — still to check** (`plans/2026-11-11-agent-team-setup/permission-checks.md`, run 2026-11-11):
+- Row 0 is not verified: the task prompt named the skill. Nam's next task statement will **not** name it; record in that file whether the new session finds `pls-x-dev-orchestrator` (and the three subagents) by itself.
+- Row 2 (`git -C . push`) was not denied; Nam adds the deny rule to `.claude/settings.json` himself. Re-run row 2 in the next new session and record the result.
+
 **Next build work (roadmap order):** P2-3, P2-6, P2-7, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **Agent team (set up 2026-11-11, ADR-0016 Proposed).** Framework tasks start with the skill `pls-x-dev-orchestrator` (`.claude/skills/`); rules in `docs/agent-rules.md`; three subagents in `.claude/agents/` (reviewer, eval case-runner, KB curator); permission `deny` rules in `.claude/settings.json` (no hook yet — TD-21). Setup evidence: `plans/2026-11-11-agent-team-setup/` (`prompt-rev4.md`, `log.md`). **Still to do in a NEW session, before anything else:** the checks in `plans/2026-11-11-agent-team-setup/permission-checks.md` (do the rules fire? is the skill found from a cold start?), then the trial task Nam chose (roadmap P3-1; prompt at the end of `log.md`). Protected paths (`.claude/**`, `docs/agent-rules.md`, `docs/review-criteria.md`, `evals/**/expected.md`, `templates/project/CLAUDE.md`) are changed by Nam or after Nam lifts the rule for that change. Nam to decide: ADR-0016 and its 4 open questions.
