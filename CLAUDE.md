@@ -28,3 +28,25 @@ Current phase: **test / demo stage, architecture v0.3** (after slices #1–#3). 
 - Every architecture decision is an ADR in `docs/adr/`. No implicit decisions in code.
 - New findings from spikes → update `docs/review-findings.md` (add an item or change its severity).
 - Deferred work goes into `docs/tech-debt.md` with a deadline.
+
+## Adaptive Model Routing
+
+Applies to every task in this repository. It never overrides the Mandatory rules, gates G1–G4, ADRs or the user's explicit choice of model; when they conflict, they win.
+
+**What can be routed (verified in Claude Code, 2026-11-10).** The main session's model is changed only by the user (`/model`, or `model` in settings); an agent cannot switch its own model. An agent *can* choose the model of each subagent it starts (Agent tool `model`: `haiku`, `sonnet`, `opus`, `fable`; a fork always inherits) and its reasoning effort (`effort`), and agent definitions carry a default model in their frontmatter. Use only these aliases; never invent model ids.
+
+**Classify first** — complexity, risk, reasoning needed — then use the least expensive option that can reliably finish *and verify* the task:
+
+| Tier | Work | Route |
+|---|---|---|
+| Light | lookups, file search, formatting, doc wording, one isolated low-risk edit | do it inline; if delegated: `haiku`, effort `low` |
+| Standard | normal implementation, refactoring, multi-file changes, tests for them | inline; if delegated: `sonnet`, effort `medium` |
+| Critical | architecture and ADRs, write guards (`assert_writable`), gates and approval records, secrets, permissions, migrations and data integrity, recovery states, concurrency, hard debugging, security review | strongest available (`opus` or `fable`), effort `high`; never delegated below this tier |
+
+- **Override weak defaults.** When an agent definition's default model is below the task's tier (e.g. a `haiku` tester or researcher on Critical work), pass `model` explicitly.
+- **Escalate, do not guess.** If the current model cannot solve or verify the task with confidence, re-run it one tier up. If the main session itself is below the task's tier, say so and ask the user to switch with `/model` before continuing Critical work.
+- **Subagents only when they pay:** independent work that runs in parallel, or a review that must not be anchored on the author's view. Not for a handful of tool calls. Give each a narrow brief with file paths; do not repeat an analysis already done.
+- **Deterministic first:** `pls` commands, lint, grep and the test suites decide what they can decide; LLM reasoning is for what they cannot.
+- **Verification scales with risk:** Light — re-read the change; Standard — the affected tests while working; Critical — also an independent review when the change touches a write guard, a gate or secrets. The commit rules in `HANDOFF.md` ("How we work": full suites, new tests shown failing on the parent commit) apply to every tier and are not reduced by this section.
+- **Cost never buys down correctness, security or required verification.**
+- **Evals are exempt:** a skill eval runs on the model its result file records (see `HANDOFF.md`, "How we work"); do not route it to a cheaper model.
