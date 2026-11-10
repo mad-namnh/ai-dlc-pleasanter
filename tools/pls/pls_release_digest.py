@@ -16,7 +16,7 @@ from pathlib import Path
 
 # filled in after G4 by apply, mark-applied, migrate, jobs-verified, bootstrap and bind
 PLAN_MUTABLE = {"status", "applied_at", "apply_started_at", "apply_finished_at", "post_apply_check", "readback",
-                "checked_at", "migrations_run"}
+                "readback_evidence", "checked_at", "migrations_run"}
 JOBS_MUTABLE = {"verified"}
 BOOTSTRAP_MUTABLE = {"status", "created", "created_at", "uncertain"}
 JOBS_FOLDER = "scheduled-scripts"

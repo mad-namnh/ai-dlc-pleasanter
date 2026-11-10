@@ -209,7 +209,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **AI does:**
   - `pls-p5-release-manager`: turns the deterministic diff into a business-language report (Japanese for the customer), explains data/permission impact, drafts release notes.
 - **Tooling does (deterministic):** `pls drift` against the **last released payload** (S2; must be clean or resolved) → `pls plan` (ordered steps by site dependency, complete payloads, snapshot, rollback) → deploy package.
-- **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals).
+- **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals). After an apply the folder also says who ran it and how it was confirmed (`apply-log.json`: `executed_by`, `confirmed`; the name is the run-log actor, self-asserted), what the read-back found (`plan.json` `readback_evidence`: per site the state and the sha256 of the live content and of the payload; `apply-log.json` `final_status` = the plan's status). Undoing an applied release is a new release until ADR-0015 (Proposed) is decided.
 - **Checks:** drift clean; plan contains complete SiteSettings only (I2); data-impacting changes have migration + dry-run; post-deploy smoke + round-trip export equals git.
 - **Gate:** G4.
 - **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run).

@@ -229,6 +229,37 @@ class RecoveryTest(unittest.TestCase):
         restored = json.loads((d / f"rollback-{first['site']}.json").read_text(encoding="utf-8"))
         self.assertEqual(self.fake.sites[first["site_id"]]["Title"], restored["Title"])           # our first write is undone
 
+    def test_the_release_folder_says_who_applied_how_it_was_confirmed_and_what_was_read_back(self):
+        import hashlib
+        import os
+        plan, d = self.plan()
+        os.environ["PLS_ACTOR"] = "Operator Hanako"
+        pls.LG._ACTOR.clear()
+        try:
+            pls.main(["apply", "R-1", "--yes"])
+        finally:
+            os.environ.pop("PLS_ACTOR", None)
+            pls.LG._ACTOR.clear()
+        log = json.loads((d / "apply-log.json").read_text(encoding="utf-8"))
+        self.assertEqual((log["executed_by"], log["confirmed"]), ("Operator_Hanako", "--yes"))
+        after = json.loads((d / "plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(log["final_status"], after["status"])                      # the log no longer contradicts the plan
+        self.assertEqual(set(log["readback"]), set(plan["sites"]))
+        for site in plan["sites"]:
+            ev = after["readback_evidence"][site]
+            self.assertEqual(ev["site_id"], plan["per_site"][site]["site_id"])
+            self.assertEqual(ev["payload_sha256"], hashlib.sha256((d / f"payload-{site}.json").read_bytes()).hexdigest())
+            self.assertRegex(ev["live_sha256"], r"^[0-9a-f]{64}$")
+            self.assertIn(ev["state"], ("applied", "differs", "not applied"))
+
+    def test_read_back_evidence_does_not_break_the_approval_binding(self):
+        import pls_release_digest as RD
+        plan, d = self.plan()
+        before = RD.digest(self.r, "R-1")["sha256"]
+        pls.main(["apply", "R-1", "--yes"])
+        self.assertIn("readback_evidence", json.loads((d / "plan.json").read_text(encoding="utf-8")))
+        self.assertEqual(RD.digest(self.r, "R-1")["sha256"], before)
+
     def bootstrap_plan(self):
         d = self.r / "releases/B-1"
         d.mkdir(parents=True)

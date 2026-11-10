@@ -1164,6 +1164,28 @@ def readback_state(rel: Path, plan: dict, step: dict, export: Any, e: dict) -> t
     return "differs", diffs
 
 
+def readback_evidence(rel: Path, step: dict, export: Any, state: str) -> dict:
+    """What `mark-applied` read for one site: the state, the digest of the live content a release manages and of the
+    payload it was compared with. The export itself stays in .pls/exports (local, not in git)."""
+    d = site_data(export)
+    live = {k: d[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings", "InheritPermission", "Permissions") if k in d}
+    return {"state": state, "site_id": d.get("SiteId"), "live_updated_time": d.get("UpdatedTime"),
+            "live_sha256": hashlib.sha256(json.dumps(live, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest(),
+            "payload_sha256": hashlib.sha256((rel / step["payload_file"]).read_bytes()).hexdigest()}
+
+
+def record_readback(rel: Path, plan: dict) -> None:
+    """Write the plan after a read-back and bring apply-log.json in line with it: the log keeps the outcome of the
+    apply (`status`) and gains the state the read-back established (`final_status`)."""
+    wj(rel / "plan.json", plan)
+    log = rel / "apply-log.json"
+    if log.exists():
+        doc = rj(log)
+        if isinstance(doc, dict):
+            wj(log, dict(doc, final_status=plan.get("status"), readback_at=_now(),
+                         readback={s_: v["state"] for s_, v in (plan.get("readback_evidence") or {}).items()}))
+
+
 def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str]) -> list[str]:
     """After a rollback: export every touched site and compare it with its rollback file. Returns problems."""
     rel_plan = {s["site"]: s for s in plan["rollback"]}
@@ -2627,12 +2649,15 @@ def http_cmd(r: Path, a) -> int:
             # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
             plan.update(status="applying", apply_started_at=_now())
             wj(rel / "plan.json", plan)
+            # Who ran it and how it was confirmed stay in the release folder, not only in the run log. The name is
+            # the run-log actor (PLS_ACTOR or git user.name): self-asserted, not an identity check (ADR-0014 TB-2).
+            ran = {"executed_by": LG.actor(r), "confirmed": "--yes" if a.yes else "typed at a terminal"}
             try:
                 res = H.apply_release(c, plan, files)
             except H.TransportError as ex:           # only the preflight reads raise: nothing was written
                 res = {"status": "refused", "log": [f"preflight: {ex}"]}
             except Exception as ex:                  # unknown point of failure: keep "applying" and leave evidence
-                wj(rel / "apply-log.json", {"transport": "http", "at": _now(), "status": "applying",
+                wj(rel / "apply-log.json", {"transport": "http", "at": _now(), **ran, "status": "applying",
                                             "error": f"{type(ex).__name__}: {ex}"})
                 raise
             if res["status"] in ("rolled-back", "recovery-required"):
@@ -2643,7 +2668,7 @@ def http_cmd(r: Path, a) -> int:
                            log=res["log"] + (bad or ["read-back: every touched site equals its rollback file"]))
             for line in res["log"]:
                 print(line)
-            wj(rel / "apply-log.json", {"transport": "http", "at": _now(), **res})
+            wj(rel / "apply-log.json", {"transport": "http", "at": _now(), **ran, **res})
             plan.update(status="planned" if res["status"] == "refused" else res["status"], apply_finished_at=_now())
             wj(rel / "plan.json", plan)
             LG.record_metric(sites=len(plan["sites"]), apply_status=res["status"])
@@ -3451,7 +3476,7 @@ def _main(argv=None) -> int:
             if stale:
                 print(f"NOT marked: the exports for {stale} are older than the apply ({started}) — export again (pls export)")
                 return 1
-        states, shown = {}, {}
+        states, shown, evidence = {}, {}, {}
         for step in plan["steps"]:
             site, sid = step["site"], plan["per_site"][step["site"]]["site_id"]
             exp = rj(Path(exports[site]))
@@ -3459,6 +3484,8 @@ def _main(argv=None) -> int:
                 print(f"NOT marked: the export for {site} is site {site_data(exp).get('SiteId')}, the release wrote site {sid}")
                 return 1
             states[site], shown[site] = readback_state(rel, plan, step, exp, e)
+            evidence[site] = readback_evidence(rel, step, exp, states[site])
+        plan["readback_evidence"] = evidence          # what was read back, kept with the release (exports are local)
         if set(states.values()) == {"not applied"}:
             print(f"NOT marked: no site holds the release payload ({', '.join(states)}).")
             if status == "planned":
@@ -3466,7 +3493,7 @@ def _main(argv=None) -> int:
                 return 1
             plan.update(status="rolled-back", readback=states, checked_at=_now(),
                         post_apply_check="read back: every site holds its rollback state (pls mark-applied)")
-            wj(rel / "plan.json", plan)
+            record_readback(rel, plan)
             print(f"{a.release}: recorded as rolled-back — make a new release plan")
             return 1
         # After a failed restore, "differs" cannot be told apart from a half-restored or hand-repaired site
@@ -3476,7 +3503,7 @@ def _main(argv=None) -> int:
                 print(f"  {site}: {st_}")
             plan.update(status="recovery-required", readback=states, checked_at=_now(),
                         post_apply_check="read back: the release is only partly live")
-            wj(rel / "plan.json", plan)
+            record_readback(rel, plan)
             print(f"{a.release}: RECOVERY REQUIRED — only partly applied. Restore the applied sites from "
                   f"rollback-<site>.json (or complete the others), export every site and run mark-applied again.")
             return 1
@@ -3497,12 +3524,12 @@ def _main(argv=None) -> int:
             plan.update(status="applied-differs", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                         post_apply_check="live differs from the payload; live-<site>.json is the baseline — fold the "
                                          "differences into config/ and plan a follow-up release")
-            wj(rel / "plan.json", plan)
+            record_readback(rel, plan)
             print(f"{a.release}: APPLIED WITH DIFFERENCES — fold them into config/ (P3 step 6) and plan the next release")
             return 1
         plan.update(status="applied", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                     post_apply_check="every site: live equals payload (pls mark-applied)")
-        wj(rel / "plan.json", plan)
+        record_readback(rel, plan)
         print(f"{a.release} marked as applied to {plan['env']}: {', '.join(plan['sites'])}")
         return 0
 
