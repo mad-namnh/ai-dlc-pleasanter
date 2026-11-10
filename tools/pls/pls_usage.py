@@ -125,7 +125,7 @@ def collect(project: Path, steps: list[dict], tdir: Path | None = None, since: s
         out = project / "ops" / "usage" / f"{sid}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps({"v": 1, "session": sid, "collected": datetime.now().astimezone().isoformat(timespec="seconds"),
-                                   "rows": rows}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+                                   "rows": rows}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
         written.append(out)
     return written
 

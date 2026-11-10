@@ -261,6 +261,8 @@ One file, `traceability.json`, links the chain in both directions:
 
 **Project files are read through one loader per kind** (design review C3). `environments.json`, release records (`plan.json`, `bootstrap.json`), `.pls/connections.json`, gate / profile / review records, `_index.json`, migration files and the profile are read as UTF-8 with a BOM tolerated; a missing, unreadable, non-UTF-8 or non-JSON file, or a field of the wrong type that a guard reads (`envs`, `sites`, `per_site`, `steps`, `rollback`, `keys`, …), is a refusal that names the file and the field before anything is written, never a traceback. Which fields a command needs stays that command's own refusal.
 
+**Portability (design review G1, G2).** Minimum Python 3.10, checked at start-up; the suite is run on 3.10 and on the current Python before a release. Every file `pls` writes has LF line endings on every OS (script bodies are byte for byte), so running a command on another OS never rewrites whole files; the framework repository's `.gitattributes` stores and checks out text with LF.
+
 | Command | Phase | Purpose | Status |
 |---|---|---|---|
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |

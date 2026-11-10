@@ -12,7 +12,7 @@ Nothing secret goes into git or into the chat.
 |---|---|
 | Pleasanter **1.5.x**, a **dev** environment | Verified on 1.5.2. Never production: the tool refuses to write to `role: prod`. |
 | Your Pleasanter user | It must be able to create sites in one folder. Creating groups is needed later, after the permission design (G2). |
-| **Python 3.10+** and **git** | On macOS/Linux use `python3` wherever this guide says `python`. |
+| **Python 3.10+** and **git** | On macOS/Linux use `python3` wherever this guide says `python`. An older Python is refused with a message. `pls` writes its files (JSON, reports, records) with LF line endings on every OS; script bodies keep the line endings Pleasanter stores. |
 | **Claude Code** on a machine that can reach Pleasanter over HTTPS | The agent works through `pls` over HTTP. |
 | This repository, cloned as `ai-dlc-pleasanter` | `git clone <url> ai-dlc-pleasanter` |
 

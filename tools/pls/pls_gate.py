@@ -234,7 +234,7 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
                 bound[rel] = None
         rec["bound"] = bound
     out = d / f"{today}-{gate}-{at[11:19].replace(':', '')}-{secrets.token_hex(3)}.json"
-    with out.open("x", encoding="utf-8") as f:          # "x": an existing record is never overwritten
+    with out.open("x", encoding="utf-8", newline="\n") as f:          # "x": an existing record is never overwritten
         f.write(json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return out
 

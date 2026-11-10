@@ -85,7 +85,7 @@ def _write(root: Path, sub: str, stem: str, rec: dict, key: str = "value") -> Pa
         now = max(prev) + timedelta(microseconds=1)
     rec = dict(rec, at=now.isoformat(timespec="microseconds"), date=now.date().isoformat())
     out = d / f"{rec['date']}-{stem}-{now.strftime('%H%M%S')}-{secrets.token_hex(3)}.json"
-    with out.open("x", encoding="utf-8") as f:        # never overwritten
+    with out.open("x", encoding="utf-8", newline="\n") as f:        # never overwritten
         f.write(json.dumps(rec, ensure_ascii=False, indent=2) + "\n")
     return out
 
@@ -161,11 +161,11 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
         p = root / "environments.json"
         doc = json.loads(p.read_text(encoding="utf-8-sig"))
         doc["envs"][env]["role"] = value
-        p.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        p.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     else:
         p = root / "CLAUDE.md"
         shown = f"`{value}`" if field == "Origin" else value
-        p.write_text(_row(field).sub(lambda _m: f"| {field} | {shown} |", _profile_text(root), count=1), encoding="utf-8")
+        p.write_text(_row(field).sub(lambda _m: f"| {field} | {shown} |", _profile_text(root), count=1), encoding="utf-8", newline="\n")
     return out
 
 

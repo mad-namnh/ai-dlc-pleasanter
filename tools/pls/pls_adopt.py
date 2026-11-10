@@ -60,6 +60,8 @@ def report(name: str, env: str, site_id: int, title: str, rt: str, counts: dict,
            principals: list[str], undecided_scripts: list[str], record: str, today: str, extra: dict | None = None) -> str:
     def lines(items, empty="none"):
         return "\n".join(f"- {x}" for x in items) if items else f"- {empty}"
+    # built outside the f-string: a backslash inside an f-string expression needs Python 3.12 (the minimum is 3.10)
+    more = "".join("## " + title + "\n\n" + lines(items) + "\n\n" for title, items in (extra or {}).items())
     return f"""# Adoption report — {name} ({env}, site {site_id})
 
 - **Date:** {today}
@@ -91,7 +93,7 @@ Existing code: record its purpose in a design decision before it is changed (I5)
 
 {lines(undecided_scripts)}
 
-{"".join(f"## {title}\n\n{lines(items)}\n\n" for title, items in (extra or {}).items())}## Next
+{more}## Next
 
 1. Review this report with the team; decide per finding (probe, accept, adopt related sites, map principals).
 2. `pls lint` lists the same points as rule ids.

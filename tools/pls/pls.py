@@ -48,6 +48,11 @@ Commands:
 """
 from __future__ import annotations
 
+import sys
+
+if sys.version_info < (3, 10):       # before the other imports: an older Python fails on them with a SyntaxError
+    sys.exit(f"pls needs Python 3.10 or newer (this is {sys.version.split()[0]}) — see docs/setup.md")
+
 import argparse
 import copy
 import hashlib
@@ -158,7 +163,7 @@ def rj(p: Path) -> Any:
 
 def wj(p: Path, obj: Any) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
 
 def _shape(doc: Any, fields: dict) -> str | None:
@@ -442,7 +447,7 @@ def write_tree(model: dict, out: Path) -> None:
     if out.exists():
         for f in sorted(out.rglob("*"), reverse=True):
             if f.is_file():
-                f.write_text("", encoding="utf-8")  # truncate; stale files reported by lint
+                f.write_text("", encoding="utf-8", newline="\n")  # truncate; stale files reported by lint
     wj(out / "meta.json", model["meta"])
     wj(out / "site.json", model["settings"])
     if model.get("permissions") is not None:
@@ -1406,7 +1411,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         res = results[s]
         wj(rel / f"payload-{s}.json", res["payload"])
         wj(rel / f"rollback-{s}.json", res["rollback"])
-        (rel / f"raw-diff-{s}.md").write_text(res["raw_diff"], encoding="utf-8")
+        (rel / f"raw-diff-{s}.md").write_text(res["raw_diff"], encoding="utf-8", newline="\n")
         per_site[s] = {k: res[k] for k in ("site_id", "changes", "classification", "snapshot_sha256", "snapshot_updated_time", "checks",
                                            "side_effects")}
         for x in res["side_effects"]:
@@ -1455,7 +1460,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
             print(f"note: envs.{env}.side_effects.jobs is 'unknown' — `pls apply` will refuse this release until a person records it (ADR-0010)")
     LG.record_metric(sites=len(order), changes=sum(p["changes"] for p in per_site.values()), classification=worst)
     (rel / "diff-report.operator.md").write_text(
-        RP.operator_report(plan, {n: c.get("title") or n for n, c in e["sites"].items()}), encoding="utf-8")
+        RP.operator_report(plan, {n: c.get("title") or n for n, c in e["sites"].items()}), encoding="utf-8", newline="\n")
     print(f"release plan written to releases/{release}/ — order: {' → '.join(order)}"
           + (f" (cycle: {cyc})" if cyc else "") + f"; {sum(p['changes'] for p in per_site.values())} change(s), {worst}")
     return 0
@@ -1648,7 +1653,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         out = r / "ops" / "adopt" / f"{today}-{env}-{name}.md"
         created.append(out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+        out.write_text(text, encoding="utf-8", newline="\n")
         ev["envs"][env] = e_new
         if not managed:
             ev.setdefault("managed_sites", []).append(name)
@@ -1660,7 +1665,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         if ledger_before is None:
             ledger_p.unlink(missing_ok=True)
         else:
-            ledger_p.write_text(ledger_before, encoding="utf-8")
+            ledger_p.write_text(ledger_before, encoding="utf-8", newline="\n")
         raise
     n_sus = sum(1 for x in extra["Numbers equal to a site id inside script bodies (written as a site id → ${site:x}; POSSIBLE lines stay as written)"] if x.startswith("POSSIBLE"))
     print(f"adopted site {sid} as '{name}' ({d.get('ReferenceType')}) from {env} — read only; nothing written to Pleasanter")
@@ -1725,7 +1730,7 @@ def env_compare(r: Path, site: str, sources: list[str], today: str) -> int:
             rows.append(d_ | {"pair": f"{i0['label']} → {info['label']}", "class": CMP.classify(d_, missing, values)})
     out = r / "ops" / "env-compare" / f"{today}-{datetime.now():%H%M%S}-{site}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(CMP.report(site, rows, [i["label"] for _, i in loaded], notes, today, short), encoding="utf-8")
+    out.write_text(CMP.report(site, rows, [i["label"] for _, i in loaded], notes, today, short), encoding="utf-8", newline="\n")
     by = {c: sum(1 for x in rows if x["class"] == c) for c in ("content", "id-like", "not-in-package")}
     print(f"{site}: {len(rows)} difference(s) after mapping ids — content {by['content']}, id-like {by['id-like']}, "
           f"not in package {by['not-in-package']}; report {out.relative_to(r)}")
@@ -2041,7 +2046,7 @@ def merge_install(r: Path) -> int:
     line = "config/*/site.json merge=pls-site"
     text = ga.read_text(encoding="utf-8") if ga.exists() else ""
     if line not in text:
-        ga.write_text(text + ("" if text.endswith("\n") or not text else "\n") + line + "\n", encoding="utf-8")
+        ga.write_text(text + ("" if text.endswith("\n") or not text else "\n") + line + "\n", encoding="utf-8", newline="\n")
     _git(r, "config", "merge.pls-site.name", "pls semantic merge of site.json (ADR-0011)")
     _git(r, "config", "merge.pls-site.driver", f'"{Path(sys.executable).as_posix()}" "{(r / "pls.py").as_posix()}" merge-site %O %A %B')
     print("merge driver installed: .gitattributes (commit it) + .git/config (every clone runs pls merge-install once)")
@@ -2245,7 +2250,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     for d in PROJECT_DIRS:
         (target / d).mkdir(parents=True, exist_ok=True)
         if not any((target / d).iterdir()):
-            (target / d / ".keep").write_text("", encoding="utf-8")
+            (target / d / ".keep").write_text("", encoding="utf-8", newline="\n")
     cm = target / "CLAUDE.md"
     text = cm.read_text(encoding="utf-8")
     text = re.sub(r"\| Origin \|.*\|", f"| Origin | `{origin}` |", text, count=1)
@@ -2255,13 +2260,13 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
         text = re.sub(r"\| Approvers \|.*\|", f"| Approvers | {approver} (all gates) |", text, count=1)
         text = re.sub(r"\| Operators \|.*\|", f"| Operators | dev: {approver}; stg: {approver}; prod: <customer operator> |", text, count=1)
     text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
-    cm.write_text(text, encoding="utf-8")
+    cm.write_text(text, encoding="utf-8", newline="\n")
     if approver:          # the person running init states these values: recorded so a later hand edit is visible (L-PRF-01)
         said = f"pls init {target.name} --approver {approver} --origin {origin}"
         for field in ("Approvers", "Operators", "Origin"):
             m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
-    (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
+    (target / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
     sync_skills(target, fw)
@@ -2306,7 +2311,7 @@ def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
     keyfile = d / f"{name}.admin.key"
     secret = ask_secret("Your API key (hidden; Enter keeps the stored one): ").strip()
     if secret:
-        keyfile.write_text(secret + "\n", encoding="utf-8")
+        keyfile.write_text(secret + "\n", encoding="utf-8", newline="\n")
         try:
             keyfile.chmod(0o600)
         except OSError:
@@ -2907,7 +2912,7 @@ def http_cmd(r: Path, a) -> int:
             today = datetime.now().astimezone().date().isoformat()
             out = r / "ops" / "kb-verify" / f"{today}-{a.env}.md"
             out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(KV.report(a.env, e.get("pleasanter"), rows, no_probe, today), encoding="utf-8")
+            out.write_text(KV.report(a.env, e.get("pleasanter"), rows, no_probe, today), encoding="utf-8", newline="\n")
             wj(out.with_suffix(".json"), {"env": a.env, "pleasanter": e.get("pleasanter"), "date": today, "probes": rows,
                                           "entries": KV.entry_results(rows), "without_probe": no_probe})
             for x in rows:
@@ -3333,7 +3338,7 @@ def _main(argv=None) -> int:
                 titles.setdefault(n, c.get("title") or n)
         text = SP.skeleton(a.site, read_tree(d), titles)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+        out.write_text(text, encoding="utf-8", newline="\n")
         LG.record_metric(ai_markers=SP.ai_markers(text), lines=text.count(chr(10)) + 1)
         print(f"{out.relative_to(r).as_posix() if out.is_relative_to(r) else out}: {text.count(chr(10)) + 1} lines, "
               f"{SP.ai_markers(text)} place(s) for the AI to write")
@@ -3525,7 +3530,7 @@ def _main(argv=None) -> int:
         e = env_conf(r, a.env)
         p = payload(read_tree(r / "config" / a.site), e, a.site)
         text = json.dumps(p, ensure_ascii=False, indent=2)
-        (Path(a.out).write_text(text + "\n", encoding="utf-8") if a.out else print(text))
+        (Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n") if a.out else print(text))
         return 0
 
     if a.cmd == "lint":
@@ -3638,7 +3643,7 @@ def _main(argv=None) -> int:
         wj(rel / "plan.json", plan)
         wj(rel / "payload.json", new)
         wj(rel / "rollback.json", {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site})
-        (rel / "raw-diff.md").write_text(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live (before) vs git (after)"), encoding="utf-8")
+        (rel / "raw-diff.md").write_text(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live (before) vs git (after)"), encoding="utf-8", newline="\n")
         print(f"plan written to releases/{a.release}/ — {len(diffs)} change(s), {plan['classification']['classification']}"
               + ("" if not missing else f"; L-DEP-01 FAILED: {missing}"))
         return 1 if missing else 0
