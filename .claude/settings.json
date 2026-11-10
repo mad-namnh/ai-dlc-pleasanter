@@ -3,6 +3,8 @@
     "deny": [
       "Bash(git push)",
       "Bash(git push *)",
+      "Bash(git -C *)",
+      "Bash(git -c *)",
       "Edit(/.claude/settings.json)",
       "Edit(/.claude/settings.local.json)",
       "Edit(/.claude/agents/**)",
