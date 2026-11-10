@@ -7,9 +7,9 @@
 **Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus all of P1 (P1-1…P1-8); details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): environment values map back as whole values or whole tokens…` (P1-4); working tree clean.
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): environment values map back as whole values or whole tokens…` (P1-4); working tree clean.
 2. `cd tools/pls && python -m unittest discover -s tests` → **310 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
-3. `main` was fast-forwarded to `brownfield-adr` on 2026-11-10 at Nam's request (local only; `origin/main` is still the demo baseline `d0c27f1`). `demo-equipment` runs the framework working tree, so it now runs the remediated `pls`: expect the new lint findings and refusals listed under "Remediation progress".
+3. `main` was fast-forwarded to `brownfield-adr` on 2026-11-10 and pushed to GitHub at Nam's request (the earlier demo baseline was `d0c27f1`). Work continues on `brownfield-adr`; `main` is fast-forwarded and pushed only when Nam asks. `demo-equipment` runs the framework working tree, so it now runs the remediated `pls`: expect the new lint findings and refusals listed under "Remediation progress".
 
 **Waiting for Nam (decisions, not code):**
 1. ADR-0014 (`docs/adr/0014-trust-boundaries.md`): accept / change / reject each row TB-1…TB-15 (column "Nam's decision", all `pending`) and the 3 open questions; then set the ADR status.
@@ -87,7 +87,7 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 4. Since 2026-11-10 `main` and `brownfield-adr` are the same commit locally (see "Resume here").
 
 **State**
-- Until 2026-11-10 `main` was the **demo baseline** (GitHub `origin/main` = `d0c27f1` still is). Nam then asked to merge everything: local `main` = `brownfield-adr`. Not pushed; push only when Nam asks.
+- Until 2026-11-10 `main` was the **demo baseline** (`d0c27f1`). Nam then asked to merge everything and push: `main` = `brownfield-adr` at that point, on GitHub too. Later commits stay on local `brownfield-adr` until Nam asks to merge and push again.
 - Branch `brownfield-adr` (last commit: `pls gate`): ADR-0009…0012, plan Step 4c BR1–BR9 built and run on MADLAB dev (kb-verify 7/7 on 1.5.2, sandbox trial, adopt of site 797 read-only), skills onboarding / spec-recovery / script-engineer / maintenance-triage, lifecycle routes by profile **Origin** (`new` / `existing`).
 - Tests: 214 Python + 6 node; write-path inventory test (`test_write_guards.py`); gate records (`test_gate.py`).
 - Audit after BR9: ready with conditions. Fixed on the branch: template `.gitattributes`, docs refreshed, `exec` expects 200, request `timeout`, socket cleanup, **`pls gate`** (I4 checked by the tool: profile approvers, L-GATE-01, G3/G4 records needed for non-dev plan/apply/bootstrap).
