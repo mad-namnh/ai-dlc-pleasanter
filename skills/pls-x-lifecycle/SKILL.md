@@ -126,7 +126,7 @@ Skill: `pls-p3-config-builder`.
 Skill: `pls-p4-test-writer`.
 
 - Write `tests/api/*.json` from the acceptance criteria. Restricted roles are tested as the project profile's **Role tests** says: with each role's key (`as_key`), or, when `deferred`, by config checks.
-- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so `pls test` needs `allow_write: true`; run them only on dev (and stg smoke tests after G4).
+- Run `pls test tests/api/<spec>.json --env dev --site <s> [--var k=v]`. Tests create records, so `pls test` needs `allow_write: true`; run them only on dev (and stg smoke tests after G4: `pls test … --env stg --release <R>`; without `--release`, `pls test` asks the person to confirm, and you never add `--yes` on your own).
 - On failure, find the cause before changing anything:
   - **build defect** → back to P3, then redeploy;
   - **design defect** → back to P2/G2;
@@ -152,7 +152,7 @@ Skill: `pls-p5-release-manager`.
 3. Write the diff report.
 4. **Stop at G4.**
 5. The person runs `pls apply`.
-6. Run smoke tests (`pls test` on the target).
+6. Run smoke tests (`pls test … --env <target> --release <R>`: the release's G4 covers them).
 
 For prod, the release is run by the customer side (ADR-0003); you prepare the package and never apply it.
 

@@ -199,7 +199,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Over the browser runner, a person switches the login.
 - **Status:** **in use.**
   - `pls lint` and `pls coverage` run.
-  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`. `pls test` writes only to the sites `environments.json` lists as the environment's own (never another application's site id, never a sandbox's shared site; ADR-0011).
+  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`. `pls test` writes only to the sites `environments.json` lists as the environment's own (never another application's site id, never a sandbox's shared site; ADR-0011). Outside dev, tests that change records need the G4 of the release under test (`--release`) or the person's confirmation (ADR-0008).
   - Not built: reviewer agents, Playwright smoke, CI.
 
 ### P5 — Release (リリース)

@@ -22,7 +22,7 @@ The browser was needed only because the agent sandbox had no network path to Ple
 | `pls export --env E --site S …` | `getsite` → `.pls/exports/` |
 | `pls bootstrap B` | creates the sites of `releases/B/bootstrap.json`, then `bind` (ADR-0007) |
 | `pls apply R` | the planned multi-site release: preflight (`UpdatedTime`), ordered apply, reverse-order restore on failure, then export + `mark-applied` |
-| `pls test SPEC… --env E --site S [--var k=v]` | same spec format as the runner; each spec's `as_key` picks the role's key, so role tests need no login switch |
+| `pls test SPEC… --env E --site S [--var k=v] [--release R \| --yes]` | same spec format as the runner; each spec's `as_key` picks the role's key, so role tests need no login switch |
 | `pls backup --env E --site S --out DIR` | every record, for migrations (ADR-0004) |
 
 **Connections are local, never in git:** `.pls/connections.json` (gitignored; template `connections.example.json`) holds the URL per environment, key references and `allow_write`. Keys are referenced as `env:NAME` (environment variable) or `file:NAME` (file under `.pls/`); literal keys are refused. Each person uses their own keys; test users' keys belong to the test users.
@@ -45,6 +45,12 @@ The browser was needed only because the agent sandbox had no network path to Ple
 
 - A role test run with another role's key does damage: refusals it expects succeed (a fixture was deleted). `pls test` and `pls http-check` now refuse/warn when two roles resolve to the same key.
 - Fixtures belong in the spec, created with the 総務 key by step-level `as_key`, so a run never depends on IDs typed by hand.
+
+## Tests outside dev and the typed confirmation (2026-11-10, design review WS2-F5 / C4)
+
+- `pls test` on an environment whose role is not `dev` sends tests that create, change or delete records only with the person's word: `--release <id>` naming the release under test, whose recorded G4 approval covers it (same record and content binding as `apply`; the release must target that environment), or, without a release, the environment name typed at a terminal, or `--yes` on the person's instruction. Read-only specs and tests on dev ask nothing. Smoke tests after a stg apply therefore run as `pls test … --env stg --release <R>`.
+- A typed confirmation (`apply`, `bootstrap`, `migrate`, `kb-verify`, `test`) counts only when stdin is a terminal. Text piped into the command is refused: it was `--yes` without the flag. An agent's shell has no terminal, so an agent can confirm only with `--yes`, which the skills allow only on the person's instruction for the target they name.
+- Not done: the kind of confirmation (`typed` / `--yes`) is not written to `apply-log.json` (review suggestion; TD-19 keeps the run-log items).
 
 ## Open questions (2026-11-09, recovery states)
 

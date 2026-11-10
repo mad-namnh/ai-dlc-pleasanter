@@ -2241,12 +2241,18 @@ def _client(r: Path, env: str, key: str | None = None):
     return H, conn, H.Client(conn["url"], H.resolve_key(conn, key), timeout=H.conn_timeout(conn))
 
 
-def _confirm(release: str, yes: bool, what: str) -> bool:
+def _confirm(release: str, yes: bool, what: str, token: str = "the release id") -> bool:
+    """The person's confirmation of a write: --yes (given on their instruction), or `release` typed at a terminal.
+    Typing counts only on a terminal: text piped into stdin is not a person and would be --yes without the flag."""
     if yes:
         return True
     print(what)
+    if not sys.stdin or not sys.stdin.isatty():
+        print("not confirmed — nothing written (no terminal to type the confirmation: a person runs this command "
+              "in a terminal, or passes --yes themselves)")
+        return False
     try:
-        typed = input(f"type the release id to confirm ({release}): ").strip()
+        typed = input(f"type {token} to confirm ({release}): ").strip()
     except EOFError:
         typed = ""
     if typed != release:
@@ -2575,6 +2581,22 @@ def http_cmd(r: Path, a) -> int:
                     f"{a.env}: these tests may write to sites {hit} that are not this environment's own "
                     + (f"(shared {e['sandbox_of']} sites; a --var record counts for every site) — refused (ADR-0011)"
                        if e.get("sandbox_of") else "(not in environments.json for it) — refused"))
+            # Outside dev, records are created, changed and deleted (deletes cannot be undone) only with the person's
+            # word: the G4 approval of the release under test, or their confirmation of this run.
+            if e.get("role") != "dev" and any(SE.test_writes(sp_) for sp_ in specs):
+                if a.release:
+                    try:
+                        GT.require(r, "G4", a.release, f"tests that change records in {a.env}")
+                    except GT.GateError as ex:
+                        raise H.TransportError(str(ex))
+                    target = rj(r / "releases" / a.release / "plan.json").get("env")
+                    if target != a.env:
+                        raise H.TransportError(f"{a.release} is a release for {target!r}, not {a.env!r} — its G4 does not "
+                                               f"cover tests in {a.env}")
+                elif not _confirm(a.env, a.yes, f"{len(specs)} test(s) create, change or delete records in {a.env} "
+                                                f"({conn['url']}); no --release with a G4 approval was named",
+                                  token="the environment name"):
+                    return 1
             try:
                 eff = env_effects(r, e)
             except ValueError as ex:
@@ -2883,6 +2905,9 @@ def _main(argv=None) -> int:
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
     s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s.add_argument("--release", help="outside dev: the release under test; its recorded G4 approval allows tests that change records")
+    s.add_argument("--yes", action="store_true",
+                   help="outside dev without --release: skip typing the environment name (only when the person asks for it)")
     s = sp.add_parser("kb-verify", help="run the KB probes on a dev environment (creates probe sites in values.kb_probe_parent)")
     s.add_argument("--env", required=True)
     s.add_argument("--yes", action="store_true", help="skip the typed confirmation (only when the person allowed it)")

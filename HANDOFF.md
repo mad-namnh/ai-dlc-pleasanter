@@ -4,11 +4,11 @@
 
 ## Resume here — 2026-11-10 (read this first)
 
-**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3 and P1-6; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
+**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3, P1-6 and P1-7; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): sandbox shared-write check in every plan…` (P1-6); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **295 OK**; `node --test tests/test_runner.mjs` → **9 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): tests outside dev need the person…` (P1-7); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **302 OK**; `node --test tests/test_runner.mjs` → **9 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. Switch back to `main` when done: `demo-equipment` runs the framework working tree and must stay on the demo baseline.
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P1-7 (`pls test` on non-dev needs a G3/G4 record or typed confirmation; confirmation requires a TTY), P1-8 (runner parity: `exec` status, `as_key`, per-restore catch; ADR-0008 differences table); then P2 and P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P1-8 (runner parity: `exec` status, `as_key`, per-restore catch; ADR-0008 differences table); then P2 and P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -64,7 +64,11 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 - Done, committed: **P1-6** — `release-plan` (and `sandbox refresh`) refuses, for every sandbox site, a summary or server script that writes to a site the sandbox did not copy, unless a person accepted that place: `sandbox create|refresh --allow-shared-writes` records the places in `envs.<env>.shared_writes`, and a later new place is refused again (WS3-F6). `pls test` writes only to the environment's own sites in every environment, not only in sandboxes (WS2-F9). ADR-0011, architecture.md, script-engineer 0.3, test-writer 0.5. Tests `test_sandbox_shared_writes_checked_by_every_plan.py` (6 of 8 fail on the parent commit; the other two are baselines). Suite: 295 Python OK, 9 node pass.
   - **Decided without asking, Nam may change:** the acceptance is a list of places, not a yes/no per sandbox (review open question "is `--allow-shared-writes` a per-sandbox decision"): stricter, and the flag on `refresh` re-accepts the current places. No record of who accepted (the flag is "checked by a person", as before).
   - **Action for existing sandboxes** created with `--allow-shared-writes`: the next `sandbox refresh` is refused until a person runs it once with `--allow-shared-writes`.
-- Not started: P1-7, P1-8, all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P1-7, P1-8.
+- Done, committed: **P1-7** — `pls test` on a non-dev environment sends tests that change records only with `--release <R>` whose G4 is recorded and still covers the release (and targets that env), or with the environment name typed at a terminal, or `--yes`; read-only specs and dev ask nothing (WS2-F5). `_confirm` reads a typed confirmation only from a terminal, for every command (piped stdin refused; C4, ADR-0014 gap closed, TD-19 updated). ADR-0008, ADR-0014, architecture.md, template hard rule 3, lifecycle 0.16, P5 0.8, test-writer 0.6. Tests `test_tests_outside_dev_need_the_person.py` (5 of 7 fail on the parent commit; the other two are baselines). Suite: 302 Python OK, 9 node pass.
+  - **Decided without asking, Nam may change:** the record accepted is **G4 only** (the roadmap row says "G3/G4"): G3 means the build is verified, not that stg may be written. The confirmation kind is not written to `apply-log.json`.
+  - **Not re-run:** the lifecycle and P5 evals after their text changes (0.16 / 0.8).
+- Adaptive Model Routing section added to the framework `CLAUDE.md` (`fdb0270`): subagent model / effort by task tier; the main session's model is the user's.
+- Not started: P1-8, all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P1-8.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 

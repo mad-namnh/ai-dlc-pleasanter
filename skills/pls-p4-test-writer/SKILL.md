@@ -32,7 +32,7 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
    - Role tests `deferred`: no `as_key` (default key). For each "cannot / only" criterion of a restricted role, write a `siteConfig` check of the setting that enforces it (e.g. `Processes.0.Groups`). Write the role test as a manual or deferred item.
    - Records are created by the test itself (`save` / `$var`); never depend on data already on dev.
    - Test record titles start with `テスト` so a person can find and remove them.
-3. **Run** `pls test tests/api/<spec>.json --env dev --site <default site> [--var k=v]`. Results go to `tests/results/<env>-<date>-<spec>-http.json`. Read the console summary only; for a failure, read that test's log lines.
+3. **Run** `pls test tests/api/<spec>.json --env dev --site <default site> [--var k=v]` (dev only; outside dev, tests that change records belong to P5 and need the release's G4 or the person's confirmation). Results go to `tests/results/<env>-<date>-<spec>-http.json`. Read the console summary only; for a failure, read that test's log lines.
 4. **Triage every failure before changing anything:**
 
    | Cause | Go to |
