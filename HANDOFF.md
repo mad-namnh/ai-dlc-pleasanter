@@ -4,11 +4,11 @@
 
 ## Resume here — 2026-11-10 (read this first)
 
-**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
+**Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus P1-1…P1-3 and P1-6; details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `015919c feat(pls): verifiable release package…` (only the handoff commit after it); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **287 OK**; `node --test tests/test_runner.mjs` → **9 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch; **never push** unless Nam asks). Last code commit: `fix(pls): sandbox shared-write check in every plan…` (P1-6); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **295 OK**; `node --test tests/test_runner.mjs` → **9 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. Switch back to `main` when done: `demo-equipment` runs the framework working tree and must stay on the demo baseline.
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P1-6 (sandbox shared-write check in every `release-plan`), P1-7 (`pls test` on non-dev needs a G3/G4 record or typed confirmation; confirmation requires a TTY), P1-8 (runner parity: `exec` status, `as_key`, per-restore catch; ADR-0008 differences table); then P2 and P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P1-7 (`pls test` on non-dev needs a G3/G4 record or typed confirmation; confirmation requires a TTY), P1-8 (runner parity: `exec` status, `as_key`, per-restore catch; ADR-0008 differences table); then P2 and P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -61,7 +61,10 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
 - Done, committed: **P0-8** — eval cases EV-01/03/09/10 (lifecycle cases 004–007) and P5 cases 001 (to G4) / 002 (after G4) written; skill versions bumped for the P0-4/P0-5 changes (lifecycle 0.15, P5 0.6, onboarding 0.6, spec-recovery 0.4, P3 config 0.4); 9 runs + 1 blind re-run on claude-opus-5-5, all **PASS** (`evals/results/pls-x-lifecycle/2026-11-10.md`, `evals/results/pls-p5-release-manager/2026-11-10.md`). Fixed from the runs: template rule 7 narrowed (P5 writes release documents), P5 step 4 migration order, EV inputs no longer point to the standard. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 - Done, committed (build part): **P0-9** — `pls package <R>` (only with G4 bound to the content; deterministic zip in `dist/`, manifest recorded in `releases/<R>/package-manifest.json`; migration `backup/` never shipped and no longer part of the G4 digest), standard-library `verify.py` shipped in the package (refuses altered / added files, wrong target or release, content G4 did not approve, missing rollback; prints the digest), `templates/project/handover/customer-responsibilities.md` (J5), ADR-0003 note, P5 0.7, TD-16…TD-19 for the prod blockers. Tests `test_package_and_verify.py`. Suite: 287 Python OK, 9 node pass.
   - **Nam to do (P0-9 decisions):** decide ADR-0003 (A/B/C + apply method, TD-02/TD-16) with customer IT; written decision on each production blocker TD-01…TD-04, TD-16…TD-19 (J4); method-L dry run by a person: package → verify → apply on dev (J1).
-- Not started: P1-6…P1-8, all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P1-6…P1-8.
+- Done, committed: **P1-6** — `release-plan` (and `sandbox refresh`) refuses, for every sandbox site, a summary or server script that writes to a site the sandbox did not copy, unless a person accepted that place: `sandbox create|refresh --allow-shared-writes` records the places in `envs.<env>.shared_writes`, and a later new place is refused again (WS3-F6). `pls test` writes only to the environment's own sites in every environment, not only in sandboxes (WS2-F9). ADR-0011, architecture.md, script-engineer 0.3, test-writer 0.5. Tests `test_sandbox_shared_writes_checked_by_every_plan.py` (6 of 8 fail on the parent commit; the other two are baselines). Suite: 295 Python OK, 9 node pass.
+  - **Decided without asking, Nam may change:** the acceptance is a list of places, not a yes/no per sandbox (review open question "is `--allow-shared-writes` a per-sandbox decision"): stricter, and the flag on `refresh` re-accepts the current places. No record of who accepted (the flag is "checked by a person", as before).
+  - **Action for existing sandboxes** created with `--allow-shared-writes`: the next `sandbox refresh` is refused until a person runs it once with `--allow-shared-writes`.
+- Not started: P1-7, P1-8, all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P1-7, P1-8.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 

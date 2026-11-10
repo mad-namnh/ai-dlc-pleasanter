@@ -23,6 +23,7 @@ A file holds a JSON **list of tests**:
 | `id`, `reqs`, `title` | test id, the requirements it proves, a label |
 | `as_key` | **key name** in `.pls/connections.json` (e.g. `admin`, `staff`). This is not a principal name; ask which user each key belongs to. The key is used for every step (default: the connection's `default_key`). `pls test` refuses to run if two roles resolve to the same key |
 | `run_on` | site whose configuration is read for `exec` (process ids) and `siteConfig`; default is the `--site` of the command |
+| step `site` | site a `create` writes to; always `${site:<name>}` of a site of this environment — `pls test` refuses a site id that `environments.json` does not list for the env, and a sandbox's shared site |
 | `vars` | fixtures. A value starting with `<` is a placeholder that `--var name=value` must fill. Steps add more with `save`. Dates relative to today (overdue tests) are passed as `--var`. `pls test` refuses to run while a placeholder is unfilled; list the needed `--var`s in the hand-over message |
 
 ## Steps

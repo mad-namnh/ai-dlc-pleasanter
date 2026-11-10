@@ -1210,9 +1210,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
             raise Fail(f"{env}/{site} points to the {conf.get('shared_from') or e.get('sandbox_of')} site (shared, read only) — "
                        "a sandbox deploys only its own copies (ADR-0011)")
         ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift, accept_unverified)
-        for m in msgs:
+        shared = shared_write_refusals(e, env, site, read_tree(r / "config" / site))
+        for m in msgs + shared:
             print(m)
-        failed |= not ok
+        failed |= not ok or bool(shared)
         results[site] = res
     jobs_now: dict = {}
     try:                                               # scheduled scripts travel with every release of the env (ADR-0012)
@@ -1708,6 +1709,34 @@ def _writes_to(model: dict, dep: str) -> list[str]:
     return out
 
 
+def shared_writes(e: dict, site: str, model: dict) -> dict[str, list[str]]:
+    """For a sandbox env: the sites `site` may write to that are not the sandbox's own copies, with the places
+    (see _writes_to). Those sites are the base environment's: a record saved in the copy would change base data."""
+    out = {}
+    for dep in sorted(site_deps(model, site, set(e["sites"]))):
+        if not e["sites"][dep].get("sandbox"):
+            places = _writes_to(model, dep)
+            if places:
+                out[dep] = places
+    return out
+
+
+def shared_write_refusals(e: dict, env: str, site: str, model: dict) -> list[str]:
+    """Writes to shared sites that no person accepted for this sandbox (envs.<env>.shared_writes). The check runs
+    for every plan, not only at `sandbox create`: a summary or script added later is refused the same way."""
+    if not e.get("sandbox_of"):
+        return []
+    accepted = (e.get("shared_writes") or {}).get(site) or {}
+    out = []
+    for dep, places in shared_writes(e, site, model).items():
+        new = [x for x in places if x not in (accepted.get(dep) or [])]
+        if new:
+            out.append(f"SHARED {site}: may write to {dep} ({', '.join(new)}); in sandbox {env} that would change "
+                       f"{e['sandbox_of']} data. Remove it, or copy {dep} into the sandbox, or — after a person checked "
+                       f"it — pls sandbox refresh --name {env[4:]} --allow-shared-writes (ADR-0011)")
+    return out
+
+
 def sandbox_create(r: Path, name: str, sites: list[str], parent: int, base: str = "dev", allow_shared_writes: bool = False) -> int:
     """Register env dev-<name> with copies of `sites` (to be created by the normal bootstrap) and plan their
     bootstrap. Sites they reference but that are not copied point to the base environment's sites (read only).
@@ -1737,6 +1766,8 @@ def sandbox_create(r: Path, name: str, sites: list[str], parent: int, base: str 
         for dep in sorted(site_deps(model, s, set(managed))):
             if dep not in e["sites"]:
                 writes = _writes_to(model, dep)
+                if writes and allow_shared_writes:         # the accepted places, checked again by every plan
+                    e.setdefault("shared_writes", {}).setdefault(s, {})[dep] = writes
                 if writes and not allow_shared_writes:
                     raise Fail(f"{s} may write to {dep} ({', '.join(writes)}); in a sandbox that would change {base} data. "
                                f"Copy {dep} too (--sites {s},{dep}), or pass --allow-shared-writes after checking")
@@ -1760,7 +1791,7 @@ def sandbox_sites(e: dict) -> dict:
     return {k: v for k, v in e["sites"].items() if v.get("sandbox")}
 
 
-def sandbox_refresh(r: Path, name: str) -> int:
+def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> int:
     """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written)."""
     import pls_http as H
     env = f"dev-{name}"
@@ -1771,6 +1802,14 @@ def sandbox_refresh(r: Path, name: str) -> int:
     missing = [s for s, v in own.items() if not v.get("id")]
     if missing:
         raise Fail(f"{env}: {missing} not created yet — run the bootstrap first")
+    if allow_shared_writes:                                # a person accepts the places as they are now
+        ev = rj(r / "environments.json")
+        found = {s: w for s in own if (w := shared_writes(e, s, read_tree(r / "config" / s)))}
+        if found != (e.get("shared_writes") or {}):
+            ev["envs"][env]["shared_writes"] = e["shared_writes"] = found
+            wj(r / "environments.json", ev)
+            print(f"{env}: writes to shared {e['sandbox_of']} sites accepted: "
+                  + ("; ".join(f"{s} -> {d} ({', '.join(p)})" for s, w in found.items() for d, p in w.items()) or "none"))
     _, _, c = _client(r, env)
     exports = {}
     for s, v in own.items():
@@ -2525,13 +2564,17 @@ def http_cmd(r: Path, a) -> int:
                     raise H.TransportError(f"keys '{vals[v]}' and '{role}' are the same key — use a key created by a user of each role")
                 vals[v] = role
             sid = e["sites"][a.site]["id"]
-            if e.get("sandbox_of"):
-                shared = {str(v["id"]) for v in e["sites"].values() if v.get("shared_from") and v.get("id")}
-                all_ids = {v["id"] for v in e["sites"].values() if v.get("id")}
-                hit = sorted({x for sp_ in specs if SE.test_writes(sp_) for x in SE.test_sites(sp_, sid, all_ids)} & shared)
-                if hit:
-                    raise H.TransportError(f"{a.env}: these tests may write to shared {e['sandbox_of']} sites {hit} "
-                                           "(a --var record counts for every site) — refused (ADR-0011)")
+            # Tests write only to the environment's own sites: a site id that environments.json does not list for
+            # this env is another application on the same server; a sandbox's shared sites are the base's data.
+            all_ids = {v["id"] for v in e["sites"].values() if v.get("id")}
+            own = {str(v["id"]) for v in e["sites"].values() if v.get("id") and not v.get("shared_from")
+                   and (v.get("sandbox") or not e.get("sandbox_of"))}
+            hit = sorted({x for sp_ in specs if SE.test_writes(sp_) for x in SE.test_sites(sp_, sid, all_ids)} - own)
+            if hit:
+                raise H.TransportError(
+                    f"{a.env}: these tests may write to sites {hit} that are not this environment's own "
+                    + (f"(shared {e['sandbox_of']} sites; a --var record counts for every site) — refused (ADR-0011)"
+                       if e.get("sandbox_of") else "(not in environments.json for it) — refused"))
             try:
                 eff = env_effects(r, e)
             except ValueError as ex:
@@ -2870,7 +2913,8 @@ def _main(argv=None) -> int:
     s.add_argument("--sites", help="create: logical sites to copy, comma separated")
     s.add_argument("--parent", type=int, help="create: id of the developer's folder")
     s.add_argument("--allow-shared-writes", action="store_true",
-                   help="create: a copied site may write to a shared dev site (summary, script) — checked by a person")
+                   help="create / refresh: accept that a copied site writes to a shared dev site (summary, script) — "
+                        "checked by a person; recorded in envs.<env>.shared_writes and compared by every plan")
     s = sp.add_parser("harvest", help="read only: bring a site's configuration from an environment into config/ (ADR-0011)")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -3063,7 +3107,7 @@ def _main(argv=None) -> int:
                 raise Fail("sandbox create needs --sites and --parent (the developer's folder id)")
             return sandbox_create(r, a.name, [x.strip() for x in a.sites.split(",") if x.strip()], a.parent,
                                   allow_shared_writes=a.allow_shared_writes)
-        return sandbox_refresh(r, a.name) if a.action == "refresh" else sandbox_drop(r, a.name)
+        return sandbox_refresh(r, a.name, a.allow_shared_writes) if a.action == "refresh" else sandbox_drop(r, a.name)
 
     if a.cmd == "harvest":
         return harvest(r, a.env, a.site)

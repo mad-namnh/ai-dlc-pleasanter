@@ -199,7 +199,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Over the browser runner, a person switches the login.
 - **Status:** **in use.**
   - `pls lint` and `pls coverage` run.
-  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`.
+  - Test specs (`tests/api/*.json`) cover create, process exec, get/list with expectations, negative creates (`expectHttp`), fixtures (`spec.vars`) and UI checks for button presence. They run through `pls test` (HTTP) or the runner `runTests`. `pls test` writes only to the sites `environments.json` lists as the environment's own (never another application's site id, never a sandbox's shared site; ADR-0011).
   - Not built: reviewer agents, Playwright smoke, CI.
 
 ### P5 — Release (リリース)
@@ -284,7 +284,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
 | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
 | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
-| `pls sandbox` / `harvest` / `merge-site` / `merge-install` | P3 (several developers) | Per-developer sandbox environments, UI edits back into git, semantic merge of `site.json` (ADR-0011) | branch |
+| `pls sandbox` / `harvest` / `merge-site` / `merge-install` | P3 (several developers) | Per-developer sandbox environments (every plan refuses a copy that writes to a shared site unless a person accepted that place), UI edits back into git, semantic merge of `site.json` (ADR-0011) | branch |
 | `pls adopt-package` | onboarding | Every site of a UI site package in one read-only run (names from the project or a person's file) | branch |
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts | branch |
