@@ -98,7 +98,7 @@ Machine-read files are JSON (stdlib only). Reference implementations: `pls-demo-
 | stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) (data migrations: `pls migrate`, before apply); the browser runner writes dev only (ADR-0014 TB-7) | `role: stg` — no ad-hoc writes; every write is a planned release |
 | prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — never written by `pls` HTTP; unreachable from MADLAB |
 
-**Transport (ADR-0008).** People and workstation agents call the Pleasanter API directly with `pls` (keys from environment variables or key files under `.pls/`, never in git or chat). The cloud agent sandbox has no network path to Pleasanter, so agents fall back to the browser runner (`tools/pls/browser/pls-runner.js`) in a logged-in tab, moving exports and payloads as gzip + base64 with SHA-256 checks.
+**Transport (ADR-0008).** People and workstation agents call the Pleasanter API directly with `pls` (keys from environment variables or key files under `.pls/`, never in git or chat). Agents never drive the browser runner (`tools/pls/browser/pls-runner.js`): it is a fallback for a person on dev only (ADR-0014 TB-7). An agent without a network path to Pleasanter tells the person and stops.
 
 ## 4. Lifecycle overview
 
