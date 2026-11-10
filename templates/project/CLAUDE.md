@@ -38,7 +38,7 @@ Filled in when the project is created; the lifecycle skill reads it.
    - Never ask for a key in chat.
 5. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`; probe on dev when it is silent.
 6. **Standard settings before code (I5).** A server script needs a written reason in the design.
-7. Commit locally at the end of each phase and after each gate decision. Do not push unless asked. Never rewrite history (no force-push, no amend or rebase of committed records) and never delete or edit files in `gates/` or `releases/` — they are the evidence of who decided what (ADR-0014 TB-3).
+7. Commit locally at the end of each phase and after each gate decision. Do not push unless asked. Never rewrite history (no force-push, no amend or rebase of committed records). Never delete or edit the records in `gates/` or the files `pls` writes in `releases/` (`plan.json`, `bootstrap.json`, payloads, rollbacks, apply log) — they are the evidence of who decided what (ADR-0014 TB-3). The release documents you write (`diff-report.md`, `approvals.md`) follow the P5 skill.
 
 ## Token rules
 
