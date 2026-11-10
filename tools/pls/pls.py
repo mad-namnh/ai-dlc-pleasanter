@@ -2538,6 +2538,7 @@ def http_cmd(r: Path, a) -> int:
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
                 res = H.migrate(c, t["site_id"], t["keys"], t["data"])
+                LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
                 MI.finish(entry, res)
                 wj(rel / "plan.json", plan)
                 print(f"{t['dir']}: {direction} {res['status']} ({res['message']})")
@@ -2629,6 +2630,8 @@ def http_cmd(r: Path, a) -> int:
             plan.update(status="planned" if res["status"] == "refused" else res["status"], apply_finished_at=_now())
             wj(rel / "plan.json", plan)
             LG.record_metric(sites=len(plan["sites"]), apply_status=res["status"])
+            LG.record_target(env=plan["env"], release=a.release,
+                             written=[plan["per_site"][s_]["site_id"] for s_ in res.get("touched") or []])
             if res["status"] != "applied-unverified":
                 print(apply_outcome_message(a.release, plan, res))
                 return 1
@@ -2679,6 +2682,7 @@ def http_cmd(r: Path, a) -> int:
                 wj(bp, dict(rj(bp), uncertain=site))
 
             res = H.bootstrap(c, plan, before=in_flight)
+            LG.record_target(env=plan["env"], release=a.release, written=list(res["created"].values()))
             for line in res["log"]:
                 print(line)
             if res["created"]:
@@ -3394,6 +3398,7 @@ def _main(argv=None) -> int:
     if a.cmd == "mark-applied" and (load_plan(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release
         plan = load_plan(rel / "plan.json")
+        LG.record_target(env=plan.get("env"), release=a.release)
         e = env_conf(r, plan["env"])
         exports = dict(x.split("=", 1) for x in (a.exports or []))
         if set(exports) != set(plan["sites"]):

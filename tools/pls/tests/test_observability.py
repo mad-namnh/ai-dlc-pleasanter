@@ -1,4 +1,6 @@
 """Run log and token usage (ADR-0013):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -11,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pls  # noqa: E402
 import pls_log as LG  # noqa: E402
 import pls_usage as US  # noqa: E402
+import test_http as TH  # noqa: E402
 
 KEYS = {"v", "ts", "kind", "run_id", "actor", "branch", "head", "cmd", "args", "env", "site", "release", "result",
         "exit_code", "duration_ms", "writes", "metrics", "message", "phase", "title"}
@@ -86,10 +89,53 @@ class LogTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             pls.main(["step", "P9", "x"])
 
-    def test_log_failure_never_breaks_a_command(self):
+    def test_a_reading_command_runs_without_a_log_and_says_so(self):
         (self.r / "ops").mkdir()
         (self.r / "ops/log").write_text("a file where the folder should be", encoding="utf-8")
-        self.assertEqual(pls.main(["lint"]), 0)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["lint"]), 0)
+        self.assertIn("run log could not be written", err.getvalue())
+
+
+class WritingCommandsAndTheRunLog(unittest.TestCase):
+    """A command that may write to Pleasanter leaves a log line or does not run (ADR-0013)."""
+    setUp = TH.HttpTest.setUp
+    tearDown = TH.HttpTest.tearDown
+    plan = TH.HttpTest.plan
+
+    def planned(self):
+        plan, d = self.plan()
+        for site in plan["per_site"]:
+            plan["per_site"][site]["payload_file"] = f"payload-{site}.json"
+        (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+
+    def events(self, cmd):
+        return [e for e in LG.read(self.r) if e["cmd"] == cmd]
+
+    def test_apply_is_refused_before_anything_is_sent_when_the_log_cannot_be_written(self):
+        self.planned()
+        (self.r / "ops").mkdir(exist_ok=True)
+        (self.r / "ops/log").write_text("a file where the folder should be", encoding="utf-8")
+        err = io.StringIO()
+        n = len(self.fake.calls)
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 2)
+        self.assertEqual(self.fake.calls[n:], [])                             # not even a read
+        self.assertIn("run log cannot be written", err.getvalue())
+        (self.r / "ops/log").unlink()
+        pls.main(["apply", "R-1", "--yes"])
+        self.assertTrue([p for p, _ in self.fake.calls[n:] if p.endswith("/updatesite")])
+
+    def test_the_event_of_an_apply_names_the_environment_the_release_and_the_sites_written(self):
+        self.planned()
+        pls.main(["apply", "R-1", "--yes"])
+        ev = self.events("apply")[-1]
+        self.assertEqual((ev["env"], ev["release"], ev["writes"]), ("dev", "R-1", True))
+        self.assertEqual(ev["metrics"]["written"], sorted([TH.EQ, TH.LO]))
+        self.assertNotIn("_env", ev["metrics"])
+        mark = self.events("mark-applied")
+        self.assertTrue(mark and all(e["env"] == "dev" for e in mark))
 
 
 class UsageTest(unittest.TestCase):

@@ -7,7 +7,8 @@ Event schema v1 (every field always present; unknown values are null):
   v, ts (ISO, local offset), kind ("command" | "step"), run_id, actor, branch, head,
   cmd, args (the CLI words, nothing secret: pls never takes a key on the command line), env, site, release,
   result ("ok" | "refused" | "error"), exit_code, duration_ms, writes (true when the command may write to Pleasanter),
-  metrics (small numbers a command reports: issues, changes, tests passed …), message (first line of an error),
+  metrics (small numbers a command reports: issues, changes, tests passed …; `written` = site ids a writing command
+  sent a write to), message (first line of an error),
   phase / title (step markers only).
 A step marker opens a step; LLM token usage (`pls usage collect`) is attributed to the step open at that time.
 """
@@ -16,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -31,6 +33,28 @@ _DEPTH = [0]
 def record_metric(**kw) -> None:
     """A command adds small numbers to its log line (issue counts, changes, tests passed, …)."""
     METRICS.update({k: v for k, v in kw.items() if v is not None})
+
+
+def record_target(env: str | None = None, release: str | None = None, written: list | None = None) -> None:
+    """A command that takes its environment from a plan (apply, bootstrap, migrate, mark-applied) says which
+    environment and release it worked on and which site ids it wrote, so the event does not depend on --env."""
+    for k, v in (("_env", env), ("_release", release)):
+        if v:
+            METRICS[k] = v
+    if written is not None:
+        METRICS["written"] = sorted({int(x) for x in written if str(x).isdigit()} | set(METRICS.get("written") or []))
+
+
+def writable(root: Path) -> str | None:
+    """Why today's log file cannot be appended to; None when it can. Nothing is written by the check."""
+    f = log_file(root, actor(root), datetime.now().astimezone().date().isoformat())
+    try:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with open(f, "a", encoding="utf-8"):
+            pass
+        return None
+    except OSError as ex:
+        return f"{f.relative_to(root).as_posix()}: {ex.strerror or ex}"
 
 
 def _git(root: Path, *args: str) -> str | None:
@@ -134,6 +158,15 @@ def run(root_fn, argv: list[str], body) -> int:
         run.current = uuid.uuid4().hex[:12]
     outer = dict(METRICS)                   # each command logs only its own metrics (nested runs do not mix)
     METRICS.clear()
+    cmd = _cmd(argv)
+    if cmd in WRITING and "-h" not in argv and "--help" not in argv:
+        # A command that may write to Pleasanter leaves a line in the run log or does not run (ADR-0013): checked
+        # before anything is sent. Commands that only read still run and warn below.
+        why = writable(root)
+        if why:
+            print(f"pls {cmd}: REFUSED — the run log cannot be written ({why}). A command that may write to Pleasanter "
+                  "always leaves a log line (ADR-0013): repair ops/log/ and run it again. Nothing was sent.", file=sys.stderr)
+            return 2
     _DEPTH[0] += 1
     t0, result, code, message = time.monotonic(), "error", None, None
     try:
@@ -152,14 +185,17 @@ def run(root_fn, argv: list[str], body) -> int:
         mine = dict(METRICS)
         METRICS.clear()
         METRICS.update(outer)
-        cmd = _cmd(argv)
+        env, release = mine.pop("_env", None), mine.pop("_release", None)
         if cmd != "step":                   # a step marker writes its own event
-            append(root, {"kind": "command", "run_id": run.current, "cmd": cmd, "args": argv,
-                          "env": _option(argv, "--env"), "site": _option(argv, "--site"),
-                          "release": _option(argv, "--release") or (argv[1] if cmd in ("apply", "bootstrap", "mark-applied")
-                                                                     and len(argv) > 1 else None),
-                          "result": result, "exit_code": code, "duration_ms": int((time.monotonic() - t0) * 1000),
-                          "writes": cmd in WRITING, "metrics": mine or None, "message": message})
+            f = append(root, {"kind": "command", "run_id": run.current, "cmd": cmd, "args": argv,
+                              "env": env or _option(argv, "--env"), "site": _option(argv, "--site"),
+                              "release": release or _option(argv, "--release")
+                              or (argv[1] if cmd in ("apply", "bootstrap", "mark-applied", "migrate") and len(argv) > 1 else None),
+                              "result": result, "exit_code": code, "duration_ms": int((time.monotonic() - t0) * 1000),
+                              "writes": cmd in WRITING, "metrics": mine or None, "message": message})
+            if f == Path():                 # only reading commands get here without a log; they still say so
+                print(f"pls {cmd}: warning — the run log could not be written (ops/log/); this command left no log line",
+                      file=sys.stderr)
 
 
 run.current = None

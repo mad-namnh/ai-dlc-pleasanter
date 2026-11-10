@@ -54,7 +54,7 @@ This ADR lists the boundaries as they are on 2026-11-10. It does **not** accept 
 **Gaps that are not boundaries** (code can close them; they remain review findings until fixed or until Nam records an explicit decision in `docs/tech-debt.md`):
 - ~~approval bound to a release id, not to the payload content~~ — closed 2026-11-09: a G4 record stores the digest of each planned release (`pls_release_digest`); `apply` / `bootstrap` on stg refuse a release changed since G4;
 - ~~recovery status after a failed restore~~ — closed 2026-11-09: `recovery-required`, decided by read-back;
-- behaviour when the run log cannot be written (it fails open; roadmap P2-5);
+- ~~behaviour when the run log cannot be written (it fails open)~~ — closed 2026-11-10: writing commands are refused before anything is sent; reading commands warn (ADR-0013);
 - ~~handling of a timeout after the server has written~~ — closed 2026-11-09: `uncertain`, no blind restore or retry; `mark-applied` reads back.
 - ~~migrations (`bulkupsert`) run only through the browser runner, without a guard~~ — closed 2026-11-10: `pls migrate` over HTTP; the runner's `bulkUpsert` refuses non-dev plans.
 - ~~the typed confirmation accepts piped stdin~~ — closed 2026-11-10: typing counts only at a terminal; `pls test` outside dev needs the G4 of the release under test or the person's confirmation (ADR-0008);
