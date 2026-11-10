@@ -21,6 +21,8 @@
 
 **Next build work (roadmap order):** P2-3, P2-6, P2-7, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
+**Agent team (set up 2026-11-11, ADR-0016 Proposed).** Framework tasks start with the skill `pls-x-dev-orchestrator` (`.claude/skills/`); rules in `docs/agent-rules.md`; three subagents in `.claude/agents/` (reviewer, eval case-runner, KB curator); permission `deny` rules in `.claude/settings.json` (no hook yet — TD-21). Setup evidence: `plans/2026-11-11-agent-team-setup/` (`prompt-rev4.md`, `log.md`). **Still to do in a NEW session, before anything else:** the checks in `plans/2026-11-11-agent-team-setup/permission-checks.md` (do the rules fire? is the skill found from a cold start?), then the trial task Nam chose (roadmap P3-1; prompt at the end of `log.md`). Protected paths (`.claude/**`, `docs/agent-rules.md`, `docs/review-criteria.md`, `evals/**/expected.md`, `templates/project/CLAUDE.md`) are changed by Nam or after Nam lifts the rule for that change. Nam to decide: ADR-0016 and its 4 open questions.
+
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
 - One roadmap item per commit, conventional message, no AI references, local only. Before each commit: full Python + node suites, and the new tests run against the parent commit (temporary `git worktree` in the scratchpad) to show they fail there.

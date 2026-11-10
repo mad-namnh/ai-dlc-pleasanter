@@ -50,3 +50,18 @@ Applies to every task in this repository. It never overrides the Mandatory rules
 - **Verification scales with risk:** Light — re-read the change; Standard — the affected tests while working; Critical — also an independent review when the change touches a write guard, a gate or secrets. The commit rules in `HANDOFF.md` ("How we work": full suites, new tests shown failing on the parent commit) apply to every tier and are not reduced by this section.
 - **Cost never buys down correctness, security or required verification.**
 - **Evals are exempt:** a skill eval runs on the model its result file records (see `HANDOFF.md`, "How we work"); do not route it to a cheaper model.
+
+## Working as an agent team
+
+Framework tasks are run by the main session as Orchestrator, with the skill `pls-x-dev-orchestrator` (`.claude/skills/`). Design: [ADR-0016](docs/adr/0016-agent-team-for-framework-development.md) (Proposed). Rules — stop points, who writes what, scratch space, budget: [`docs/agent-rules.md`](docs/agent-rules.md).
+
+- The Orchestrator plans, implements, verifies and commits locally itself. Three subagents (`.claude/agents/`) do only what must be separate: `pls-x-reviewer` — read-only review of a Standard or Critical change; `pls-x-eval-case-runner` — one blind eval case per call; `pls-kb-curator` — knowledge-base edits from supplied evidence.
+- Nam's global rules (`~/.claude/rules`) stay in force. Where they name an agent, this repository uses:
+
+| Global rule says | In this repository |
+|---|---|
+| delegate to `planner` | the Orchestrator writes `plans/<date>-<slug>/plan.md` |
+| delegate to `tester` | both framework suites, run by the Orchestrator before every commit |
+| delegate to `code-reviewer` | the subagent `pls-x-reviewer` |
+
+- Reports to Nam are in Vietnamese.

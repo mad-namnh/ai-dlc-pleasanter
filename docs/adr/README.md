@@ -17,5 +17,6 @@
 | [0012](0012-scheduled-server-scripts-scope.md) | Scope of scheduled (background) server scripts | Accepted (2026-11-05) — option B: files in git, manual deploy, person verifies (no API) |
 | [0014](0014-trust-boundaries.md) | Trust boundaries — what `pls` enforces and what it trusts | Proposed (2026-11-09) |
 | [0015](0015-undoing-an-applied-release.md) | Undoing a release that was applied successfully (`pls rollback`) | Proposed (2026-11-11) — nothing built |
+| [0016](0016-agent-team-for-framework-development.md) | An agent team for developing the framework (Orchestrator + three subagents, permission rules) | Proposed (2026-11-11) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

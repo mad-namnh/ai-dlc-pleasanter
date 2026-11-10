@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/agents/**)",
+      "Edit(/.claude/skills/**)",
+      "Edit(/docs/agent-rules.md)",
+      "Edit(/docs/review-criteria.md)",
+      "Edit(/evals/**/expected.md)",
+      "Edit(/templates/project/CLAUDE.md)",
+      "Edit(//**/.pls/**)",
+      "Read(//**/.pls/**)"
+    ]
+  }
+}
