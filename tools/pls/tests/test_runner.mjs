@@ -28,11 +28,12 @@ function fakePleasanter(sites, failOn = null) {
 }
 
 const plan = {
-  env: 'dev', env_role: 'dev',
-  steps: [{site: 'b', site_id: 202, payload_file: 'payload-b.json', expect_updated_time: 'tb'},
-          {site: 'a', site_id: 201, payload_file: 'payload-a.json', expect_updated_time: 'ta'}],
-  rollback: [{site: 'a', site_id: 201, payload_file: 'rollback-a.json'},
-             {site: 'b', site_id: 202, payload_file: 'rollback-b.json'}],
+  env: 'dev', env_role: 'dev', sites: ['b', 'a'],
+  per_site: {a: {site_id: 201, snapshot_updated_time: 'ta'}, b: {site_id: 202, snapshot_updated_time: 'tb'}},
+  steps: [{op: 'updatesite', site: 'b', site_id: 202, payload_file: 'payload-b.json', expect_updated_time: 'tb'},
+          {op: 'updatesite', site: 'a', site_id: 201, payload_file: 'payload-a.json', expect_updated_time: 'ta'}],
+  rollback: [{op: 'updatesite', site: 'a', site_id: 201, payload_file: 'rollback-a.json'},
+             {op: 'updatesite', site: 'b', site_id: 202, payload_file: 'rollback-b.json'}],
 };
 const pl = tag => ({Title: tag, ReferenceType: 'Results', SiteSettings: {tag}});
 const files = {'payload-a.json': pl('new-a'), 'payload-b.json': pl('new-b'), 'rollback-a.json': pl('old-a'), 'rollback-b.json': pl('old-b')};
@@ -78,6 +79,24 @@ test('refuses a step whose site id differs from per_site', async () => {
   const {runner, calls} = fakePleasanter(sites());
   const r = await runner.applyRelease({...plan, per_site: {a: {site_id: 201}, b: {site_id: 999}}}, files);
   assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
+});
+
+test('refuses steps that do not match the planned sites, files or snapshot (same rule as pls apply)', async () => {
+  const extra = {op: 'updatesite', site: 'shared', site_id: 902, payload_file: 'payload-b.json', expect_updated_time: 'tb'};
+  const bad = {
+    'extra step': {...plan, steps: [...plan.steps, extra]},
+    'other file': {...plan, steps: [{...plan.steps[0], payload_file: 'payload-a.json'}, plan.steps[1]]},
+    'other snapshot': {...plan, steps: [{...plan.steps[0], expect_updated_time: 'later'}, plan.steps[1]]},
+    'rollback not reversed': {...plan, rollback: [...plan.rollback].reverse()},
+    'no per_site': {...plan, per_site: undefined},
+  };
+  for (const [label, p] of Object.entries(bad)) {
+    const {runner, calls} = fakePleasanter(sites());
+    const r = await runner.applyRelease(p, files);
+    assert.equal(r.status, 'refused', label); assert.equal(calls.length, 0, label);
+    await assert.rejects(runner.rollbackRelease(p, files), undefined, label);
+    assert.equal(calls.length, 0, label);
+  }
 });
 
 test('refuses when a payload or rollback file is missing', async () => {

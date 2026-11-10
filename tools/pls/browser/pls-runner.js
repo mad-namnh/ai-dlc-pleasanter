@@ -32,9 +32,30 @@ var plsRunner = (() => {
       return `plan for ${plan && plan.env} has env_role ${JSON.stringify(plan && plan.env_role)}: the browser runner ` +
         'writes only dev (ADR-0014 TB-7); use pls apply / pls bootstrap over HTTP, or re-plan with a current pls';
     }
-    for (const s of [...(plan.steps || []), ...(plan.rollback || [])]) {     // writes use steps, not per_site
-      const ps = plan.per_site && plan.per_site[s.site];
-      if (plan.per_site && (!ps || ps.site_id !== s.site_id)) return `step for ${s.site} does not match per_site — re-plan`;
+    return null;
+  };
+  // Same rule as pls plan_steps_problem: the writes use steps / rollback, the checks read per_site; both must name the
+  // same sites, ids and files, each site once, in the planned order (rollback reversed).
+  const stepsRefusal = plan => {
+    const sites = plan.sites, per = plan.per_site;
+    if (!Array.isArray(sites) || !sites.length || !per || Object.keys(per).sort().join('\u0000') !== [...sites].sort().join('\u0000')) {
+      return 'plan sites and per_site do not name the same sites — re-plan';
+    }
+    for (const [part, key, prefix, order] of [['steps', 'payload_file', 'payload', sites],
+                                              ['rollback', 'rollback_file', 'rollback', [...sites].reverse()]]) {
+      const st = plan[part];
+      if (!Array.isArray(st) || st.map(x => x && x.site).join('\u0000') !== order.join('\u0000')) {
+        return `plan ${part} do not list exactly the sites ${order.join(', ')} — re-plan`;
+      }
+      for (const x of st) {
+        const ps = per[x.site], file = ps[key] || `${prefix}-${x.site}.json`;
+        if (x.op !== 'updatesite' || x.site_id !== ps.site_id || x.payload_file !== file) {
+          return `plan ${part} entry for ${x.site} does not match per_site (site id, file or op) — re-plan`;
+        }
+        if (part === 'steps' && 'snapshot_updated_time' in ps && x.expect_updated_time !== ps.snapshot_updated_time) {
+          return `plan steps entry for ${x.site}: expect_updated_time is not the planned snapshot's — re-plan`;
+        }
+      }
     }
     return null;
   };
@@ -152,13 +173,13 @@ var plsRunner = (() => {
     return {log, failed};
   };
   const rollbackRelease = async (plan, files, sites) => {
-    const no = planRefusal(plan);
+    const no = planRefusal(plan) || stepsRefusal(plan);
     if (no) throw new Error(no);
     return (await restoreSites(plan, files, sites)).log;
   };
 
   const applyRelease = async (plan, files) => {
-    const no = planRefusal(plan);
+    const no = planRefusal(plan) || stepsRefusal(plan);
     if (no) return {status: 'refused', log: [no]};
     const log = [];
     for (const step of plan.steps) {           // files present before anything is written

@@ -948,15 +948,39 @@ def plan_steps_problem(plan: dict) -> str | None:
     """`apply` writes plan["steps"] and plan["rollback"]; the environment check reads plan["per_site"]. Both must
     name the same sites, ids and files, each site once, in the planned order, so no edited step writes elsewhere."""
     sites, per = plan.get("sites") or [], plan.get("per_site") or {}
-    for part, file_key, order in (("steps", "payload_file", sites), ("rollback", "rollback_file", sites[::-1])):
+    if not isinstance(sites, list) or not sites or not isinstance(per, dict) or set(per) != set(sites):
+        return "plan.json sites and per_site do not name the same sites"
+    for part, file_key, prefix, order in (("steps", "payload_file", "payload", sites),
+                                          ("rollback", "rollback_file", "rollback", sites[::-1])):
         steps = plan.get(part)
         if not isinstance(steps, list) or [s.get("site") if isinstance(s, dict) else None for s in steps] != order:
             return f"plan.json {part} do not list exactly the sites {order}"
         for s in steps:
             ps = per.get(s["site"]) or {}
-            if s.get("op") != "updatesite" or s.get("site_id") != ps.get("site_id") or \
-                    (ps.get(file_key) and s.get("payload_file") != ps[file_key]):
+            file_ = ps.get(file_key) or f"{prefix}-{s['site']}.json"      # release-plan names them so
+            if s.get("op") != "updatesite" or s.get("site_id") != ps.get("site_id") or s.get("payload_file") != file_:
                 return f"plan.json {part} entry for {s['site']} does not match per_site (site id, file or op)"
+            if part == "steps" and "snapshot_updated_time" in ps and s.get("expect_updated_time") != ps["snapshot_updated_time"]:
+                return f"plan.json steps entry for {s['site']}: expect_updated_time is not the planned snapshot's UpdatedTime"
+    return None
+
+
+def bootstrap_steps_problem(plan: dict, e: dict) -> str | None:
+    """`bootstrap` creates what bootstrap.json lists: each step must be a createsite of a site of this environment
+    (environments.json), under the environment's folder — never a site elsewhere."""
+    parent = e.get("parent_id")
+    if plan.get("parent_id") != parent:
+        return f"bootstrap.json parent_id {plan.get('parent_id')} is not envs.{plan.get('env')}.parent_id {parent}"
+    steps = plan.get("steps")
+    if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
+        return "bootstrap.json steps is not a list of steps"
+    names = [s.get("site") for s in steps]
+    if len(set(names)) != len(names):
+        return "bootstrap.json lists a site twice"
+    for s in steps:
+        conf = (e.get("sites") or {}).get(s.get("site"))
+        if s.get("op") != "createsite" or conf is None or s.get("parent_id") != parent:
+            return f"bootstrap.json step for {s.get('site')!r} is not a createsite of a site of this environment under {parent}"
     return None
 
 
@@ -2423,6 +2447,9 @@ def http_cmd(r: Path, a) -> int:
             bp = r / "releases" / a.release / "bootstrap.json"
             plan = rj(bp)
             e = env_conf(r, plan["env"])
+            bad_step = bootstrap_steps_problem(plan, e)
+            if bad_step:
+                raise H.TransportError(f"{a.release}: {bad_step} — make a new bootstrap plan")
             if plan.get("status") == "created":
                 raise H.TransportError(f"{a.release} was already created ({plan.get('created')}) — never create twice (S1)")
             done = set(plan.get("created") or {}) | {s for s, v in e["sites"].items() if v.get("id")}
@@ -3113,6 +3140,10 @@ def _main(argv=None) -> int:
         exports = dict(x.split("=", 1) for x in (a.exports or []))
         if set(exports) != set(plan["sites"]):
             print(f"NOT marked as applied: need --export for exactly {plan['sites']}")
+            return 1
+        bad_step = plan_steps_problem(plan)              # the read-back compares with the files the steps name
+        if bad_step:
+            print(f"NOT marked: {bad_step}")
             return 1
         status = plan.get("status")
         if status in APPLIED:      # re-marking would re-stamp applied_at and could turn drift into the baseline
