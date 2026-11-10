@@ -3052,7 +3052,9 @@ def main(argv=None) -> int:
     return LG.run(root, args, lambda: _main(args))
 
 
-def _main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """The one parser of pls: every command and its arguments. The command table of docs/architecture.md §7.1 is
+    checked against it by a test."""
     ap = argparse.ArgumentParser(prog="pls")
     sp = ap.add_subparsers(dest="cmd", required=True)
     for c in ("unpack", "diff", "drift", "classify", "plan", "slots"):
@@ -3227,7 +3229,11 @@ def _main(argv=None) -> int:
     s.add_argument("--env", required=True)
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
-    a = ap.parse_args(argv)
+    return ap
+
+
+def _main(argv=None) -> int:
+    a = build_parser().parse_args(argv)
     if a.cmd == "setup":
         setup_profile(a.profile)
         print("next: python <framework>/tools/pls/pls.py init <new project folder>")

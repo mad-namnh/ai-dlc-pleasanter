@@ -270,17 +270,18 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls package` | P5 (ADR-0003) | Zip a G4-approved release for the customer's operator: release files, migration folders without `backup/`, the G4 record, a manifest of sha256, `CHECKLIST.md` and a standard-library `verify.py` that refuses an altered file, an added file, a wrong target or release, or content the G4 record did not approve; deterministic zip | branch |
 | `pls migrate` | P5 (ADR-0004) | Send the explicit data of each migration folder of a release with one `bulkupsert`: write guard, G4 on non-dev (digest covers the folder), mail / job checks, typed confirmation, run recorded in `plan.json` before the call; `--rollback` sends `rollback.data` prepared by a person | branch |
 | `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback for a person on dev (ADR-0014 TB-7) |
+| `pls setup` | before P1 (once per machine and environment) | Save a machine profile — URL, folder, ids by name, key file outside the repositories — that `pls init` applies to every new project; the profile opts in to writes on that environment (ADR-0014 TB-10; `docs/setup.md`) | built (2026-11-05) |
 | `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework | **0.6** |
 | `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
+| `pls principals` | P3 (after G2) | Bind the roles of `design/roles.json` to group / user ids of an environment by name (read-only lookup); exit 1 while a role has no id | built (2026-11-05) |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
-| `pls validate` | P3, P4 | JSON schema (derived from real exports) | Not built |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | **v0.1** — L-SEC-01, L-REF-01, L-SCR-01, L-SLOT-01, L-LAD-01 |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
 | `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting | **0.4** |
 | `pls coverage [--env E]` | P4 | REQ ↔ design ↔ config ↔ test gaps for one environment (default dev): covered only when the design documents and config elements exist and every linked test passed **in that environment** (latest run per test); `api-only`, `failed`, `error`, `not-run` counted apart; an empty `traceability.json` is a gap | **v0.1**; per environment since 2026-11-10 |
 | `pls drift` | P5, P6 | Live vs **last applied release** (D11); reports whether reverting is data-impacting | **v0.2** |
 | `pls slots` | P5, P6 | Column-slot check: live target vs git vs slot ledger (A2, ADR-0002) — collision, slot used outside the ledger (incl. editor-only slots), repurposed label, git slot not allocated | **v0.3** |
-| `pls plan` / `deploy` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — `pls plan` (one site) and `pls release-plan` (several sites: order by `${site:x}` dependencies, per-site snapshot + rollback, reverse-order restore, nothing written if any site fails). Runner `applyRelease`: preflight on `UpdatedTime`, ordered apply, automatic restore on failure; smoke tests still run by hand (`runTests`) |
+| `pls plan` / `release-plan` | P5 | Ordered, complete-payload deploy with snapshot and rollback (A3, D4); **refuses on unresolved drift and on column-slot findings** (missing ledger = refused) | **v0.3** — `pls plan` (one site) and `pls release-plan` (several sites: order by `${site:x}` dependencies, per-site snapshot + rollback, reverse-order restore, nothing written if any site fails). Runner `applyRelease`: preflight on `UpdatedTime`, ordered apply, automatic restore on failure; smoke tests still run by hand (`runTests`) |
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 | `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package; names the KB entries not verified on that version, as `release-plan` does in its `VERSION` lines (ADR-0009) | branch `brownfield-adr` |
@@ -297,23 +298,29 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls review as-is` | onboarding (I4, I5) | Record that a G2 approver reviewed `design/as-is/<site>.md`, bound to its sha256; only then does `DES-000-as-is-<site>.md` clear L-LAD-01 | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4. A G4 approval stores the digest of each planned release (`pls_release_digest`); a release changed after G4 is refused | branch |
 
+Planned, not built (not a command of `pls`): `validate` — JSON schema derived from real exports (P3, P4).
+
+The first column of this table is checked against the parser of `tools/pls/pls.py` by `tools/pls/tests/test_architecture_tables_match_the_parser_and_lint_rules.py`: a command the parser does not have, or a parser command without a row, fails the suite. Sub-actions (`skills check|sync`, `profile set`) and the other columns are not checked.
+
 ### 7.2 Lint rule catalogue (seeded from findings)
+
+**Rules `pls lint` reports.** The same test checks this table against the rule codes of the issues the lint code builds: a rule lint cannot report, or a reported rule without a row, fails the suite.
 
 | Rule | Source | Checks |
 |---|---|---|
 | L-SEC-01 | D5 | No secret-like values in configuration or scripts. Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
 | L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
+| L-REF-02 | S5, B2 | Every `${site:x}`, `${env:x}` and `${principal:x}` in the configuration is defined for every environment; scheduled scripts resolve for every environment that can receive them |
 | L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |
 | L-REF-04 | E4 | No `${env:x}` inside longer text when its value is a number or shorter than 6 characters: unpack maps such a value back only as a whole value (ADR-0005) |
 | L-SCR-01 | D7 | No top-level `const`/`let` in shared server scripts |
-| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |
-| L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason: a `design/decisions/DES-*.md` that names the script **and** its site as whole names (a name inside a longer word, a decision about another site, or any other file under `design/` does not count). Shared server scripts are not checked (open: decide in an ADR). `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
 | L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
 | L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
+| L-ENV-01 | `docs/setup.md` | Environment setup is finished: no principal id left as a `<…>` placeholder, no `parent_id` of 0 |
 | L-ENV-02 | ADR-0010 | `side_effects` values are known states |
 | L-JOB-01 | ADR-0012 | Scheduled scripts: `_index.json` is a list with unique names, and every entry has a body (and every body an entry) |
 | L-ONB-01 | lifecycle §0 | Origin `existing` without `ops/onboarding/*-summary.md`: no `REQ-*` / `DES-*` documents. The same check refuses `pls step` P1–P5 / G1–G4, `pls gate`, `bootstrap-plan` and `release-plan` |
@@ -321,6 +328,13 @@ One file, `traceability.json`, links the chain in both directions:
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
 | L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile; a damaged gate record is reported here |
 | L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
+
+**Checks made by other commands — never in the output of `pls lint`** (not checked by the test):
+
+| Check | Source | Checks |
+|---|---|---|
+| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
+| L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
 
 ### 7.3 AI assets (framework templates, installed into project repos)
