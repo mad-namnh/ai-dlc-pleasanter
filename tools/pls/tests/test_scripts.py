@@ -156,10 +156,14 @@ class CliTest(unittest.TestCase):
         self.assertEqual(self.raw().count("${site:anken}"), 2)
         with self.assertRaises(pls.Fail):                                                   # a person must be named
             pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px"])
-        self.assertEqual(pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px", "--reason", "CSS width", "--by", "Nam"]), 0)
+        with self.assertRaises(pls.Fail):                                                   # and their own words
+            pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px", "--reason", "CSS width", "--by", "Nam"])
+        self.assertEqual(pls.main(["refs", "--site", "anken", "--keep", "siteId: 797 px", "--reason", "CSS width", "--by", "Nam",
+                                   "--quote", "797 there is a width in px, keep it"]), 0)
         self.assertEqual(self.raw(), "var siteId = ${site:anken};\r\nvar w = 'siteId: 797 px';\r\nvar s = 797;\r\n")   # CRLF kept
         rec = json.loads((self.r / "design/refs-literal.json").read_text(encoding="utf-8"))["literal"][0]
-        self.assertEqual((rec["site"], rec["number"], rec["context"], rec["by"]), ("anken", "797", "siteId: 797 px", "Nam"))
+        self.assertEqual((rec["site"], rec["number"], rec["context"], rec["by"], rec["quote"]),
+                         ("anken", "797", "siteId: 797 px", "Nam", "797 there is a width in px, keep it"))
         self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)   # survives re-unpack
         self.assertIn("siteId: 797 px", self.raw())
         site = json.loads((self.r / "config/anken/site.json").read_text(encoding="utf-8"))
@@ -174,10 +178,14 @@ class CliTest(unittest.TestCase):
     def test_ref_marks_a_possible_number_and_survives_unpack(self):
         with self.assertRaises(pls.Fail):                                                   # a person must be named
             pls.main(["refs", "--site", "anken", "--ref", "var s = 797;"])
-        self.assertEqual(pls.main(["refs", "--site", "anken", "--ref", "var s = 797;", "--reason", "site of 案件", "--by", "Nam"]), 0)
+        with self.assertRaises(pls.Fail):                                                   # and their own words
+            pls.main(["refs", "--site", "anken", "--ref", "var s = 797;", "--reason", "site of 案件", "--by", "Nam", "--quote", " "])
+        self.assertEqual(pls.main(["refs", "--site", "anken", "--ref", "var s = 797;", "--reason", "site of 案件", "--by", "Nam",
+                                   "--quote", "yes, s is the 案件 site"]), 0)
         self.assertEqual(self.raw(), "var siteId = ${site:anken};\r\nvar w = 'siteId: ${site:anken} px';\r\nvar s = ${site:anken};\r\n")  # CRLF kept
         self.assertNotIn("L-REF-03", {i["rule"] for i in pls.lint(self.r)})       # the recorded reference covers it
         rec = json.loads((self.r / "design/refs-literal.json").read_text(encoding="utf-8"))["reference"][0]
+        self.assertEqual(rec["quote"], "yes, s is the 案件 site")
         self.assertEqual((rec["number"], rec["context"], rec["by"]), ("797", "var s = 797;", "Nam"))
         self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)   # survives re-unpack
         self.assertIn("var s = ${site:anken};", self.raw())
@@ -197,12 +205,12 @@ class CliTest(unittest.TestCase):
 
     def test_keep_needs_a_real_context(self):
         with self.assertRaises(pls.Fail):
-            pls.main(["refs", "--site", "anken", "--keep", "797", "--reason", "x", "--by", "Nam"])
+            pls.main(["refs", "--site", "anken", "--keep", "797", "--reason", "x", "--by", "Nam", "--quote", "q"])
         self.assertFalse((self.r / "design/refs-literal.json").exists())
 
     def test_unknown_context_is_an_error(self):
         with self.assertRaises(pls.Fail):
-            pls.main(["refs", "--site", "anken", "--keep", "nowhere 797 here", "--reason", "x", "--by", "Nam"])
+            pls.main(["refs", "--site", "anken", "--keep", "nowhere 797 here", "--reason", "x", "--by", "Nam", "--quote", "q"])
 
     def test_broken_decisions_file_is_a_clear_error(self):
         (self.r / "design/refs-literal.json").write_text('{"literal": [{"site": "anken", "number": "797"}]}', encoding="utf-8")

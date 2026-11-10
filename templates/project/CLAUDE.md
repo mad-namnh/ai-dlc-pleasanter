@@ -29,7 +29,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 
 ## Hard rules
 
-1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`).
+1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`). The rows Origin, Approvers and Operators below and every environment `role` change only through `pls profile set … --quote "<their words>"`, never by hand.
 2. **Writes only to environments `pls` allows:** `role: dev`, or stg after G4, with `allow_write: true` in the operator's `.pls/connections.json`. Never change roles or `allow_write` to get past a refusal. Never write to prod.
 3. **`pls apply` / `pls bootstrap` need the person:** they run the command, or they tell you to add `--yes` for that target. Never add `--yes` on your own.
 4. **No keys, secrets or business data in git or chat.**

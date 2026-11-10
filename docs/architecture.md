@@ -287,6 +287,8 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts | branch |
 | `pls jobs-verified` | P5 (ADR-0012) | Record that an operator of the release's env (profile row `Operators`) or a G4 approver deployed and checked its scheduled scripts by hand; until then the next release lists them again | branch |
+| `pls profile set` | I4 | Set profile rows Approvers / Operators / Origin or an environment `role` as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing, L-PRF-01) | branch |
+| `pls review as-is` | onboarding (I4, I5) | Record that a G2 approver reviewed `design/as-is/<site>.md`, bound to its sha256; only then does `DES-000-as-is-<site>.md` clear L-LAD-01 | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4. A G4 approval stores the digest of each planned release (`pls_release_digest`); a release changed after G4 is refused | branch |
 
 ### 7.2 Lint rule catalogue (seeded from findings)
@@ -300,7 +302,7 @@ One file, `traceability.json`, links the chain in both directions:
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
-| L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason |
+| L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason. `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
 | L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
@@ -310,7 +312,8 @@ One file, `traceability.json`, links the chain in both directions:
 | L-ONB-01 | lifecycle §0 | Origin `existing` without `ops/onboarding/*-summary.md`: no `REQ-*` / `DES-*` documents. The same check refuses `pls step` P1–P5 / G1–G4, `pls gate`, `bootstrap-plan` and `release-plan` |
 | L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
-| L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile |
+| L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile; a damaged gate record is reported here |
+| L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
 | P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
 
 ### 7.3 AI assets (framework templates, installed into project repos)

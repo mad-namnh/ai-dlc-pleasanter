@@ -86,8 +86,9 @@ class PlsTest(unittest.TestCase):
                    {"Id": 2, "Name": "s1", "Body": "var k = 'sk-ant-abcdefghijklmnop'; items.Get(202, '{}');"}]
         self.unpack_dev(scripts=scripts)
         rules = sorted({i["rule"] for i in pls.lint(self.r)})
-        # 202 is a stg id → not converted by dev unpack → hard-coded reference
-        self.assertEqual(rules, ["L-LAD-01", "L-REF-01", "L-SCR-01", "L-SEC-01"])
+        # 202 is a stg id → not converted by dev unpack → hard-coded reference;
+        # L-PRF-01: the fixture's Approvers row and stg role were written by hand, not through pls profile set
+        self.assertEqual(rules, ["L-LAD-01", "L-PRF-01", "L-REF-01", "L-SCR-01", "L-SEC-01"])
 
     def job_files(self, jobs: dict, entries: list | None = None):
         import pls_side_effects as SE

@@ -8,7 +8,8 @@ commands trust:
 - `apply` / `bootstrap` on stg need a G4 approval naming that release or bootstrap id, bound to its content
   (pls_release_digest): a release changed after G4 is refused;
 - lint L-GATE-01: every "G<n> approved" status line in a REQ, DES, G3 or approvals file has its record.
-Only names listed as approvers in the project profile (`CLAUDE.md`, row "Approvers") are accepted.
+Only names listed as approvers in the project profile (`CLAUDE.md`, row "Approvers") are accepted; once the row has a
+`pls profile set` record, the recorded value is the one read (pls_profile_records).
 The last decision counts: ordered by the instant in `at` (a rejection wins a tie); a record dated in the future or
 of the wrong shape refuses every gate check until a person repairs or removes it.
 """
@@ -20,6 +21,7 @@ import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pls_profile_records as PR
 import pls_release_digest as RD
 
 GATES = ("G1", "G2", "G3", "G4")
@@ -81,8 +83,7 @@ def _gates(text: str) -> set[str]:
 
 
 def _approver_for(root: Path, name: str, gate: str) -> str:
-    prof = root / "CLAUDE.md"
-    names = approvers(prof.read_text(encoding="utf-8")) if prof.exists() else {}
+    names = approvers(PR.effective_profile_text(root))
     if not names:
         raise GateError("the project profile names no approver: ask the person who approves this gate and add the name "
                         "to the Approvers row of CLAUDE.md after they say it")
@@ -122,8 +123,7 @@ def job_verifier(root: Path, name: str, env: str, approved_by: str | None = None
     """Who may confirm the manual deploy of scheduled scripts on `env`: an operator of that environment (profile row
     Operators) or a G4 approver. Without an Operators row only G4 approvers (older projects). `approved_by`, when
     given, must be a G4 approver. Returns the record fields; raises GateError for a name the profile does not hold."""
-    prof = root / "CLAUDE.md"
-    ops = operators(prof.read_text(encoding="utf-8")) if prof.exists() else None
+    ops = operators(PR.effective_profile_text(root))
     op = next((n for n in (ops or {}).get(env, set()) if n.casefold() == name.strip().casefold()), None)
     if op:
         rec = {"by": op, "role": "operator", "env": env}
@@ -274,8 +274,7 @@ ONBOARDING_SUMMARY = "ops/onboarding/*-summary.md"
 
 def origin(root: Path) -> str | None:
     """Origin of the project profile (`new` / `existing`); None when the row is missing or still the template text."""
-    prof = root / "CLAUDE.md"
-    m = _ORIGIN.search(prof.read_text(encoding="utf-8")) if prof.exists() else None
+    m = _ORIGIN.search(PR.effective_profile_text(root))
     return m.group(1) if m else None
 
 
@@ -309,8 +308,7 @@ def lint(root: Path) -> list[dict]:
     except GateError as ex:            # a damaged record is itself the finding; the checks below would all refuse
         issues.append({"rule": "L-GATE-01", "site": "-", "msg": str(ex)})
         return issues
-    prof = root / "CLAUDE.md"
-    names = {n.casefold() for n in approvers(prof.read_text(encoding="utf-8"))} if prof.exists() else set()
+    names = {n.casefold() for n in approvers(PR.effective_profile_text(root))}
 
     def who_of(rest: str) -> str | None:
         m = _WHO.match(rest)

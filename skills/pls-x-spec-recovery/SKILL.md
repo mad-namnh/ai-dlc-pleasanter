@@ -39,7 +39,7 @@ Start with `pls spec-skeleton --site <site>`: it writes `design/as-is/<site>.md`
 - **未確認事項** has two parts: questions for the customer (Japanese) and points you can settle later from the configuration.
 - **No business data:** never read records; examples use placeholders.
 - **Ids:** write logical names (`${site:kokyaku}` → 顧客サイト), never numeric ids.
-- **Server scripts without a design decision** (lint L-LAD-01): the 9. section is that decision's source. After the person has reviewed the document — record it in its header (「レビュー: <name>, <date>」) and commit (`docs(as-is): …`) — add `design/decisions/DES-000-as-is-<site>.md` (English) listing each server script by `Name` with its purpose and rung 3 reason "existing behaviour, adopted"; this clears L-LAD-01 for adopted code only. Client scripts need no DES-000 entry.
+- **Server scripts without a design decision** (lint L-LAD-01): the 9. section is that decision's source. After the person has reviewed the document and said so — record it with `pls review as-is <site> --approver <name> --quote "<their words>"` (a G2 approver; never a relayed or paraphrased approval), note it in its header (「レビュー: <name>, <date>」) and commit (`docs(as-is): …`) — add `design/decisions/DES-000-as-is-<site>.md` (English) listing each server script by `Name` with its purpose and rung 3 reason "existing behaviour, adopted". L-LAD-01 accepts a DES-000 entry only for a script named in the reviewed document, and only while that document is unchanged since the record; the as-is document alone clears nothing. After any change to the document, the person reviews again. Client scripts need no DES-000 entry.
 
 ## Checklist
 

@@ -16,7 +16,11 @@ Commands:
   pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01, L-JOB-01, L-ONB-01)
+  profile set FIELD VALUE [--env E] --approver N --quote Q
+                                                set Approvers / Operators / Origin (CLAUDE.md) or role (environments.json)
+                                                as the person stated it; recorded under gates/profile/ (I4)
+  review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
+  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01, L-JOB-01, L-ONB-01, L-PRF-01)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports
@@ -63,6 +67,8 @@ import pls_scripts as SX                                    # noqa: E402 — scr
 import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
+import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
+import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
@@ -591,7 +597,7 @@ def lint(r: Path) -> list[dict]:
     e_all = envs(r)
     all_ids = {str(s["id"]) for e in e_all["envs"].values() for s in e["sites"].values() if s.get("id")}
     ledger = rj(r / "design/slot-ledger.json") if (r / "design/slot-ledger.json").exists() else None
-    decisions = "\n".join(p.read_text(encoding="utf-8") for p in (r / "design").rglob("*.md")) if (r / "design").exists() else ""
+    decided = AR.ladder_decided(r)                              # L-LAD-01: a reviewed as-is counts only via its record
     for env_name, ec in e_all["envs"].items():                   # L-ENV-01: setup not finished
         for n, v in (ec.get("principals") or {}).items():
             if "<" in str(v):
@@ -639,7 +645,7 @@ def lint(r: Path) -> list[dict]:
                                    "or record it (pls refs --ref)"})
                 if kind == "ServerScripts" and it.get("Shared") and TOP_LEVEL_DECL.search(body):
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
-                if kind == "ServerScripts" and not it.get("Shared") and nm and nm not in decisions:
+                if kind == "ServerScripts" and not it.get("Shared") and nm and not decided(nm):
                     issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
         for name in unconditioned_processes(m["settings"], view_missing_only=True):   # L-PRC-01 (D21)
             issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no View object: API execution fails "
@@ -680,6 +686,7 @@ def lint(r: Path) -> list[dict]:
                 if info.get("status") == "allocated" and col not in used:
                     issues.append({"rule": "L-SLOT-01", "site": site, "msg": f"ledger allocates {col} but configuration does not define it"})
     issues += GT.lint(r)                                          # L-GATE-01: approvals in documents have records (I4)
+    issues += PR.lint(r)                                          # L-PRF-01: guard inputs set through pls profile set
     return issues
 
 
@@ -794,6 +801,18 @@ def releases_for(r: Path, env: str, site: str, status: str | None = None) -> lis
     return sorted(out, key=lambda x: (_applied_key(x[1].get("applied_at")), x[1]["release"]))
 
 
+def _jobs_verified_holds(r: Path, v, env: str) -> bool:
+    """A `jobs.verified` entry counts only as `pls jobs-verified` writes it: the person's words, and a name the profile
+    still accepts for this environment (a hand-written entry by anyone else is not a confirmation)."""
+    if not isinstance(v, dict) or not isinstance(v.get("quote"), str) or not v["quote"].strip() or v.get("env") != env:
+        return False
+    try:
+        GT.job_verifier(r, str(v.get("by") or ""), env, v.get("approved_by"))
+    except GT.GateError:
+        return False
+    return True
+
+
 def last_applied_jobs(r: Path, env: str) -> dict | None:
     """Scheduled-script fingerprints of the last applied release of env whose jobs are known to be on the tenant
     (ADR-0012): it changed none, or a person recorded the manual deploy (`pls jobs-verified`). None when there is no
@@ -804,7 +823,7 @@ def last_applied_jobs(r: Path, env: str) -> dict | None:
         jobs = plan.get("jobs")
         if plan.get("env") != env or plan.get("status") not in APPLIED or SE.bad_plan_jobs(jobs) or jobs.get("fingerprints") is None:
             continue
-        if jobs["changed"] and not jobs.get("verified"):
+        if jobs["changed"] and not _jobs_verified_holds(r, jobs.get("verified"), env):
             continue                                   # manual deploy not confirmed: its changes are listed again
         key = (_applied_key(plan.get("applied_at")), plan.get("release") or "")
         if best is None or key > best[0]:
@@ -1396,9 +1415,9 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         for key, _ in ACL_KEYS for x in p.get(key) or [] if not str(x).startswith("${principal:")]
     if perms and not str(perms.get("inherit", "")).startswith("${site:"):
         principals.insert(0, f"permissions inherited from site {perms.get('inherit')} (not managed) — L-PERM-01")
-    decisions = "\n".join(p.read_text(encoding="utf-8") for p in (r / "design").rglob("*.md")) if (r / "design").exists() else ""
+    decided = AR.ladder_decided(r)                              # L-LAD-01: a reviewed as-is counts only via its record
     undecided = [it.get("Name") or f"(no name, Id {it.get('Id')})" for it in ss.get("ServerScripts") or []
-                 if not it.get("Shared") and (not it.get("Name") or it.get("Name") not in decisions)]
+                 if not it.get("Shared") and not decided(it.get("Name"))]
     counts = {"slots used": len(entries) - nf, "slots only in filters": nf}
     counts |= {k: len(ss.get(k) or []) for k in ("Columns", "Processes", "Views", "Notifications", "Reminders", "Summaries",
                                                   "Links", "ServerScripts", "Scripts", "Styles", "Htmls", "DashboardParts")}
@@ -1551,10 +1570,10 @@ def refs_cmd(r: Path, a) -> int:
         if a.summary:
             print("POSSIBLE by group: " + ", ".join(f"{g} {n}" for g, n in groups.most_common()))
         print(f"{a.site}: {len(uses)} site reference(s) in scripts; {possible} number(s) equal to a site id kept as "
-              "written — mark a real one with --ref \"<context>\" --reason … --by <name>")
+              "written — mark a real one with --ref \"<context>\" --reason … --by <name> --quote \"<their words>\"")
         return 0
-    if not (a.reason and a.by):
-        raise Fail("--keep needs --reason and --by (the person who decided)")
+    if not (a.reason and a.by and (a.quote or "").strip()):
+        raise Fail("--keep needs --reason, --by (the person who decided) and --quote (their own words)")
     found = [(name, num) for name, num in resolve.items() if re.search(SX.id_pattern(num), a.keep)]
     if len(found) != 1:
         raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
@@ -1578,6 +1597,7 @@ def refs_cmd(r: Path, a) -> int:
     f = r / "design" / "refs-literal.json"                  # the decision first: a later unpack applies it anyway
     doc = rj(f) if f.exists() else {"literal": []}
     doc["literal"].append({"site": a.site, "number": num, "context": a.keep, "reason": a.reason, "by": a.by,
+                           "quote": a.quote.strip(),
                            "date": datetime.now().astimezone().date().isoformat()})
     wj(f, doc)
     SX.load_literal(r)
@@ -1589,8 +1609,8 @@ def refs_cmd(r: Path, a) -> int:
 
 def _record_reference(r: Path, a, d: Path, resolve: dict) -> int:
     """A person says: this number, in this context, is a site id. Recorded first, then the git scripts change."""
-    if not (a.reason and a.by):
-        raise Fail("--ref needs --reason and --by (the person who decided)")
+    if not (a.reason and a.by and (a.quote or "").strip()):
+        raise Fail("--ref needs --reason, --by (the person who decided) and --quote (their own words)")
     found = [(name, num) for name, num in resolve.items() if re.search(SX.id_pattern(num), a.ref)]
     if len(found) != 1:
         raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
@@ -1613,7 +1633,7 @@ def _record_reference(r: Path, a, d: Path, resolve: dict) -> int:
     f = r / "design" / "refs-literal.json"
     doc = rj(f) if f.exists() else {"literal": []}
     doc.setdefault("reference", []).append({"site": a.site, "target": name, "number": num, "context": a.ref, "reason": a.reason,
-                                            "by": a.by, "date": datetime.now().astimezone().date().isoformat()})
+                                            "by": a.by, "quote": a.quote.strip(), "date": datetime.now().astimezone().date().isoformat()})
     wj(f, doc)
     SX.load_literal(r)                                       # the decision holds for the rest of this run too
     for path, new in targets:
@@ -2002,6 +2022,11 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
         text = re.sub(r"\| Operators \|.*\|", f"| Operators | dev: {approver}; stg: {approver}; prod: <customer operator> |", text, count=1)
     text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
     cm.write_text(text, encoding="utf-8")
+    if approver:          # the person running init states these values: recorded so a later hand edit is visible (L-PRF-01)
+        said = f"pls init {target.name} --approver {approver} --origin {origin}"
+        for field in ("Approvers", "Operators", "Origin"):
+            m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
+            PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
     (target / "pls.py").write_text(LAUNCHER, encoding="utf-8")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
@@ -2721,6 +2746,7 @@ def _main(argv=None) -> int:
     s.add_argument("--summary", action="store_true", help="group POSSIBLE numbers; print only the group 'other' line by line")
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
+    s.add_argument("--quote", help="the person's own words for --keep / --ref (never a relayed or paraphrased approval)")
     s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")
     s.add_argument("action", choices=["create", "refresh", "drop"])
     s.add_argument("--name", required=True, help="developer name; the environment is dev-<name>")
@@ -2756,6 +2782,18 @@ def _main(argv=None) -> int:
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
+    s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
+    s.add_argument("action", choices=["set"])
+    s.add_argument("field", choices=PR.FIELDS + (PR.ROLE,))
+    s.add_argument("value")
+    s.add_argument("--env", help="role: the environment in environments.json")
+    s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
+    s.add_argument("--quote", required=True, help="the person's own words for this decision")
+    s = sp.add_parser("review", help="record that the person reviewed an as-is document (I4); never record it yourself")
+    s.add_argument("kind", choices=["as-is"])
+    s.add_argument("site")
+    s.add_argument("--approver", required=True, help="a G2 approver of the profile")
+    s.add_argument("--quote", required=True, help="the person's own words for this review")
     s = sp.add_parser("jobs-verified", help="record that a person deployed and checked the scheduled scripts of an applied "
                                             "release (ADR-0012); never record it yourself")
     s.add_argument("release")
@@ -2855,6 +2893,25 @@ def _main(argv=None) -> int:
 
     if a.cmd == "refs":
         return refs_cmd(r, a)
+
+    if a.cmd == "profile":
+        try:
+            out = PR.set_field(r, a.field, a.value, a.approver, a.quote, a.env)
+        except GT.GateError as ex:
+            raise Fail(str(ex))
+        rec = rj(out)
+        print(f"{a.field}{' of ' + a.env if a.env else ''} = {rec['value']!r}, stated by {rec['approver']}: "
+              f"{out.relative_to(r).as_posix()}")
+        return 0
+
+    if a.cmd == "review":
+        try:
+            out = AR.record_review(r, a.site, a.approver, a.quote)
+        except GT.GateError as ex:
+            raise Fail(str(ex))
+        print(f"as-is review of {a.site} by {rj(out)['approver']}: {out.relative_to(r).as_posix()} — DES-000-as-is-{a.site}.md "
+              f"now clears L-LAD-01 for scripts named in design/as-is/{a.site}.md while that document is unchanged")
+        return 0
 
     if a.cmd == "sandbox":
         if a.action == "create":
