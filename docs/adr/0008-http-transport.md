@@ -29,7 +29,7 @@ The browser was needed only because the agent sandbox had no network path to Ple
 
 **Write guard:** environments.json `role` dev or stg **and** local `allow_write: true`; `role: prod` is never written by this tool. `apply` and `bootstrap` ask the operator to type the release id (agents do not pass `--yes` unless the person asks).
 
-**The browser runner stays** as the fallback for sandboxed agents without a network path. Both transports read and write the same files (plan, payloads, rollbacks, test specs, results), so a release can be planned by one and applied by the other.
+**The browser runner stays** as a fallback for a person on dev only; agents do not use it (ADR-0014 TB-7, design review 2026-11-09). Both transports read and write the same files (plan, payloads, rollbacks, test specs, results), so a release can be planned by one and applied by the other.
 
 ## Limits
 

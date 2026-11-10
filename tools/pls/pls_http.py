@@ -186,6 +186,20 @@ class Client:
         return st, (js or {}).get("Message", text[:200])
 
 
+def migrate(client: Client, site_id: int, keys: list, data: list) -> dict:
+    """One bulkupsert of a migration (D13), never retried. HTTP 200 → "migrated"; HTTP 4xx → "failed" (D18: a refused
+    call changes no record); any other answer or none at all → "uncertain" (records may have changed: a person checks
+    them against the backup before anything else runs)."""
+    try:
+        st, msg = client.bulk_upsert(site_id, keys, data)
+    except UncertainOutcome as ex:
+        return {"status": "uncertain", "message": str(ex)}
+    except TransportError as ex:
+        return {"status": "failed", "message": str(ex)}
+    status = "migrated" if st == 200 else "failed" if 400 <= st < 500 else "uncertain"
+    return {"status": status, "message": f"HTTP {st}: {msg}"}
+
+
 # ---------------------------------------------------------------- release (same semantics as runner applyRelease)
 
 def apply_release(client: Client, plan: dict, files: dict) -> dict:

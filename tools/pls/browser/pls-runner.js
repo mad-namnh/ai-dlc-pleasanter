@@ -1,7 +1,8 @@
 // pls browser runner — transport between the pls toolchain (files) and a Pleasanter environment.
 // Runs in a browser tab that is logged in to the TARGET Pleasanter (session auth, no API key).
-// Only for dev, driven by a person (ADR-0014 TB-7): applyRelease, rollbackRelease and bootstrapSites refuse a plan
-// whose env_role (written by pls release-plan / bootstrap-plan) is not "dev"; stg and prod go through pls over HTTP.
+// Only for dev, driven by a person — agents do not use it (ADR-0014 TB-7): applyRelease, rollbackRelease,
+// bootstrapSites and bulkUpsert refuse a plan whose env_role (written by pls release-plan / bootstrap-plan) is not
+// "dev"; stg and prod go through pls over HTTP (migrations: `pls migrate`).
 //
 //   await plsRunner.exportSite(siteId)                 → getsite response (save as export JSON)
 //   await plsRunner.apply(siteId, payload)             → updatesite with a COMPLETE payload (I2)
@@ -14,7 +15,8 @@
 //   await plsRunner.bootstrapSites(plan)           → new sites (ADR-0007): createsite skeletons from releases/R/bootstrap.json;
 //                                                        returns {site: newId} for `pls bind`; never deletes anything
 //   await plsRunner.backupRecords(siteId)              → every record of a site (paged), for migration/backup/ (ADR-0004)
-//   await plsRunner.bulkUpsert(siteId, keys, data)     → /bulkupsert; records matched by `keys` are updated, others created
+//   await plsRunner.bulkUpsert(plan, siteId, keys, data) → /bulkupsert for a dev plan; records matched by `keys` are
+//                                                        updated, others created. Guarded runs: `pls migrate`
 //     API updates do not create record versions (Ver stays 1 — D14), so the backup is the only way back.
 var plsRunner = (() => {
   const call = async (path, body, method = 'POST') => {
@@ -222,7 +224,9 @@ var plsRunner = (() => {
     return {site_id: siteId, taken_at: new Date().toISOString(), count: all.length, records: all};
   };
 
-  const bulkUpsert = async (siteId, keys, data) => {
+  const bulkUpsert = async (plan, siteId, keys, data) => {
+    const no = planRefusal(plan);
+    if (no) return {http: null, message: no, refused: true};
     const r = await call(`/api/items/${siteId}/bulkupsert`, {Keys: keys, Data: data});
     return {http: r.http, message: r.json && r.json.Message};
   };

@@ -153,12 +153,12 @@ def test_sites(spec: dict, default_site: Any, all_sites: set) -> set[str]:
     return sites
 
 
-def test_refusal(env: str, eff: dict, mailing_sites: dict[str, list[str]]) -> str | None:
+def test_refusal(env: str, eff: dict, mailing_sites: dict[str, list[str]], subject: str = "these tests") -> str | None:
     """Reason to refuse a test run, or None. mailing_sites: site id → its mail-sending elements (live)."""
     if eff["mail"] in MAIL_SAFE or not mailing_sites:
         return None
     detail = "; ".join(f"site {s}: {', '.join(els[:3])}{' …' if len(els) > 3 else ''}" for s, els in sorted(mailing_sites.items()))
-    return (f"REFUSED (ADR-0010): these tests change records on sites that send mail ({detail}), and envs.{env}.side_effects.mail "
+    return (f"REFUSED (ADR-0010): {subject} change(s) records on sites that send mail ({detail}), and envs.{env}.side_effects.mail "
             f"is {eff['mail']!r}. Every notification and reminder counts, also disabled ones (safe side), and a record given by --var "
             "counts for every site of the env. A person checks the environment's SMTP and sets mail to 'sink' or 'disabled' first.")
 
@@ -297,18 +297,18 @@ def changed_jobs(before: dict[str, str] | None, after: dict[str, str]) -> list[s
     return out
 
 
-def jobs_test_refusal(env: str, eff: dict, jobs: dict[str, str]) -> tuple[str | None, str | None]:
+def jobs_test_refusal(env: str, eff: dict, jobs: dict[str, str], subject: str = "these tests") -> tuple[str | None, str | None]:
     """(refusal, warning) for tests that change records. A scheduled script runs tenant-wide on its own schedule and
     is not tied to one site, so every declared job counts for every writing test (safe side)."""
     if not jobs or eff["jobs"] == "disabled":
         return None, None
     names = ", ".join(sorted(jobs))
     if eff["jobs"] == "unknown":
-        return (f"REFUSED (ADR-0010, ADR-0012): these tests change records, the project declares scheduled server scripts ({names}) "
-                f"and envs.{env}.side_effects.jobs is 'unknown'. A scheduled script can act on the test records (update them, "
+        return (f"REFUSED (ADR-0010, ADR-0012): {subject} change(s) records, the project declares scheduled server scripts ({names}) "
+                f"and envs.{env}.side_effects.jobs is 'unknown'. A scheduled script can act on these records (update them, "
                 "mail about them) on its next run. A person checks whether scheduled scripts run on this environment and records "
                 "jobs as 'disabled' or 'live'."), None
-    return None, f"WARNING (ADR-0010): scheduled scripts run on {env} ({names}); they may act on the records these tests create"
+    return None, f"WARNING (ADR-0010): scheduled scripts run on {env} ({names}); they may act on the records {subject} write(s)"
 
 
 def jobs_apply_refusal(env: str, eff: dict, changed: list[str] | None, declared: bool) -> tuple[str | None, str | None]:

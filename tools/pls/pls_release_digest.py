@@ -2,7 +2,7 @@
 
 A G4 record stores, per release, the digest of the release folder as it was when the person approved it:
 plan.json (or bootstrap.json) without the fields that later commands fill in, plus every payload, rollback and
-scheduled-script file the plan uses. `apply` / `bootstrap` on stg recompute it and refuse on any difference, so a
+scheduled-script file the plan uses and every file of its migration folders (`migrate` sends their data). `apply` / `bootstrap` on stg recompute it and refuse on any difference, so a
 payload, a target environment or a site id edited after G4 is never written (I4).
 
 Mutable fields are a deny list on purpose: a field added later is covered by the digest until it is listed here,
@@ -14,9 +14,9 @@ import hashlib
 import json
 from pathlib import Path
 
-# filled in after G4 by apply, mark-applied, jobs-verified, bootstrap and bind
+# filled in after G4 by apply, mark-applied, migrate, jobs-verified, bootstrap and bind
 PLAN_MUTABLE = {"status", "applied_at", "apply_started_at", "apply_finished_at", "post_apply_check", "readback",
-                "checked_at"}
+                "checked_at", "migrations_run"}
 JOBS_MUTABLE = {"verified"}
 BOOTSTRAP_MUTABLE = {"status", "created", "created_at", "uncertain"}
 JOBS_FOLDER = "scheduled-scripts"
@@ -71,6 +71,14 @@ def digest(root: Path, release: str) -> dict:
         for p in sorted(jobs.rglob("*")) if jobs.is_dir() else []:
             if p.is_file():
                 files[p.relative_to(f.parent).as_posix()] = _sha(p.read_bytes())
+        migs = doc.get("migration")
+        for mig in [migs] if isinstance(migs, str) else migs if isinstance(migs, list) else []:
+            d = Path(mig) if Path(mig).is_absolute() else root / mig
+            if not d.is_dir():
+                raise DigestError(f"{release}: migration folder {mig} named in plan.json is missing")
+            for p in sorted(d.rglob("*")):
+                if p.is_file():
+                    files[f"migration:{mig}/{p.relative_to(d).as_posix()}"] = _sha(p.read_bytes())
     body = json.dumps({"file": f.name, "content": _content(doc, bootstrap), "files": files},
                       ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return {"env": doc.get("env"), "sha256": _sha(body.encode("utf-8"))}
@@ -85,6 +93,6 @@ def check(root: Path, release: str, bound: dict | None) -> str | None:
     if now["env"] != bound.get("env"):
         return f"{release} now targets {now['env']!r}, G4 approved it for {bound.get('env')!r}"
     if now["sha256"] != bound["sha256"]:
-        return (f"{release} changed since G4 (plan, payload, rollback or scheduled-script files) — show the person "
+        return (f"{release} changed since G4 (plan, payload, rollback, scheduled-script or migration files) — show the person "
                 f"the new plan; a new G4 is needed")
     return None

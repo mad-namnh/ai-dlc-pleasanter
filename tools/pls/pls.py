@@ -36,6 +36,7 @@ Commands:
                                                 (${site:x} references, referenced sites first), snapshot + rollback per
                                                 site, reverse-order rollback; nothing is written if any site fails
   bootstrap-plan --env E --release R            new sites (ADR-0007): createsite plan for managed sites without an id in E
+  migrate <release> [--rollback] [--yes]        data migrations of a data-impacting release over HTTP, before apply (ADR-0004)
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
   mark-applied <release> --export S=F …         same for a multi-site plan (every site must match)
@@ -69,6 +70,7 @@ import pls_kbverify as KV                                   # noqa: E402 — exe
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
+import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
@@ -2260,6 +2262,69 @@ def http_cmd(r: Path, a) -> int:
                 print(f"{site}: {out.relative_to(r)}")
             return 0
 
+        if a.cmd == "migrate":
+            rel = r / "releases" / a.release
+            plan = rj(rel / "plan.json")
+            migs = MI.dirs(plan)
+            if not migs:
+                raise H.TransportError(f"{a.release} carries no migration (release-plan --migration DIR)")
+            e = env_conf(r, plan["env"])
+            H_, conn, c = _client(r, plan["env"])
+            H.assert_writable(e, conn, plan["env"])
+            if e.get("role") != "dev":
+                try:
+                    GT.require(r, "G4", a.release, f"migrating data in {plan['env']}")
+                except GT.GateError as ex:
+                    raise H.TransportError(str(ex))
+            probs = migration_problems(r, migs)
+            if probs:
+                raise H.TransportError(f"{a.release}: " + "; ".join(probs) + " (ADR-0004)")
+            direction = "rollback" if a.rollback else "forward"
+            todo = []
+            try:
+                for m in migs:
+                    why = MI.state_problem(plan, m, a.rollback)
+                    if why:
+                        raise MI.MigrateError(why)
+                    mg = MI.load(r, m, a.rollback)
+                    todo.append(dict(mg, site_id=MI.target(e, plan["env"], mg["site"])))
+            except MI.MigrateError as ex:
+                raise H.TransportError(f"{a.release}: {ex}")
+            try:
+                eff = env_effects(r, e)
+                jobs = SE.declared_jobs(r)
+            except ValueError as ex:
+                raise H.TransportError(f"envs.{plan['env']} / {SE.JOBS_DIR.as_posix()}: {ex}")
+            subject = "this migration"
+            refusal, warning = SE.jobs_test_refusal(plan["env"], eff, jobs, subject)
+            if not refusal and eff["mail"] not in SE.MAIL_SAFE:
+                mailing = {}
+                for t in todo:
+                    els = sorted(SE.mail_elements(c.export_site(t["site_id"])["Response"]["Data"]["SiteSettings"]))
+                    if els:
+                        mailing[t["site_id"]] = els
+                refusal = SE.test_refusal(plan["env"], eff, mailing, subject)
+            if refusal:
+                raise H.TransportError(refusal)
+            if warning:
+                print(warning)
+            what = ", ".join(f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
+            if not _confirm(a.release, a.yes, f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}"):
+                return 1
+            for t in todo:
+                entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
+                wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
+                res = H.migrate(c, t["site_id"], t["keys"], t["data"])
+                MI.finish(entry, res)
+                wj(rel / "plan.json", plan)
+                print(f"{t['dir']}: {direction} {res['status']} ({res['message']})")
+                if res["status"] != "migrated":
+                    print(f"{a.release}: stopped — " + ("nothing changed (D18); fix the data and run again" if res["status"] == "failed"
+                                                        else "records may have changed: a person compares them with backup/"))
+                    return 1
+            print(f"{a.release}: {direction} migration done" + ("" if a.rollback else f" — next: pls apply {a.release}"))
+            return 0
+
         if a.cmd == "apply":
             rel = r / "releases" / a.release
             plan = rj(rel / "plan.json")
@@ -2275,6 +2340,9 @@ def http_cmd(r: Path, a) -> int:
                     raise H.TransportError(str(ex))
             if plan.get("status") != "planned":
                 raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+            if MI.pending(plan):                         # ADR-0004 order: backup → conversion → configuration
+                raise H.TransportError(f"{a.release}: migrations {MI.pending(plan)} have not run — pls migrate {a.release} first "
+                                       "(ADR-0004: data is converted before the configuration changes)")
             for s_ in plan["sites"]:                         # the plan's ids must be this env's own sites (ADR-0011)
                 conf = e["sites"].get(s_) or {}
                 if conf.get("id") != plan["per_site"][s_].get("site_id") or conf.get("shared_from") or \
@@ -2727,6 +2795,10 @@ def _main(argv=None) -> int:
     s = sp.add_parser("apply", help="apply a planned release over HTTP, then export and mark-applied")
     s.add_argument("release")
     s.add_argument("--yes", action="store_true", help="skip typing the release id (only when the person asks for it)")
+    s = sp.add_parser("migrate", help="run the data migrations of a planned release over HTTP (bulkupsert, ADR-0004), before apply")
+    s.add_argument("release")
+    s.add_argument("--rollback", action="store_true", help="send each migration's rollback.data (prepared by a person from backup/)")
+    s.add_argument("--yes", action="store_true", help="skip typing the release id (only when the person asks for it)")
     s = sp.add_parser("bootstrap", help="create the sites of a bootstrap plan over HTTP, then bind (ADR-0007)")
     s.add_argument("release")
     s.add_argument("--yes", action="store_true")
@@ -2903,7 +2975,7 @@ def _main(argv=None) -> int:
         print(f"config/{a.site}/site.json: {'canonicalised' if after != before else 'already canonical'}")
         return 0
 
-    if a.cmd in ("http-check", "export", "apply", "bootstrap", "test", "backup", "version", "adopt", "adopt-package", "kb-verify"):
+    if a.cmd in ("http-check", "export", "apply", "migrate", "bootstrap", "test", "backup", "version", "adopt", "adopt-package", "kb-verify"):
         return http_cmd(r, a)
 
     if a.cmd == "refs":

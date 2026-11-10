@@ -21,7 +21,7 @@ sys.path.insert(0, str(HERE.parent))
 import pls  # noqa: E402
 import test_http as TH  # noqa: E402
 
-WRITES = {"apply", "bootstrap", "test", "kb-verify"}
+WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify"}
 NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "principals", "backup", "harvest", "sandbox"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
@@ -29,8 +29,8 @@ LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon"
 WRITE_ENDPOINT = re.compile(r"/(updatesite|createsite|bulkupsert|create|update|delete)\b|\{op\}")
 ALLOWED_WRITE_SITES = {("pls_http", "Client.apply"), ("pls_http", "Client.create_site"), ("pls_http", "Client.bulk_upsert"),
                        ("pls_http", "run_tests"), ("pls", "http_cmd")}
-CLIENT_WRITERS = {"apply": {"apply_release", "rollback"}, "create_site": {"bootstrap"}, "bulk_upsert": set()}
-WRITE_RUNNERS = {"apply_release": {"http_cmd"}, "rollback": {"apply_release"}, "bootstrap": {"http_cmd"},
+CLIENT_WRITERS = {"apply": {"apply_release", "rollback"}, "create_site": {"bootstrap"}, "bulk_upsert": {"migrate"}}
+WRITE_RUNNERS = {"apply_release": {"http_cmd"}, "rollback": {"apply_release"}, "bootstrap": {"http_cmd"}, "migrate": {"http_cmd"},
                  "run_tests": {"http_cmd"}}
 
 

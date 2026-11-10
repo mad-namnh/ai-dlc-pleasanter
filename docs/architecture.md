@@ -95,7 +95,7 @@ Machine-read files are JSON (stdlib only). Reference implementations: `pls-demo-
 | Environment | Who writes | How | Role in config |
 |---|---|---|---|
 | local / dev (MADLAB) | Engineers and AI agents | `pls deploy` with write guard | `role: dev`, `allow_write: true` |
-| stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) or the browser runner `applyRelease` | `role: stg` — no ad-hoc writes; every write is a planned release |
+| stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) (data migrations: `pls migrate`, before apply); the browser runner writes dev only (ADR-0014 TB-7) | `role: stg` — no ad-hoc writes; every write is a planned release |
 | prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — never written by `pls` HTTP; unreachable from MADLAB |
 
 **Transport (ADR-0008).** People and workstation agents call the Pleasanter API directly with `pls` (keys from environment variables or key files under `.pls/`, never in git or chat). The cloud agent sandbox has no network path to Pleasanter, so agents fall back to the browser runner (`tools/pls/browser/pls-runner.js`) in a logged-in tab, moving exports and payloads as gzip + base64 with SHA-256 checks.
@@ -212,7 +212,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals).
 - **Checks:** drift clean; plan contains complete SiteSettings only (I2); data-impacting changes have migration + dry-run; post-deploy smoke + round-trip export equals git.
 - **Gate:** G4.
-- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs after the configuration, in the same release window. Bulk updates go through `bulkupsert` with keys.
+- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run).
 - **Status:** **proven on stg in slices #1–#3.** The release sequence:
   1. `release-plan` checks drift, slots and the migration gate, and orders multi-site releases by dependency.
   2. `applyRelease` / `pls apply` runs a preflight on `UpdatedTime`, applies in order and restores automatically on failure.
@@ -263,7 +263,8 @@ One file, `traceability.json`, links the chain in both directions:
 |---|---|---|---|
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |
 | `pls http-check` | all | Check connection, key and role of an environment | **0.5** |
-| `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback |
+| `pls migrate` | P5 (ADR-0004) | Send the explicit data of each migration folder of a release with one `bulkupsert`: write guard, G4 on non-dev (digest covers the folder), mail / job checks, typed confirmation, run recorded in `plan.json` before the call; `--rollback` sends `rollback.data` prepared by a person | branch |
+| `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback for a person on dev (ADR-0014 TB-7) |
 | `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework | **0.6** |
 | `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |

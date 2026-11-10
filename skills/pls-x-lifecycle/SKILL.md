@@ -65,7 +65,7 @@ Tell the user in two or three lines where the project stands and what comes next
 8. **Keep tokens low.**
    - Read `pls` output, not the files it writes. Never open `releases/*/payload-*.json`, `rollback-*.json`, `.pls/exports/*` or `tests/results/*.json` whole. Use `pls diff`, `pls lint`, `pls coverage`, or a short `python -c` / `grep` for one field.
    - Read `config/<site>/site.json` by section (the part you change), not end to end, once it is large.
-   - Use HTTP `pls` commands. The browser runner and base64 transfers are a fallback only when no network path exists, and only after telling the person why.
+   - Use HTTP `pls` commands. Never drive the browser runner yourself: it is a fallback for a person on dev only (ADR-0014 TB-7). If no network path exists, tell the person and stop.
    - Do not repeat earlier output back to the person. Summarise.
    - Prefer the summary forms: `pls lint --summary`, `pls refs --site <s> --summary`; the full list only for the lines you act on.
    - **One Claude Code session per change request.** The state lives in the repository (`requirements/`, `design/`, `gates/`, `releases/`, `ops/log/`); a new session reads it with section 1. A long session re-reads its whole context on every turn (ADR-0013: 88 % of a day's tokens).
@@ -172,7 +172,7 @@ To see how environments differ, compare local files only: `pls env-compare --sit
 A change request follows the same order. The differences:
 - P1 starts from the current `config/` (impact analysis).
 - No bootstrap.
-- A data-impacting change needs a migration folder before `release-plan` accepts it (ADR-0004). Migrations currently run only through the browser runner: tell the person.
+- A data-impacting change needs a migration folder before `release-plan` accepts it (ADR-0004). The data moves with `pls migrate R-…` before `pls apply` (same guards as apply; the person runs it or tells you to use `--yes`).
 
 ## 5. When something is not covered here
 

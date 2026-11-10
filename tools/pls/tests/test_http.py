@@ -59,6 +59,22 @@ class Fake:
                 s["SiteSettings"] = {k: v for k, v in s["SiteSettings"].items() if k != self.drop_on_save}
             s["UpdatedTime"] = f"t{len(self.calls)}"
             return 200, {"Message": "updated"}
+        if act == "bulkupsert":                       # D13: matched by Keys → update, others created; D18: duplicates → 400
+            if who != "admin":
+                return 403, {"Message": "forbidden"}
+            keys, added, updated = body.get("Keys") or [], 0, 0
+            for row in body.get("Data") or []:
+                hits = [r_ for r_ in self.records.values() if r_["site"] == iid and all(r_.get(k) == row.get(k) for k in keys)]
+                if len(hits) > 1:
+                    return 400, {"Message": "条件に一致するレコードが複数存在します。"}
+                if hits:
+                    hits[0].update(row)
+                    updated += 1
+                else:
+                    self.next_id += 1
+                    self.records[self.next_id] = {"site": iid, "ResultId": self.next_id, **row}
+                    added += 1
+            return 200, {"Message": f"{added} 件追加し、{updated} 件更新しました。"}
         if act == "createsite":
             self.next_id += 1
             self.sites[self.next_id] = {"SiteId": self.next_id, "Title": body["Title"], "ReferenceType": body["ReferenceType"],

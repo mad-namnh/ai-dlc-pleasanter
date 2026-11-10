@@ -45,10 +45,10 @@ Probes changed the meaning of "data-impacting": on 1.5.2 configuration changes d
 
 1. `pls classify` marks as data-impacting: column definition removed, choices/statuses removed, formula/default changed (static rules, D11/D12).
 2. `pls plan` / `pls release-plan` **refuse** a data-impacting change unless `--migration DIR` holds:
-   - `migration.json` — `site`, `keys` (business identifier columns for `bulkupsert`), the conversion (mapping or data), `rollback`;
-   - `backup/` — every record of the affected site exported **before** the change (runner `backupRecords`; needed because of D14);
+   - `migration.json` — `site`, `keys` (business identifier columns for `bulkupsert`), the conversion (mapping or data), `rollback`; `pls migrate` sends only explicit `data` (the result of a mapping, as checked in the dry run) and, with `--rollback`, only `rollback.data` that a person prepared from `backup/`;
+   - `backup/` — every record of the affected site exported **before** the change (`pls backup` over HTTP; needed because of D14);
    - `dry-run.md` — log of the conversion run on a copy of the site with a copy of the data.
-3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup.
+3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup. Enforced by `pls migrate` (HTTP, guarded like `apply`; each run recorded in `plan.json` `migrations_run` before the call, `uncertain` when no answer arrives) and by `apply`, which refuses a release whose migrations have not run. Open question: whether records read back by `get` (with ids, timestamps) can be sent to `bulkupsert` unchanged on 1.5.x is not verified, so pls does not build a rollback from `backup/` itself.
 4. The slot ledger never re-allocates a slot that held data (D12 makes old values resurface).
 5. Business approver on the customer side signs the migration at G4.
 

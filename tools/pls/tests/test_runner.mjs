@@ -69,6 +69,8 @@ test('writes only plans made for dev (ADR-0014 TB-7)', async () => {
     assert.equal(r.status, 'refused'); assert.equal(calls.length, 0);
     await assert.rejects(runner.rollbackRelease({...plan, env_role: role}, files));
     assert.equal(calls.length, 0);
+    const b = await runner.bulkUpsert({...plan, env_role: role}, 201, ['ClassA'], [{ClassA: 'x'}]);   // migrations too
+    assert.equal(b.refused, true); assert.equal(calls.length, 0);
   }
 });
 
