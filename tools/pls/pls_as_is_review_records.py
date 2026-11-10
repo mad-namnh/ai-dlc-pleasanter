@@ -8,6 +8,7 @@ reviewed document names, while the document is unchanged. The as-is document its
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import pls_profile_records as PR
@@ -47,22 +48,35 @@ def reviewed_as_is(root: Path) -> dict[str, str]:
     return out
 
 
-def ladder_decided(root: Path):
-    """name → True when a design decision gives the server script its ladder reason (L-LAD-01, I5).
+def names(text: str, word: str) -> bool:
+    """True when `word` stands in `text` as a whole name: not as part of a longer ASCII word, id or file name
+    (`ab` is not named by `label` or `ab-test`). Japanese text around a name does not hide it."""
+    return bool(word) and re.search(r"(?<![A-Za-z0-9_-])" + re.escape(word) + r"(?![A-Za-z0-9_-])", text) is not None
 
-    Any design document counts except the as-is documents themselves. DES-000-as-is-<site>.md counts only for a
-    script named in the reviewed, unchanged design/as-is/<site>.md (the person reviewed exactly that list)."""
-    design = root / "design"
-    other, adopted = [], []
-    reviewed = reviewed_as_is(root) if design.exists() else {}
-    for p in sorted(design.rglob("*.md")) if design.exists() else []:
-        if p.relative_to(design).parts[0] == "as-is":
-            continue
+
+def ladder_decided(root: Path):
+    """(script name, site) → True when a design decision gives that site's server script its ladder reason
+    (L-LAD-01, I5).
+
+    Only decision documents count: design/decisions/DES-*.md that name both the script and its site as whole names.
+    Other design files (as-is documents, probes, notes) decide nothing, and a decision about another site does not
+    cover a script of the same name here. DES-000-as-is-<site>.md counts only for scripts of that site that are
+    named in the reviewed, unchanged design/as-is/<site>.md (the person reviewed exactly that list)."""
+    decisions = root / "design" / "decisions"
+    other, adopted = [], {}
+    reviewed = reviewed_as_is(root) if decisions.exists() else {}
+    for p in sorted(decisions.glob("DES-*.md")) if decisions.exists() else []:
         if p.name.startswith(AS_IS_DES):
             site = p.stem[len(AS_IS_DES):]
             if site in reviewed:
-                adopted.append((p.read_text(encoding="utf-8"), reviewed[site]))
+                adopted[site] = (p.read_text(encoding="utf-8"), reviewed[site])
             continue
         other.append(p.read_text(encoding="utf-8"))
-    text = "\n".join(other)
-    return lambda name: bool(name) and (name in text or any(name in d and name in a for d, a in adopted))
+
+    def decided(name: str | None, site: str) -> bool:
+        if not name:
+            return False
+        if site in adopted and names(adopted[site][0], name) and names(adopted[site][1], name):
+            return True
+        return any(names(d, name) and names(d, site) for d in other)
+    return decided

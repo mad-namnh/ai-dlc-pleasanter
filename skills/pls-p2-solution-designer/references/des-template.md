@@ -14,6 +14,8 @@ Rung: <1–5>. <Reason if ≥ 3.>
 |---|---|---|---|
 | … | … | … | … |
 
+A server script gets its own row that names the site and the script exactly as in `server-scripts/_index.json`, e.g. `| L10 | loans server script `validate-dates` | BeforeCreate: … | 002 | **3** |`, followed by the rung 3 reason. Lint L-LAD-01 looks for both names in a `design/decisions/DES-*.md`; a script named only elsewhere stays undecided.
+
 ## Rejected alternatives
 
 - <alternative> — <why (cite pls-kb-pleasanter entry if applicable)>

@@ -309,7 +309,7 @@ One file, `traceability.json`, links the chain in both directions:
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
-| L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason. `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
+| L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason: a `design/decisions/DES-*.md` that names the script **and** its site as whole names (a name inside a longer word, a decision about another site, or any other file under `design/` does not count). Shared server scripts are not checked (open: decide in an ADR). `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
 | L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |

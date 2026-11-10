@@ -783,8 +783,9 @@ def lint(r: Path) -> list[dict]:
                                    "or record it (pls refs --ref)"})
                 if kind == "ServerScripts" and it.get("Shared") and TOP_LEVEL_DECL.search(body):
                     issues.append({"rule": "L-SCR-01", "site": site, "msg": f"shared server script '{nm}' declares top-level const/let (D7)"})
-                if kind == "ServerScripts" and not it.get("Shared") and nm and not decided(nm):
-                    issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision (ladder reason, I5)"})
+                if kind == "ServerScripts" and not it.get("Shared") and nm and not decided(nm, site):
+                    issues.append({"rule": "L-LAD-01", "site": site, "msg": f"server script '{nm}' has no design decision: no "
+                                   f"design/decisions/DES-*.md names both the script and the site '{site}' (ladder reason, I5)"})
         for name in unconditioned_processes(m["settings"], view_missing_only=True):   # L-PRC-01 (D21)
             issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no View object: API execution fails "
                            "(HTTP 500) and opening the site's records fails in the UI (D21) — give it a View with its display "
@@ -1617,7 +1618,7 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
         principals.insert(0, f"permissions inherited from site {perms.get('inherit')} (not managed) — L-PERM-01")
     decided = AR.ladder_decided(r)                              # L-LAD-01: a reviewed as-is counts only via its record
     undecided = [it.get("Name") or f"(no name, Id {it.get('Id')})" for it in ss.get("ServerScripts") or []
-                 if not it.get("Shared") and not decided(it.get("Name"))]
+                 if not it.get("Shared") and not decided(it.get("Name"), name)]
     counts = {"slots used": len(entries) - nf, "slots only in filters": nf}
     counts |= {k: len(ss.get(k) or []) for k in ("Columns", "Processes", "Views", "Notifications", "Reminders", "Summaries",
                                                   "Links", "ServerScripts", "Scripts", "Styles", "Htmls", "DashboardParts")}

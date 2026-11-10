@@ -7,8 +7,8 @@
 **Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus all of P1 (P1-1…P1-8); details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): runs on Python 3.10 and writes LF on every OS…` (P2-8); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **330 OK** (also on Python 3.10: `py -V:Astral/CPython3.10.21 -m unittest discover -s tests`, 1 skipped there); `node --test tests/test_runner.mjs` → **14 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): L-LAD-01 needs a decision document naming the script and its site…` (P2-9); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **337 OK** (also on Python 3.10: `py -V:Astral/CPython3.10.21 -m unittest discover -s tests`, 1 skipped there); `node --test tests/test_runner.mjs` → **14 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. `main` was fast-forwarded to `brownfield-adr` on 2026-11-10 and pushed to GitHub at Nam's request (the earlier demo baseline was `d0c27f1`). Work continues on `brownfield-adr`; `main` is fast-forwarded and pushed only when Nam asks. `demo-equipment` runs the framework working tree, so it now runs the remediated `pls`: expect the new lint findings and refusals listed under "Remediation progress".
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P2-3, P2-6, P2-7, P2-9…P2-12, then P3. Nam's choices (2026-11-10): P2-12 tighten the spike guard (role check before the localhost exemption, permission given to edit `spike/round-trip/scripts/common.py` for that); P2-11 records only (read-back digest, executor, confirmation mode), `pls rollback` as a Proposed ADR. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P2-3, P2-6, P2-7, P2-10…P2-12, then P3. Nam's choices (2026-11-10): P2-12 tighten the spike guard (role check before the localhost exemption, permission given to edit `spike/round-trip/scripts/common.py` for that); P2-11 records only (read-back digest, executor, confirmation mode), `pls rollback` as a Proposed ADR. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -84,7 +84,10 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
   - **Still open (TD-19):** the actor in the log is self-asserted (`PLS_ACTOR` / git user.name); the effective `allow_write` is not logged.
 - Done, committed: **P2-8** — the one construct that needed Python 3.12 (`pls_adopt.py`, backslash inside an f-string expression) rewritten; start-up guard for Python < 3.10; every text writer (`wj`, reports, gate / profile / usage records) writes LF on every OS, script bodies unchanged; framework `.gitattributes` (`* text=auto eol=lf`). setup.md, architecture.md §7.1. Tests `test_written_files_use_lf_on_every_os.py` (4 fail on the parent commit). Suite on 3.12 and on 3.10: OK.
   - **Action for existing projects on Windows:** files that pls wrote with CRLF (`config/*/site.json`, `releases/*/plan.json`, …; they are `-text` in project repos) become LF the next time pls rewrites them — one whole-file change per file, once.
-- Not started: P2-3, P2-6, P2-7, P2-9…P2-12 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
+- Done, committed: **P2-9** (rest; as-is documents were excluded with P0-4) — L-LAD-01 and the adopt report count a server script as decided only when a `design/decisions/DES-*.md` names the script and its site as whole names; other files under `design/` decide nothing; `DES-000-as-is-<site>.md` covers only that site's scripts. DES template (P2 0.7) shows the row; architecture lint catalogue. Tests `test_ladder_decision_names_the_script_and_the_site.py` (all fail on the parent commit).
+  - **Decided without asking, Nam may change:** whole-name match in the decision document rather than a required table format (the existing projects name scripts in backticks or plain text; a required row would flag all of them). Shared server scripts stay unchecked; the review asks for an ADR line on that.
+  - **Action for existing projects:** a script named only in a design file outside `design/decisions/`, or in a DES that does not mention its site, is flagged again.
+- Not started: P2-3, P2-6, P2-7, P2-10…P2-12 and P3. All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 
