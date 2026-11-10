@@ -20,7 +20,7 @@ Commands:
                                                 set Approvers / Operators / Origin (CLAUDE.md) or role (environments.json)
                                                 as the person stated it; recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
-  lint                                          rule catalogue (L-SEC-01, L-REF-01, L-SCR-01, L-SCR-02, L-SLOT-01, L-LAD-01, L-CAN-01, L-MAIL-01, L-ENV-02, L-MRG-01, L-PRC-01, L-GATE-01, L-JOB-01, L-ONB-01, L-PRF-01)
+  lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
                                                 live vs LAST APPLIED RELEASE (D11); exit 1 on drift; reports

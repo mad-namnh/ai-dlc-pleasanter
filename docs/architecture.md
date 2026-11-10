@@ -94,7 +94,7 @@ Machine-read files are JSON (stdlib only). Reference implementations: `pls-demo-
 
 | Environment | Who writes | How | Role in config |
 |---|---|---|---|
-| local / dev (MADLAB) | Engineers and AI agents | `pls deploy` with write guard | `role: dev`, `allow_write: true` |
+| local / dev (MADLAB) | Engineers and AI agents | `pls release-plan` (plan and checks), then `pls apply`, confirmed by the person who types the release id again; write guard | `role: dev`, `allow_write: true` |
 | stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) (data migrations: `pls migrate`, before apply); the browser runner writes dev only (ADR-0014 TB-7) | `role: stg` — no ad-hoc writes; every write is a planned release |
 | prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — never written by `pls` HTTP; unreachable from MADLAB |
 
@@ -275,7 +275,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
 | `pls principals` | P3 (after G2) | Bind the roles of `design/roles.json` to group / user ids of an environment by name (read-only lookup); exit 1 while a role has no id | built (2026-11-05) |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
-| `pls lint` | P3, P4 | Rule catalogue §7.2 | **v0.1** — L-SEC-01, L-REF-01, L-SCR-01, L-SLOT-01, L-LAD-01 |
+| `pls lint` | P3, P4 | Rule catalogue §7.2 | built — the rules it reports are listed in §7.2 only |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
 | `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting | **0.4** |
 | `pls coverage [--env E]` | P4 | REQ ↔ design ↔ config ↔ test gaps for one environment (default dev): covered only when the design documents and config elements exist and every linked test passed **in that environment** (latest run per test); `api-only`, `failed`, `error`, `not-run` counted apart; an empty `traceability.json` is a gap | **v0.1**; per environment since 2026-11-10 |

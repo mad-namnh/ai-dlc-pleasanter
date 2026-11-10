@@ -16,3 +16,7 @@ Counts: subagent calls (not eval cases) 2/6 (both for the permission checks befo
 - 2026-11-11 | commit: test(pls): architecture command table and lint catalogue are checked against the parser and the lint rule codes
 - 2026-11-11 | counts: subagent calls 3/6, review rounds 1/2, fix attempts 0/3
 - 2026-11-11 | REPORT SENT
+- 2026-11-11 | Nam's decisions after the report: §3.2 in a new session; F2 → rule lists replaced by a reference to §7.2; §3.3 `pls deploy` → `pls release-plan` then `pls apply`. Light follow-up, no review
+- 2026-11-11 | Nam's own settings change committed at his request (`5ef09eb`)
+- 2026-11-11 | follow-up verified: both suites (see commit); commit: docs: lint rules are listed only in architecture §7.2; §3.3 names release-plan and apply
+- 2026-11-11 | REPORT SENT
