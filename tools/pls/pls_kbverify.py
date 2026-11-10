@@ -72,7 +72,12 @@ def load_probes(kb_dir: Path) -> list[dict]:
     for f in sorted((kb_dir / "references" / "probes").glob("*.json")):
         if f.name == "index.json":
             continue
-        p = json.loads(f.read_text(encoding="utf-8"))
+        try:
+            p = json.loads(f.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeDecodeError, ValueError) as ex:
+            raise ValueError(f"probe {f.name}: not readable JSON ({ex})") from ex
+        if not isinstance(p, dict):
+            raise ValueError(f"probe {f.name}: must be a JSON object")
         p["_name"] = f.stem
         try:
             check_probe(p)

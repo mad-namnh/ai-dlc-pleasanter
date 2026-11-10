@@ -48,7 +48,10 @@ def _placeholder(field: str, raw: str) -> bool:
 
 def _profile_text(root: Path) -> str:
     p = root / "CLAUDE.md"
-    return p.read_text(encoding="utf-8-sig") if p.exists() else ""
+    try:
+        return p.read_text(encoding="utf-8-sig") if p.exists() else ""
+    except (OSError, UnicodeDecodeError) as ex:      # no profile read = no approver known: refuse, never guess
+        raise _gt().GateError(f"CLAUDE.md (the project profile) cannot be read as UTF-8 text ({ex}) — save it as UTF-8")
 
 
 def _load(root: Path, sub: str, key: str = "value") -> list[dict]:

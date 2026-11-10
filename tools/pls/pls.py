@@ -126,6 +126,11 @@ class Fail(Exception):
     pass
 
 
+class BadFile(Fail, ValueError):
+    """A project file that cannot be read or has the wrong shape. Also a ValueError, so the places that already
+    turn a damaged file into their own refusal keep doing so."""
+
+
 # ---------------------------------------------------------------- project / io
 
 def root() -> Path:
@@ -137,7 +142,18 @@ def root() -> Path:
 
 
 def rj(p: Path) -> Any:
-    return json.loads(p.read_text(encoding="utf-8-sig"))   # tolerate a BOM (files edited on Windows)
+    """Read a JSON file. A missing, unreadable, non-UTF-8 or non-JSON file is a refusal that names the file, never a
+    traceback. A BOM is tolerated (files edited on Windows)."""
+    try:
+        return json.loads(Path(p).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        raise BadFile(f"{p}: file not found")
+    except OSError as ex:
+        raise BadFile(f"{p}: cannot be read ({ex.strerror or ex})")
+    except UnicodeDecodeError:
+        raise BadFile(f"{p}: not UTF-8 text — save it as UTF-8")
+    except json.JSONDecodeError as ex:
+        raise BadFile(f"{p}: not valid JSON (line {ex.lineno}, column {ex.colno}: {ex.msg})")
 
 
 def wj(p: Path, obj: Any) -> None:
@@ -145,8 +161,58 @@ def wj(p: Path, obj: Any) -> None:
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _shape(doc: Any, fields: dict) -> str | None:
+    """First field of `doc` whose type is not the expected one (fields: name → (type, element type or None)).
+    Only fields that are present are checked; which ones a command needs is that command's refusal."""
+    if not isinstance(doc, dict):
+        return "must be a JSON object"
+    for name, (kind, element) in fields.items():
+        v = doc.get(name)
+        if v is None:
+            continue
+        if isinstance(v, bool) or not isinstance(v, kind):
+            return f"{name} must be {_KIND[kind]}, not {type(v).__name__}"
+        if element:
+            items = v.items() if isinstance(v, dict) else enumerate(v)
+            for k, x in items:
+                if isinstance(x, bool) or not isinstance(x, element):
+                    return f"{name}[{k!r}] must be {_KIND[element]}, not {type(x).__name__}"
+    return None
+
+
+_KIND = {dict: "an object", list: "a list", str: "text", int: "a number"}
+_ENVIRONMENTS = {"envs": (dict, dict), "managed_sites": (list, str)}
+_ENVIRONMENT = {"role": (str, None), "sites": (dict, dict), "principals": (dict, str), "values": (dict, None),
+                "side_effects": (dict, None), "connection": (str, None), "sandbox_of": (str, None), "parent_id": (int, None)}
+_RELEASE = {"env": (str, None), "release": (str, None), "status": (str, None), "sites": (list, str), "per_site": (dict, dict),
+            "steps": (list, dict), "rollback": (list, dict), "created": (dict, None)}
+
+
 def envs(r: Path) -> dict:
-    return rj(r / "environments.json")
+    """environments.json, with the shape every guard relies on (objects where objects are read)."""
+    f = r / "environments.json"
+    ev = rj(f)
+    bad = _shape(ev, _ENVIRONMENTS)
+    if not bad and not isinstance(ev.get("envs"), dict):
+        bad = "envs must be an object"
+    if not bad:
+        for name, e in ev["envs"].items():
+            bad = _shape(e, _ENVIRONMENT)
+            if bad:
+                bad = f"envs.{name} {bad}" if bad.startswith("must") else f"envs.{name}.{bad}"
+                break
+    if bad:
+        raise BadFile(f"{f.name}: {bad}")
+    return ev
+
+
+def load_plan(p: Path) -> dict:
+    """A release record (plan.json, bootstrap.json) with the shape the checks before a write read."""
+    plan = rj(p)
+    bad = _shape(plan, _RELEASE)
+    if bad:
+        raise BadFile(f"{'/'.join(Path(p).parts[-3:])}: {bad} — the record is damaged; make a new plan")
+    return plan
 
 
 def env_conf(r: Path, env: str) -> dict:
@@ -860,7 +926,7 @@ def releases_for(r: Path, env: str, site: str, status: str | None = None) -> lis
     """status "applied" matches every applied state (APPLIED)."""
     out = []
     for p in sorted((r / "releases").glob("*/plan.json")) if (r / "releases").exists() else []:
-        plan = rj(p)
+        plan = load_plan(p)
         in_plan = plan.get("site") == site or site in (plan.get("sites") or [])
         st = plan.get("status")
         if plan.get("env") == env and in_plan and (status is None or st == status or (status == "applied" and st in APPLIED)):
@@ -886,7 +952,7 @@ def last_applied_jobs(r: Path, env: str) -> dict | None:
     such release (releases made before the jobs check, adoption records, sandboxes, hand-broken records)."""
     best = None
     for p in sorted((r / "releases").glob("*/plan.json")) if (r / "releases").exists() else []:
-        plan = rj(p)
+        plan = load_plan(p)
         jobs = plan.get("jobs")
         if plan.get("env") != env or plan.get("status") not in APPLIED or SE.bad_plan_jobs(jobs) or jobs.get("fingerprints") is None:
             continue
@@ -1378,7 +1444,7 @@ def version_check(r: Path, env: str, tested_env: str = "dev") -> dict:
 def _adopted(r: Path, site: str) -> bool:
     """True when the site came into the project through `pls adopt` (an adoption record exists in any env)."""
     for p in (r / "releases").glob("A-*/plan.json") if (r / "releases").exists() else []:
-        plan = rj(p)
+        plan = load_plan(p)
         if plan.get("kind") == "adopt" and site in (plan.get("sites") or []):
             return True
     return False
@@ -1996,7 +2062,7 @@ def new_sites(r: Path, env: str) -> set:
     """Sites created by a bootstrap in `env` that have no applied release yet."""
     out = set()
     for bp in sorted((r / "releases").glob("*/bootstrap.json")) if (r / "releases").exists() else []:
-        b = rj(bp)
+        b = load_plan(bp)
         if b.get("env") == env:
             out |= set(b.get("created", {}))
     return {s for s in out if not releases_for(r, env, s, "applied")}
@@ -2004,7 +2070,7 @@ def new_sites(r: Path, env: str) -> set:
 
 def bind(r: Path, env: str, release: str, created: dict) -> int:
     bp = r / "releases" / release / "bootstrap.json"
-    plan = rj(bp)
+    plan = load_plan(bp)
     if plan.get("env") != env:
         raise Fail(f"{bp.name} is for env '{plan.get('env')}', not '{env}'")
     want = {s["site"] for s in plan["steps"]}
@@ -2386,7 +2452,7 @@ def http_cmd(r: Path, a) -> int:
 
         if a.cmd == "migrate":
             rel = r / "releases" / a.release
-            plan = rj(rel / "plan.json")
+            plan = load_plan(rel / "plan.json")
             migs = MI.dirs(plan)
             if not migs:
                 raise H.TransportError(f"{a.release} carries no migration (release-plan --migration DIR)")
@@ -2449,7 +2515,7 @@ def http_cmd(r: Path, a) -> int:
 
         if a.cmd == "apply":
             rel = r / "releases" / a.release
-            plan = rj(rel / "plan.json")
+            plan = load_plan(rel / "plan.json")
             if not plan.get("sites"):
                 raise H.TransportError("single-site plans: use pls release-plan (multi-site format) for the HTTP transport")
             e = env_conf(r, plan["env"])
@@ -2543,7 +2609,7 @@ def http_cmd(r: Path, a) -> int:
 
         if a.cmd == "bootstrap":
             bp = r / "releases" / a.release / "bootstrap.json"
-            plan = rj(bp)
+            plan = load_plan(bp)
             e = env_conf(r, plan["env"])
             bad_step = bootstrap_steps_problem(plan, e)
             if bad_step:
@@ -2644,7 +2710,7 @@ def http_cmd(r: Path, a) -> int:
                         GT.require(r, "G4", a.release, f"tests that change records in {a.env}")
                     except GT.GateError as ex:
                         raise H.TransportError(str(ex))
-                    target = rj(r / "releases" / a.release / "plan.json").get("env")
+                    target = load_plan(r / "releases" / a.release / "plan.json").get("env")
                     if target != a.env:
                         raise H.TransportError(f"{a.release} is a release for {target!r}, not {a.env!r} — its G4 does not "
                                                f"cover tests in {a.env}")
@@ -3138,7 +3204,7 @@ def _main(argv=None) -> int:
         rel = r / "releases" / a.release
         if not (rel / "plan.json").exists():
             raise Fail(f"{a.release} has no plan.json — make a release plan first (release-plan)")
-        plan = rj(rel / "plan.json")
+        plan = load_plan(rel / "plan.json")
         if not plan.get("sites"):
             raise Fail("only multi-site release plans (release-plan) are packaged")
         if plan.get("status") != "planned":
@@ -3287,9 +3353,9 @@ def _main(argv=None) -> int:
         exports = dict(x.split("=", 1) for x in a.export)
         return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified)
 
-    if a.cmd == "mark-applied" and (rj(r / "releases" / a.release / "plan.json").get("sites")):
+    if a.cmd == "mark-applied" and (load_plan(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release
-        plan = rj(rel / "plan.json")
+        plan = load_plan(rel / "plan.json")
         e = env_conf(r, plan["env"])
         exports = dict(x.split("=", 1) for x in (a.exports or []))
         if set(exports) != set(plan["sites"]):
@@ -3380,7 +3446,7 @@ def _main(argv=None) -> int:
 
     if a.cmd == "mark-applied":
         rel = r / "releases" / a.release
-        plan = rj(rel / "plan.json")
+        plan = load_plan(rel / "plan.json")
         e = env_conf(r, plan["env"])
         if plan.get("status") in APPLIED or plan.get("status") == "rolled-back":
             print(f"NOT marked again: {a.release} is already recorded as {plan.get('status')} ({plan.get('applied_at')})")

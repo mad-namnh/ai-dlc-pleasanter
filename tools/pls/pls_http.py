@@ -54,13 +54,17 @@ def load_connection(root: Path, env: str) -> dict:
                              "(keys go in environment variables, see docs/setup.md in ai-dlc-pleasanter)")
     try:
         allc = json.loads(f.read_text(encoding="utf-8-sig"))   # Windows PowerShell 5 writes a BOM
-    except json.JSONDecodeError as ex:
-        raise TransportError(f"{f} is not JSON: {ex}")
+    except (OSError, UnicodeDecodeError, ValueError) as ex:
+        raise TransportError(f"{f} is not readable JSON (UTF-8): {ex}")
+    if not isinstance(allc, dict):
+        raise TransportError(f"{f}: must be a JSON object of environment name → connection")
     c = allc.get(env)
     if not c:                                  # a sandbox env shares the connection of its base (ADR-0011)
         try:
             all_envs = json.loads((root / "environments.json").read_text(encoding="utf-8-sig"))["envs"]
-        except (OSError, ValueError, KeyError):
+        except (OSError, ValueError, KeyError, TypeError):
+            all_envs = {}
+        if not isinstance(all_envs, dict) or not all(isinstance(v, dict) for v in all_envs.values()):
             all_envs = {}
         me = all_envs.get(env) or {}
         alias = me.get("connection")
@@ -69,8 +73,14 @@ def load_connection(root: Path, env: str) -> dict:
                 raise TransportError(f"environment '{env}': a connection alias is allowed only for a dev sandbox of a dev "
                                      f"environment (sandbox_of = connection, both role dev) — got connection {alias!r}")
             c = allc.get(alias)
+    if c is not None and not isinstance(c, dict):
+        raise TransportError(f"{f}: the entry for '{env}' must be an object (url, keys, allow_write)")
     if not c or not c.get("url"):
         raise TransportError(f"{f}: no url for environment '{env}'")
+    keys = c.get("keys")
+    if not isinstance(c["url"], str) or (keys is not None and (
+            not isinstance(keys, dict) or not all(isinstance(v, str) for v in keys.values()))):
+        raise TransportError(f"{f}: for '{env}', url must be text and keys an object of name → env:NAME or file:PATH")
     c = dict(c)
     c["_dir"] = str(f.parent)
     return c

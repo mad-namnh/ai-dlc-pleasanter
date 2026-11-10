@@ -259,6 +259,8 @@ One file, `traceability.json`, links the chain in both directions:
 
 ### 7.1 `pls` toolchain (framework, deterministic)
 
+**Project files are read through one loader per kind** (design review C3). `environments.json`, release records (`plan.json`, `bootstrap.json`), `.pls/connections.json`, gate / profile / review records, `_index.json`, migration files and the profile are read as UTF-8 with a BOM tolerated; a missing, unreadable, non-UTF-8 or non-JSON file, or a field of the wrong type that a guard reads (`envs`, `sites`, `per_site`, `steps`, `rollback`, `keys`, …), is a refusal that names the file and the field before anything is written, never a traceback. Which fields a command needs stays that command's own refusal.
+
 | Command | Phase | Purpose | Status |
 |---|---|---|---|
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |

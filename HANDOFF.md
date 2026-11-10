@@ -7,8 +7,8 @@
 **Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus all of P1 (P1-1…P1-8); details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
 **Check the tree first:**
-1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): environment values map back as whole values or whole tokens…` (P1-4); working tree clean.
-2. `cd tools/pls && python -m unittest discover -s tests` → **310 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
+1. `cd "C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter"` → `git switch brownfield-adr` (local branch, not on GitHub; push `main` only when Nam asks). Last code commit: `fix(pls): damaged project files are refusals…` (P2-1); working tree clean.
+2. `cd tools/pls && python -m unittest discover -s tests` → **316 OK**; `node --test tests/test_runner.mjs` → **13 pass**. (Lines like `ConnectionAbortedError` / `TimeoutError` in the output are expected noise from the timeout tests.)
 3. `main` was fast-forwarded to `brownfield-adr` on 2026-11-10 and pushed to GitHub at Nam's request (the earlier demo baseline was `d0c27f1`). Work continues on `brownfield-adr`; `main` is fast-forwarded and pushed only when Nam asks. `demo-equipment` runs the framework working tree, so it now runs the remediated `pls`: expect the new lint findings and refusals listed under "Remediation progress".
 
 **Waiting for Nam (decisions, not code):**
@@ -19,7 +19,7 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Next build work (roadmap order):** P2, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+**Next build work (roadmap order):** P2-2…P2-12, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
 **How we work (Nam's preferences, kept on purpose):**
 - Chat with Nam in Vietnamese; everything in the repository in English (CLAUDE.md conventions).
@@ -74,7 +74,8 @@ Reviewed commit: `10c328a`. Each workstream ran as an independent agent in its o
   - **Not built, open question in ADR-0007:** the automatic look-up by title under the parent folder. The KB does not verify that the 1.5.x API lists a folder's child sites; needs a `kb-verify` probe on dev first.
 - Done, committed: **P1-4** (rest; numbers never substituted came with `5e5cda5`) — Nam chose "whole value + whole token": at unpack a string equal to a value always becomes `${env:x}`; inside longer text only a value of 6+ characters that is not all digits, as a whole token. Lint **L-REF-04** for a number / short value written inside longer text. `values` checked on load (text, number or null; anything else refused by name). ADR-0005 section, architecture lint catalogue, setup.md, config-builder 0.5, script-engineer 0.4. Tests in `test_apply_recovery_and_readback.py` (5 fail on the parent commit). Suite: 310 Python OK, 13 node pass.
   - **Action for existing projects:** a project that uses a short or numeric `${env:x}` inside a script body or a label now gets L-REF-04 (its exports already differed from git since `5e5cda5` for numbers).
-- Not started: all P2 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
+- Done, committed: **P2-1** — one loader per file kind: `rj` turns a missing / unreadable / non-UTF-8 / non-JSON file into a refusal naming the file (`BadFile`, a `Fail`); `envs()` and `load_plan()` check the shape guards read (objects, lists, text) and name the field; `load_connection` checks the file, the entry and the key references; the profile and KB probes refuse on unreadable text; BOM accepted everywhere (`pls_usage`, `pls_kbverify` included). architecture.md §7.1. Tests `test_malformed_project_files_are_refusals.py` (38 sub-cases fail or raise on the parent commit). Suite: 316 Python OK, 13 node pass.
+- Not started: P2-2…P2-12 and P3 (P2-9 L-LAD-01 partly done: as-is excluded). All P0 code and text work is done; P0 still waits for Nam's decisions (ADR-0014 rows, ADR-0003, J4 sign-off). Next build work: P2.
 
 **To resume on another account:** for every row still "pending", recreate the setup (worktree at `10c328a` outside the repo, project copies without key material) and run that workstream from its rows in the plan (Deliverable 2, 4, 5) with the rules of the standard §7; then run WS-7 in a fresh context over all reports and write `99-final-report.md` (standard §6, verdict per stage). Reports are copied into the folder above and committed one by one; review test files stay in the worktrees and are never committed.
 

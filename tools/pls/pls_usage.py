@@ -80,7 +80,7 @@ def sessions(tdir: Path) -> dict[str, list[tuple[Path, str]]]:
             meta = f.with_name(f.stem + ".meta.json")
             label = f.stem
             try:                                    # agent type + id only: the description is conversation text
-                m = json.loads(meta.read_text(encoding="utf-8"))
+                m = json.loads(meta.read_text(encoding="utf-8-sig"))
                 label = f"{m.get('agentType') or 'agent'} {f.stem.removeprefix('agent-')[:8]}"
             except (OSError, ValueError):
                 pass
@@ -134,7 +134,7 @@ def load(project: Path) -> list[dict]:
     rows = []
     for f in sorted((project / "ops" / "usage").glob("*.json")) if (project / "ops" / "usage").exists() else []:
         try:
-            doc = json.loads(f.read_text(encoding="utf-8"))
+            doc = json.loads(f.read_text(encoding="utf-8-sig"))
         except ValueError:
             continue
         rows += [dict(r, session=doc.get("session")) for r in doc.get("rows") or []]
