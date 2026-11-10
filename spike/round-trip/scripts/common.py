@@ -3,10 +3,11 @@
 No third-party packages (stdlib only).
 
 SAFETY RULES for writes (create/update) — see CLAUDE.md, do not loosen:
-  - localhost: always writable.
+  - A declared role other than "dev" (stg, prod, anything else): NEVER written to, whatever the host or
+    allow_write says. This is checked first: an SSH tunnel makes any server look like localhost.
+  - localhost with role "dev" or no role declared: writable.
   - Other hosts: only when the environment declares  role = "dev"  AND  allow_write = true,
-    and the operator confirms the host name (or passes --yes).
-  - role "stg" / "prod" (or no role): NEVER written to, whatever allow_write says.
+    and the operator confirms the host name (or passes --yes). No role on another host: never written.
 """
 from __future__ import annotations
 
@@ -57,10 +58,16 @@ def is_local(base_url: str) -> bool:
 
 
 def assert_writable(env: dict) -> None:
-    """Block writes unless the environment is localhost or a write-enabled dev."""
+    """Block writes unless the environment is localhost or a write-enabled dev. The role is checked before the
+    localhost exemption: a declared stg / prod role is refused even on 127.0.0.1 (a tunnel to another server)."""
+    role = env.get("role")
+    if role is not None and role not in WRITABLE_ROLES:
+        raise UnsafeTargetError(
+            f"Refusing to write to '{host_of(env['base_url'])}' (environment '{env.get('name')}', role={role!r}): "
+            "an environment whose role is not 'dev' is never written to, localhost included."
+        )
     if is_local(env["base_url"]):
         return
-    role = env.get("role")
     if role not in WRITABLE_ROLES or env.get("allow_write") is not True:
         raise UnsafeTargetError(
             f"Refusing to write to '{host_of(env['base_url'])}' (environment '{env.get('name')}', "

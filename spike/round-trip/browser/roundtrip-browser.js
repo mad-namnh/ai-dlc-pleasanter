@@ -1,5 +1,7 @@
 // Round-trip runner executed in a browser logged in to Pleasanter.
 // Paste into the DevTools console on the Pleasanter dev origin. NEVER run against production.
+// The write functions (create, update, pkg) refuse until the person has stated, in this tab, that the server is a
+// dev environment and typed its host name:   spike.arm('dev', '<host name shown in the address bar>')
 // Usage:      await spike.create(42410, 44562)   // copy site 42410 into folder 44562, diff
 //             await spike.update(44563)          // change one label → restore → write twice, diff
 //             await spike.pkg(42410, [42410,42411], 44562)  // copysitepackage without data, diff
@@ -33,15 +35,28 @@ const spike = (() => {
     s = s.replace(/sk-ant-[A-Za-z0-9_\-]+/g,'[REDACTED]'); return s.length>90 ? s.slice(0,90)+'…' : s; };
   const show = d => d.map(x=>({path:x.path, kind:x.kind, before:mask(x.before), after:mask(x.after)}));
   const pick = o => Object.fromEntries(FIELDS.filter(f=>f in o).map(f=>[f,o[f]]));
+  // The browser has no environments file: the person states the role and the host. Anything but role 'dev' on the
+  // host of this tab leaves the write functions refusing.
+  let armed = false;
+  const arm = (role, host) => {
+    armed = role === 'dev' && typeof host === 'string' && host.toLowerCase() === location.hostname.toLowerCase();
+    return armed ? `armed for dev on ${location.hostname}` : `NOT armed: role must be 'dev' and the host must be ${location.hostname}`;
+  };
+  const mustBeDev = what => {
+    if (!armed) throw new Error(`${what}: refused — this tab is not confirmed as a dev environment; ` +
+      `run spike.arm('dev', '${location.hostname}') only if it is one`);
+  };
   return {
-    get, norm, diff,
+    get, norm, diff, arm,
     async create(src, folder) {
+      mustBeDev('create');
       const orig = await get(src);
       const c = await pls(`/api/items/${folder}/createsite`, {TenantId:1, ParentId:folder, InheritPermission:folder, ...pick(orig)});
       const d = diff(norm(orig), norm(await get(c.Id)));
       return {src, copy:c.Id, diffCount:d.length, diffs:show(d)};
     },
     async update(copy) {
+      mustBeDev('update');
       const base = await get(copy), baseN = norm(base);
       const mod = JSON.parse(JSON.stringify(base)); const col = mod.SiteSettings.Columns[0];
       const label = col.LabelText; col.LabelText = label + '_SPIKE';
@@ -54,6 +69,7 @@ const spike = (() => {
       return {copy, changeApplied: applied, iters};
     },
     async pkg(anchor, sites, folder) {
+      mustBeDev('pkg');
       const r = await pls(`/api/items/${anchor}/copysitepackage`, {TargetSiteId:folder,
         SelectedSites: sites.map(s=>({SiteId:s, IncludeData:false})), IncludeSitePermission:false,
         IncludeRecordPermission:false, IncludeColumnPermission:false, IncludeNotifications:true, IncludeReminders:true});

@@ -227,3 +227,30 @@ test('applyRelease: a site changed between the preflight and its own write is no
   assert.equal(live[202].SiteSettings.tag, 'old-b');                      // our first write is undone
   assert.ok(!calls.includes('updatesite 201'));
 });
+
+// The spike's browser script (spike/round-trip/browser): its write functions refuse until the person confirms dev.
+const spikeSrc = readFileSync(new URL('../../../spike/round-trip/browser/roundtrip-browser.js', import.meta.url), 'utf8');
+function spikeTab(hostname = 'dev.example') {
+  const calls = [];
+  const fetch = async path => {
+    calls.push(path);
+    return {json: async () => ({Id: 9, Response: {Data: {Title: 't', SiteSettings: {Columns: [{ColumnName: 'ClassA', LabelText: 'a'}]}}}})};
+  };
+  const ctx = {fetch, console, location: {hostname}}; vm.createContext(ctx);
+  vm.runInContext(spikeSrc + '\nthis.spike = spike;', ctx);
+  return {spike: ctx.spike, calls};
+}
+
+test('spike browser script: writes are refused until the tab is confirmed as dev by role and host name', async () => {
+  const {spike, calls} = spikeTab();
+  for (const write of [() => spike.create(1, 2), () => spike.update(3), () => spike.pkg(1, [1], 2)]) {
+    await assert.rejects(write, /not confirmed as a dev environment/);
+  }
+  assert.match(spike.arm('prod', 'dev.example'), /NOT armed/);
+  assert.match(spike.arm('dev', 'other.example'), /NOT armed/);
+  await assert.rejects(() => spike.create(1, 2), /refused/);
+  assert.deepEqual(calls, []);                                            // nothing was sent, not even a read
+  assert.match(spike.arm('dev', 'DEV.example'), /^armed for dev/);
+  await spike.create(1, 2);
+  assert.ok(calls.some(c => c.endsWith('/createsite')));
+});
