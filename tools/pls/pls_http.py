@@ -26,6 +26,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from datetime import date as _date, timedelta as _timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -331,13 +332,24 @@ def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None =
 
 # ---------------------------------------------------------------- tests (same spec format as runner runTests)
 
-_VAR = re.compile(r"^\$(\w+)$")
+_VAR = re.compile(r"^\$(\w+)(?:([+-])(\d+))?$")
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _subst(v: Any, vars_: dict) -> Any:
+    """`$name` → its value. `$name+N` / `$name-N` → the date N days from that variable, only when its value is a
+    date (YYYY-MM-DD) — for probes and tests of relative date ranges (e.g. a view from today to today+90)."""
     if isinstance(v, str):
         m = _VAR.match(v)
-        return str(vars_[m.group(1)]) if m and m.group(1) in vars_ else v
+        if not m or m.group(1) not in vars_:
+            return v
+        val = str(vars_[m.group(1)])
+        if not m.group(2):
+            return val
+        if not _ISO_DATE.match(val):
+            return v
+        days = int(m.group(3)) * (1 if m.group(2) == "+" else -1)
+        return (_date.fromisoformat(val) + _timedelta(days=days)).isoformat()
     if isinstance(v, list):
         return [_subst(x, vars_) for x in v]
     if isinstance(v, dict):

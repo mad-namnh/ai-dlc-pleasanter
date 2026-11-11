@@ -8,7 +8,7 @@ Each KB entry that skills rely on has probes in skills/pls-kb-pleasanter/referen
      "expect_stored": {"Columns[ColumnName=Status].DefaultInput": null}, # stored settings (null = absent, D8)
      "control": "<other probe>",                                         # this result counts only if that one passes
      "observe": true,                                                    # records what happens (no expected outcome yet)
-     "server_dates": true,                                               # $today/$yesterday… from the server's clock
+     "server_dates": true,                                               # $today/$yesterday… from the server's clock; $today+90, $today-1
      "tests": [ … specs in the `pls test` format, confined to the probe site … ],
      "teardown": {"SiteSettings": {…}}}                                 # saved after the run: leave the site harmless
 
