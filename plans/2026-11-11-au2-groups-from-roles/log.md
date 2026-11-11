@@ -21,3 +21,5 @@
 - BUDGET: review rounds 2 of 2 already used on the probe → the code change has no independent review yet: asked Nam for one more round.
 - Nam: allowed up to 2 more review rounds for the code. 3.10: see next line.
 - review round 3 (opus/high, extra): accept with fixes, 2 Medium + 4 Low; fixed or documented; suites 404 OK (3.12, 3.10 2 skipped), node 15. Subagent calls in AU2: 4 (3 reviews, 1 curator). Review rounds: 3 (2 + 1 of the 2 extra Nam allowed); no High open.
+- trial run by Nam 18:25 on pls-demo-contracts dev: groups_created [3 ids], 3 roles bound; Nam: operator membership correct. Curator call 5 (GroupMembers). ADR/plan/HANDOFF closed; pls message no longer asks to check membership.
+- suites before the closing commit: 3.12 404 OK, 3.10 404 OK (2 skipped), node 15. Closing change is Light (message text + docs): no review.

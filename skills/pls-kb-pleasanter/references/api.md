@@ -69,7 +69,7 @@ Compared with getsite of the same site after mapping ids: 0 differences (setting
 
 - `POST /items/{siteId}/SetSiteSettings` with `ControlId=NewProcess` (or `NewProcessDataChange`, …) returns the **dialog HTML** with every field and option for that setting, without saving anything. Use it to learn the schema of a setting on the exact installed version.
 
-## Users and groups (1.5.2; first three rows: read-only probe of 2026-11-05 with an admin session; rows marked "write probe": 2026-11-11, tenant administrator API key, build 201520)
+## Users and groups (1.5.2; first three rows: read-only probe of 2026-11-05 with an admin session; rows marked "write probe": 2026-11-11 (including the `GroupMembers` probe), tenant administrator API key, build 201520)
 
 | Call | Result |
 |---|---|
@@ -81,7 +81,8 @@ Compared with getsite of the same site after mapping ids: 0 differences (setting
 | Write probe: `POST /api/groups/{id}/delete` (body only `ApiVersion`/`ApiKey`) for both ids | HTTP 200 each, `{"Id": <id>, "StatusCode": 200, "Message": "\" <name> \" を削除しました。"}`; lookup by name afterwards: no group left |
 | Write probe: lookup with `ColumnFilterHash.GroupName` | Returned both duplicate groups for the exact name. Exact vs partial match was **not tested**; callers compare the name exactly |
 | `create` / `delete` with a non-administrator key | not verified. The Pleasanter manual says these are for the tenant administrator only (https://pleasanter.org/en/manual/developers-guide/api/group-operations/api-group-create/); not observed by us |
-| `create` with `GroupMembers` / `GroupChildren`; `POST /api/groups/{id}/update` | not verified |
+| Write probe (2026-11-11 18:25 +09:00): `POST /api/groups/create` `{GroupName, Body, GroupMembers: ["User,<user id>,False"]}`, three groups, tenant administrator key | Each answered HTTP 200 with a new GroupId; the read-back by exact name found exactly that id. A person checked in the Pleasanter UI that the user is a member of each created group. **Not observed:** the third field `True` (group administrator) and `Dept,<id>` members |
+| `create` with `GroupChildren`; `POST /api/groups/{id}/update` | not verified |
 
 Write probe limits: group names of the form `zz_probe_group_<timestamp>`, on a dev environment; the probe created and deleted its own groups and the server URL was not recorded.
 

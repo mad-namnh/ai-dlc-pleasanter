@@ -2490,8 +2490,7 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
                     raise Fail(f"{role}: after creating group '{name}' (id {gid}) the lookup found {again} — check the "
                                "groups with that name in Pleasanter; nothing is retried")
                 pr[role] = f"Group,{gid}"
-                print(f"{role}: {pr[role]} (group '{name}' created, member {admin} — check the membership once in "
-                      "Pleasanter: GroupMembers is not yet observed on 1.5.2)")
+                print(f"{role}: {pr[role]} (group '{name}' created, member {admin})")
     except H.UncertainOutcome as ex:
         raise Fail(f"{ex} — the group may exist now: run pls principals --env {env} (without --create) to bind it")
     finally:

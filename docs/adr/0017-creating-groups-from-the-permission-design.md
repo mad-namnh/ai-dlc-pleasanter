@@ -22,7 +22,7 @@ Constraints:
 - [x] Do dev and stg share one tenant? **On the MADLAB demo server yes, on purpose** (demo, one tenant only); in real projects dev and stg are different tenants (Nam, 2026-11-11). Rule 1 therefore holds on real servers; on the demo server a group created on dev is also visible to stg, which Nam accepts for the demo.
 - [x] Should created groups get members? **The operator** (`envs.<env>.principals.admin`), so the person can test at once (Nam, 2026-11-11). Other members are people data, added by the person.
 - [ ] Limits of the lookup, not observed: whether the `GroupName` filter is exact, partial or case-insensitive. `pls` compares names exactly (case-sensitive) and treats an answer of more than one page as unknown (refused). A group whose name differs only by case is not seen as the same group. A role already bound is not checked again for duplicates.
-- [ ] `GroupMembers` on create is not observed on 1.5.2 (manual: 1.3.4+, `"User,<id>,False"`). `pls` asks the person to check the membership of the first created group once; the result goes into the KB.
+- [x] `GroupMembers` on create: **observed** on 1.5.2 — the trial run of `pls principals --env dev --create` (2026-11-11) created three groups with `"User,<operator>,False"`, and the operator confirmed the membership in the UI (KB `api.md` "Users and groups").
 
 ## Options
 
