@@ -26,5 +26,6 @@
 | [0020](0020-gate-records-and-approver-model.md) | Gate records, approvers and profile records (one approver per record; G3 / G4 outside dev; Operators; onboarding first) | Proposed (2026-11-11) — option C: as built for `demo`, approvers for `cstg` / `prod` open | yes: `pls gate`, `profile set`, `jobs-verified`, every G3 / G4 check |
 | [0021](0021-machine-setup-profile-key-files-and-environment-overrides.md) | Machine setup profile, key files and environment overrides (`PLS_CONNECTIONS`, `PLS_PROFILE_DIR`, `PLS_ACTOR`) | Proposed (2026-11-11) — option B (opt-in asked, `file:` limited) | yes, as option A: `pls setup`, `init --profile` |
 | [0022](0022-framework-distribution-to-project-repositories.md) | Framework distribution: launcher, `framework.lock`, `skills check|sync` | Proposed (2026-11-11) — option A for `demo` | yes |
+| [0023](0023-configuration-shapes-the-kb-does-not-cover.md) | Configuration shapes the KB does not cover: source at the version's tag → KB probe → `kb-verify` → KB + scope key, once in the framework | Proposed (2026-11-11) — option A | yes, as option A: `references/kb-gaps.md` in the lifecycle skill; P2/P3 skills; `$today±N` probe variables; `[${principal:x}]` in mail addresses |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

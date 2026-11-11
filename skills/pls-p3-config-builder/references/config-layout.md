@@ -27,7 +27,7 @@ The top-level keys are `SiteSettings` properties: `Columns`, `EditorColumnHash`,
 | Reference | Resolved by `pack` from `environments.json` | Use for |
 |---|---|---|
 | `${site:<name>}` | `envs.<env>.sites.<name>.id` | links, `[[…]]` choices, `Summaries[].SiteId`, script bodies, `permissions.inherit` |
-| `${principal:<name>}` | `envs.<env>.principals.<name>` (`"Group,372"` or `"User,1"`) | `permissions.json` entries, process `Groups` / `Users` / `Depts` |
+| `${principal:<name>}` | `envs.<env>.principals.<name>` (`"Group,372"` or `"User,1"`) | `permissions.json` entries, process `Groups` / `Users` / `Depts`; inside mail addresses of notifications and reminders as `[${principal:<name>}]` (Pleasanter's `[Group<id>]` / `[User<id>]` / `[Dept<id>]`, ADR-0023) |
 | `${env:<name>}` | `envs.<env>.values.<name>` | environment-specific values (not secrets). Maps back at unpack as a whole value; inside longer text only a value of 6+ characters that is not all digits (lint L-REF-04, ADR-0005) |
 
 A reference that `pack` cannot resolve fails the plan. That is intended, not something to work around.

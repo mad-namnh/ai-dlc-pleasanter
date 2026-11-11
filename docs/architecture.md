@@ -347,7 +347,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 | `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package; names the KB entries not verified on that version, as `release-plan` does in its `VERSION` lines (ADR-0009) | branch `brownfield-adr` |
-| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009) | branch |
+| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
 | `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
 | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
 | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |

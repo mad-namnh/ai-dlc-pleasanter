@@ -246,6 +246,12 @@
         "1.5.2"
       ],
       "probes": []
+    },
+    "D33": {
+      "verified_on": [],
+      "probes": [
+        "D33-near-completion-range"
+      ]
     }
   }
 }

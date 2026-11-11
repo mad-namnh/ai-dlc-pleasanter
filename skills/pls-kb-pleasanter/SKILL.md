@@ -5,7 +5,7 @@ description: Verified knowledge of how Pleasanter 1.5.x actually behaves (config
 
 # pls-kb-pleasanter — Pleasanter knowledge base
 
-Every entry here was **observed on a real environment** (version and evidence given). Use it to avoid re-discovering behaviour by trial and error, and to avoid designs that Pleasanter cannot support.
+Every entry here was **observed on a real environment** (version and evidence given). Rows marked "source-derived, not verified" come from the Pleasanter source at a version tag (ADR-0023, procedure in `skills/pls-x-lifecycle/references/kb-gaps.md`); they may be designed with as assumptions but are not deployed by a project until their probe passes `pls kb-verify` and `verified_on` names the version. Use it to avoid re-discovering behaviour by trial and error, and to avoid designs that Pleasanter cannot support.
 
 ## How to use
 

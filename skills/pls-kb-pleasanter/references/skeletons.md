@@ -21,9 +21,9 @@ Use this in P2 for a new app instead of creating a probe site (decision B3, 2026
 | Issues (期限付きテーブル) | `IssueId` | key column, first in the editor and grid |
 | Issues | `StartTime`, `CompletionTime` | date columns (relabelled 貸出日 / 返却予定日). `CompletionTime` drives the `Overdue` view (D24). API returns them as `YYYY-MM-DDT00:00:00` |
 | Issues | `Status` | default status list; records created through the API had `Status` 100 (equipment demo T-103). `CurrentStatus`/`ChangedStatus` in processes |
-| Issues | defaults dropped on save | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` — do not keep them in git (D8) |
+| Issues | defaults dropped on save | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` — do not keep them in git (D8). Also `Columns[Title].ValidateRequired: true` was dropped in one project round trip (`updatesite` → export, MADLAB dev 1.5.2, 2026-11-11; one observation, not a probe) |
 
 ## Rules for P2
 
 - A column a design uses must be placed in `EditorColumnHash.General`, or it does nothing (D22). This applies to built-in and custom columns alike.
-- Anything about built-in columns that is not in this table (e.g. whether `Title` is required by default, `Body`, `WorkValue`, `ProgressRate`, `Manager`, `Owner` on Issues) is **not verified**. Design with custom slots instead, or carry it as an open point that the dev round trip in P3 confirms.
+- Anything about built-in columns that is not in this table (e.g. whether `Title` is required by default on Results — on Issues there is only the single round-trip observation above, `Body`, `WorkValue`, `ProgressRate`, `Manager`, `Owner` on Issues) is **not verified**. Design with custom slots instead, or carry it as an open point that the dev round trip in P3 confirms.

@@ -60,7 +60,7 @@ Tell the user in two or three lines where the project stands and what comes next
    - Alternatively, they tell you to run it with `--yes`. Use `--yes` only after that explicit instruction, and only for the target they named.
 4. **Never read API keys, ask for them, or print them.** If a key is missing, `pls http-check` says which environment variable to set; pass that on to the person.
 5. **No connection, no improvising.** If a `pls` command cannot reach the environment, stop. Tell the person what to check (`pls http-check`), and do not replace a fresh export with an old one: that skips the drift check.
-6. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. Anything not in it is probed on dev (P2 rule) or raised as an open point.
+6. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. A shape or behaviour not in it follows `references/kb-gaps.md` (ADR-0023): source at the version's tag, KB probe, `pls kb-verify` by the person, KB and scope key — in the framework, once for every project — or it is raised as an open point.
 7. **Commit at the end of every phase and after every gate decision.** Use local commits with a prefix such as `feat(p1):`, `docs(g1):` or `release(p5):`. Never push unless asked.
 8. **Keep tokens low.**
    - Read `pls` output, not the files it writes. Never open `releases/*/payload-*.json`, `rollback-*.json`, `.pls/exports/*` or `tests/results/*.json` whole. Use `pls diff`, `pls lint`, `pls coverage`, or a short `python -c` / `grep` for one field.
@@ -84,7 +84,7 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 
 ### P2 Design → G2
 - Skill: `pls-p2-solution-designer`. For a new app, also its `references/new-sites.md` (ADR-0007).
-- Behaviour the design depends on comes from the KB (new sites: `references/skeletons.md`). A gap is designed around (the safe branch), or carried as an open point that P3's dev round trip confirms. If a probe is unavoidable, it is an open point at G2 for the person; `pls` has no command that writes probe sites, and you do not call the API directly.
+- Behaviour the design depends on comes from the KB (new sites: `references/skeletons.md`). A gap goes through `references/kb-gaps.md` (ADR-0023): the shape from the Pleasanter source at the version's tag, then a framework KB probe that the person runs with `pls kb-verify --env <dev>`. Until it passes, the design keeps the safe branch and names the probe as an open point at G2. You never call the API directly, and a project dev release is not the evidence.
 - A new app also gets these outputs:
   - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
@@ -117,7 +117,7 @@ Skill: `pls-p3-config-builder`.
 5. **If the plan is refused, read the reason:**
    - **drift:** someone changed dev → explain it, ask the person, and record the decision before `--accept-drift`;
    - **slot finding:** go back to the design;
-   - **scope** (`SCOPE … no round-trip evidence`, ADR-0001): the site uses a component never proven to round-trip. Tell the person; it is probed on a copy in dev, or the person writes a decision record for `--accept-unverified`. Never write that record yourself;
+   - **scope** (`SCOPE … no round-trip evidence`, ADR-0001): the site uses a component never proven to round-trip. Tell the person, and follow `references/kb-gaps.md` (ADR-0023): the framework gets a probe, the person runs `pls kb-verify`, and the key is added to the scope with that evidence; then `pls skills sync` and plan again. Build and deploy the other elements meanwhile, without the unverified key. Do not ask for `--accept-unverified`, and never write that record yourself;
    - **data-impacting without a migration:**
      - First check that the sites created by bootstrap have their record `releases/B-*/bootstrap.json`. Without it `pls` does not know they are new, and treats e.g. a new summary as data-impacting. Recover the record; do not reopen G2 for this.
      - Otherwise P2 missed it → back to G2.

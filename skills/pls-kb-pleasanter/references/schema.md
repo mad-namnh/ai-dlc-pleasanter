@@ -59,6 +59,18 @@ Editor layout: `EditorColumnHash.General` (ordered list). Grid: `GridColumns`. F
 |---|---|
 | Link (child → parent) | child `Columns[ClassX].ChoicesText = "[[parentSiteId]]"` + `Links: [{ColumnName: "ClassX", SiteId: parentSiteId}]`; record value = parent record Id as string |
 | Summary (on the child) | `{Id, SiteId: parent, DestinationReferenceType, DestinationColumn, LinkColumn, Type: Count/Total, SourceColumn?, SourceCondition?: childViewId, SetZeroWhenOutOfCondition?}` (D16, D23) |
-| Issues view | `Overdue: true` (D24); built-in `StartTime` / `CompletionTime`; editor key `IssueId` (Results: `ResultId`) |
+| Issues view | `Overdue: true` (D24); `NearCompletionTime: true` is source-derived only (D33, below); built-in `StartTime` / `CompletionTime`; editor key `IssueId` (Results: `ResultId`) |
 | Process data change | `{Type: "InputDate", ColumnName, BaseDateTime: "CurrentDate"}` — `CurrentDate` is the default and is dropped on save (D8) |
 | Issues defaults dropped on save (D8) | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` are defaults — do not keep them in git (equipment demo R-E01) |
+
+## Source-derived, not verified on a server
+
+Everything in this section was read in the Pleasanter source (GitHub Implem/Implem.Pleasanter, tag `Pleasanter_1.5.2.0`, read 2026-11-11) and has **not** been observed on a server. Treat it as an assumption until an entry in `probes/index.json` lists the target version.
+
+| Setting | Shape (source: Pleasanter_1.5.2.0, not verified on a server) |
+|---|---|
+| Issues view `NearCompletionTime` (D33) | View `{…, NearCompletionTime: true}` (`bool?`). Filter on `CompletionTime` from `today − NearCompletionTimeBeforeDays` to the end of `today + NearCompletionTimeAfterDays`; no Status condition (completed records stay). Probe `D33-near-completion-range` pending |
+| Site `NearCompletionTimeBeforeDays`, `NearCompletionTimeAfterDays` (D33) | top-level `SiteSettings` numbers (`decimal?`). Empty = `General.json` value (7 / 7 as shipped); stored only when different (D8 pattern). `General.json` as shipped: Min 0, Max 30 for both. **Open:** whether a value above Max (e.g. 90) sent through `updatesite` is stored and used, or clamped/refused; installations can change `General.json` |
+| `Aggregations[]` (grid aggregation) | `{Id (long), GroupBy (string, column name), Type, Target (string, column name)}`; `Type` 0 Count, 1 Total, 2 Average. Computed results (`Data`) are not serialized |
+| `Reminders[]` | `{Id, ReminderType, Subject, Body, Line, From, To, Token, Column, StartDateTime, Type (repeat type), Range, SendCompletedInPast, NotSendIfNotApplicable, NotSendHyperLink, ExcludeOverdue, Condition (view Id), Disabled}`. `ReminderType`: 1 Mail, 2 Slack, 3 ChatWork, 4 Line, 5 LineGroup, 6 Teams, 7 RocketChat, 8 InCircle, 9 LineWorks. Probe sites never carry reminders (kb-verify refuses them), so this shape will not be probed by `kb-verify` |
+| Reminder `To` tokens | `[<ColumnName>]` (e.g. `[ClassD]`, `[Manager]`) expanded per record; `[Group<id>]` → the group's members, `[User<id>]`, `[Dept<id>]` (`Libraries/Mails/Addresses.cs`). The ids are environment-specific: `pls` stores them as `[${principal:x}]` in git and writes the environment's id back on pack (`tools/pls/pls_address_principals.py`; same idea as D15) |

@@ -11,6 +11,12 @@ import pls_version as PV  # noqa: E402
 import test_http as TH  # noqa: E402
 
 LOGIN = '<link href="/assets/css/style.min.css?v=201520" rel="stylesheet" />'
+KB_INDEX = Path(__file__).resolve().parents[3] / "skills" / "pls-kb-pleasanter" / "references" / "probes" / "index.json"
+
+
+def pending_on(app: str) -> list[str]:
+    """Entries of the real KB not verified on `app` — e.g. a source-derived entry whose probe has not run (ADR-0023)."""
+    return PV.kb_unverified(json.loads(KB_INDEX.read_text(encoding="utf-8-sig")), app) or []
 
 
 class PureTest(unittest.TestCase):
@@ -124,7 +130,13 @@ class CliTest(unittest.TestCase):
         envs["envs"]["dev"]["pleasanter"] = {"app": "1.5.2.0", "build": "201520", "schema": 1.017}
         envs["envs"]["prod"]["pleasanter"] = {"app": "1.5.1.0", "build": "201510", "schema": 1.017}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
-        self.assertEqual(pls.version_check(self.r, "dev")["differences"], [])
+        pending = pending_on("1.5.2.0")
+        diffs = pls.version_check(self.r, "dev")["differences"]
+        self.assertEqual([d for d in diffs if not d.startswith("knowledge base:")], [])
+        kb = [d for d in diffs if d.startswith("knowledge base:")]
+        self.assertEqual(len(kb), 1 if pending else 0)                    # only entries not verified on 1.5.2
+        for d in kb:
+            self.assertIn(f"({', '.join(pending)})", d)
         envs["envs"]["dev"]["pleasanter"]["app"] = "unknown"
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         self.assertIn("not known for dev", pls.version_check(self.r, "dev")["differences"][0])
@@ -154,7 +166,11 @@ class CliTest(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.run_version("--app", "1.5.2.0")
-        self.assertNotIn("knowledge base:", out.getvalue())
+        pending = pending_on("1.5.2.0")
+        if pending:                                                         # a probe not run yet is named, nothing else
+            self.assertIn(f"({', '.join(pending)})", out.getvalue())
+        else:
+            self.assertNotIn("knowledge base:", out.getvalue())
 
 
 if __name__ == "__main__":
