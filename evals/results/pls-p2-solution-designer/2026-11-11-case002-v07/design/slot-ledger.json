@@ -1,0 +1,27 @@
+{
+  "inquiries": {
+    "AttachmentsA": {"label": "添付資料", "status": "allocated", "zone": "madlab"},
+    "CheckA": {"label": "AIで一次対応する", "status": "allocated", "zone": "madlab"},
+    "ClassA": {"label": "問い合わせ番号", "status": "allocated", "zone": "madlab"},
+    "ClassB": {"label": "顧客名", "status": "allocated", "zone": "madlab"},
+    "ClassC": {"label": "チャネル", "status": "allocated", "zone": "madlab"},
+    "ClassD": {"label": "カテゴリ", "status": "allocated", "zone": "madlab"},
+    "ClassE": {"label": "優先度", "status": "allocated", "zone": "madlab"},
+    "ClassF": {"label": "AI: 推定カテゴリ", "status": "allocated", "zone": "madlab"},
+    "ClassG": {"label": "AI: 推奨優先度", "status": "allocated", "zone": "madlab"},
+    "ClassH": {"label": "AI実行記録", "status": "allocated", "zone": "madlab"},
+    "DateA": {"label": "受付日", "status": "allocated", "zone": "madlab"},
+    "DateB": {"label": "対応期限", "status": "allocated", "zone": "madlab"},
+    "DateC": {"label": "エスカレーション日時", "status": "allocated", "zone": "madlab", "req": "REQ-001"},
+    "DescriptionA": {"label": "AI: 回答の下書き", "status": "allocated", "zone": "madlab"},
+    "NumA": {"label": "対応回数", "status": "allocated", "zone": "madlab"},
+    "NumB": {"label": "合計対応時間", "status": "allocated", "zone": "madlab", "req": "REQ-014", "design": "DES-005"}
+  },
+  "responses": {
+    "AttachmentsA": {"label": "添付資料", "status": "allocated", "zone": "madlab"},
+    "ClassA": {"label": "問い合わせ", "status": "allocated", "zone": "madlab"},
+    "ClassB": {"label": "対応種別", "status": "allocated", "zone": "madlab"},
+    "DateA": {"label": "対応日時", "status": "allocated", "zone": "madlab"},
+    "NumA": {"label": "作業時間", "status": "allocated", "zone": "madlab", "req": "REQ-013"}
+  }
+}

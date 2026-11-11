@@ -1,0 +1,34 @@
+{
+  "REQ-001": {
+    "design": ["DES-001"],
+    "config": [
+      "config/inquiries/site.json#Columns[Status]",
+      "config/inquiries/site.json#Columns[DateC]",
+      "config/inquiries/site.json#EditorColumnHash",
+      "config/inquiries/site.json#GridColumns",
+      "config/inquiries/site.json#Processes[escalate]"
+    ],
+    "tests": []
+  },
+  "REQ-002": {
+    "design": ["DES-001"],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate]"
+    ],
+    "tests": []
+  },
+  "REQ-003": {
+    "design": ["DES-001"],
+    "config": [
+      "config/inquiries/site.json#Processes[escalate]"
+    ],
+    "tests": []
+  },
+  "REQ-004": {
+    "design": ["DES-001"],
+    "config": [
+      "config/inquiries/site.json#Views[2]"
+    ],
+    "tests": []
+  }
+}

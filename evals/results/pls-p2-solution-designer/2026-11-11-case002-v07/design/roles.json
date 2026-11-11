@@ -1,0 +1,14 @@
+{
+  "roles": {
+    "accounting": {
+      "principal": "Group",
+      "group_name": "経理",
+      "description": "経理チーム: read-only on 問い合わせ and 対応履歴 (REQ-010..012, Q13 assumed group name). DES-004"
+    },
+    "support": {
+      "principal": "Group",
+      "group_name": "問い合わせ管理_サポート担当",
+      "description": "Support staff who may press エスカレーション (process access control). PROPOSED - pending derived requirement DR-1 at G1 and customer question Q24; replace the group name if the customer names an existing group. DES-004"
+    }
+  }
+}
