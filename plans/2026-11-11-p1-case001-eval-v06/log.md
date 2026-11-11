@@ -1,0 +1,4 @@
+# Log
+- Nam (2026-11-11): run case 001 on 0.6; investigate the literal site id left by pls unpack in case 002 (earlier peer session stopped on token limit, its scratch not used).
+- case 001 scratch ../_agent-scratch/p1-case001-v06-run2: pls-demo-inquiry 539b61f (first commit, no pre-slice commit exists): DES-000, slot ledger minus DateC, environments.json; config = pls unpack releases/R-20261105-01/rollback.json --env stg (stg before R-01; .pls/exports/stg-44573-before.json is unreadable to agents, deny rule) ; ai1 siteId 44566 (dev id held on stg, D3) restored by hand to ${site:responses} as input.md requires; empty requirements/; traceability {}; REQUEST.md = request + config summary of input.md.
+- case 001 graded FAIL 9/10 (reminder item: impact table says unaffected unless owner changes; condition is view 2 → depends on 状況/Q6, not raised). Investigation written. Suites: see commit. No pls change (Nam decides A/B/C).
