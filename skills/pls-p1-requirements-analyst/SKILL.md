@@ -1,6 +1,6 @@
 ---
 name: pls-p1-requirements-analyst
-description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meeting notes, email, ticket, drift accepted in operations) into testable EARS requirements with acceptance criteria, derived requirements and open questions for the customer, ready for gate G1. Use whenever a new or changed requirement for a Pleasanter system arrives.
+description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meeting notes, email, ticket, drift accepted in operations) into testable EARS requirements with acceptance criteria, derived requirements and open questions for the customer, ready for gate G1. When the request is only a rough idea, interviews the person first and writes requirements only from their answers. Use whenever a new or changed requirement for a Pleasanter system arrives.
 ---
 
 # pls-p1-requirements-analyst
@@ -13,6 +13,17 @@ description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meetin
 - The request, verbatim (save it under `requirements/sources/YYYY-MM-DD-<slug>.md`).
 - Current state: `config/` (unpacked sites), `requirements/index.md`, `design/` — to detect conflicts and impact.
 - `pls-kb-pleasanter` — to know what Pleasanter can and cannot do.
+
+## When the input is a rough idea (interview mode)
+
+A specification, a mail or a ticket says who does what with which data: go to the procedure. An **idea** names a goal ("we want to manage X in Pleasanter") and leaves that out. Writing requirements from it would mean inventing them.
+
+Use interview mode (`references/interview.md`) when one of these holds:
+- the input does not say at least two of: what one record is and its fields; the states a record goes through; who may do what;
+- you would have to settle core behaviour through `[assumed]` questions (more than about five) to write the first requirement;
+- the person asks to be interviewed.
+
+In interview mode you ask in at most 3 rounds, keep the questions and answers verbatim in `requirements/sources/YYYY-MM-DD-interview-<slug>.md`, get a summary confirmed, and then run the procedure below from step 2 with that record as the source. **A requirement needs a source answer (a derived requirement: the requirement and answer it derives from); without one it is a question.** Do not interview when the input is already a specification: use the open questions instead.
 
 ## Procedure
 
@@ -36,6 +47,7 @@ description: Phase P1 of AI-DLC for Pleasanter. Turns a customer request (meetin
 
 ```
 requirements/sources/YYYY-MM-DD-<slug>.md
+requirements/sources/YYYY-MM-DD-interview-<slug>.md   # interview mode: questions and answers verbatim (references/interview.md)
 requirements/REQ-NNN-<slug>.md        # one per requirement — template in references/req-template.md
 requirements/index.md                 # table + open questions
 ```
@@ -52,6 +64,7 @@ IDs are sequential across the project (`REQ-001`, `REQ-002`, …) and never reus
 - [ ] No derived requirement adds behaviour beyond the request that no existing element needs (those are questions).
 - [ ] Customer-facing text (questions, labels) is in Japanese; the rest of the document is English.
 - [ ] Nothing in the requirements depends on a Pleasanter behaviour you have not verified (`pls-kb-pleasanter`).
+- [ ] Interview mode: every requirement names the answers it comes from (`A<n>`, or `P<n> accepted`; a derived requirement names the requirement and answer it derives from); a proposal of yours that the person did not accept in their own words is a question, not a requirement; the record holds the questions, answers, proposals and the confirmation verbatim.
 
 ## Example (illustrative — not a template to copy)
 

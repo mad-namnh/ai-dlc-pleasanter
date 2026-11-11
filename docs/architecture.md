@@ -185,9 +185,10 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Inputs:** meeting notes, emails, tickets, screenshots, existing site configuration (for change requests), drift accepted in P6.
 - **AI does:**
   - `pls-p1-requirements-analyst`: extracts requirements as **EARS** statements, assigns REQ IDs, writes acceptance criteria.
+  - When the input is only a rough idea, the same skill interviews the person first (at most 3 rounds, grounded in the KB) and keeps questions and answers verbatim in `requirements/sources/<date>-interview-<slug>.md`. A requirement then names the answers it comes from; what has no source answer — including a proposal of the AI that the person did not accept — is an open question, not a requirement (I4, I8).
   - Flags ambiguity, conflicts with existing requirements, and missing non-functional aspects (permissions, notifications, volume, audit).
   - Produces the customer-facing question list (Japanese) for open points.
-- **Outputs:** `requirements/REQ-*.md`, `requirements/index.md`, question list.
+- **Outputs:** `requirements/REQ-*.md`, `requirements/index.md`, question list; in interview mode also the interview record under `requirements/sources/`.
 - **Checks:** every REQ has EARS form + acceptance criteria; no duplicate IDs; open questions listed.
 - **Gate:** G1.
 - **Status:** **used in slices #1–#3.** Skill 0.3 passed eval cases 001 and 002. Lessons:

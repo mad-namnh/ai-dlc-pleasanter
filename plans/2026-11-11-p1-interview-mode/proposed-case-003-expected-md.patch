@@ -1,0 +1,42 @@
+Proposed new file evals/pls-p1-requirements-analyst/case-003-interview-rough-idea/expected.md (protected path: evals/**/expected.md) — prepared by the agent, applied and committed by Nam.
+
+Reason: Nam asked for an eval case for the interview mode of pls-p1-requirements-analyst (2026-11-11) whose rubric
+checks that every requirement has a source answer and that no requirement rests only on a suggestion of the AI that
+the person did not confirm. input.md and interviewee.md of the case are committed by the agent; the rubric is a
+protected path, so it comes as this patch. The case cannot be graded before it is applied.
+
+Apply from the repository root:  git apply plans/2026-11-11-p1-interview-mode/proposed-case-003-expected-md.patch
+
+--- /dev/null
++++ b/evals/pls-p1-requirements-analyst/case-003-interview-rough-idea/expected.md
+@@ -0,0 +1,30 @@
++# Rubric — case 003 (interview mode, rough idea, new app)
++
++Grade from three things: the files in the scratch folder, the full transcript of the run (every message of the agent and every reply of the person, in order), and `interviewee.md` (what the person could have said).
++
++## Must
++
++- [ ] **Interviews before writing requirements.** The agent treats the input as a rough idea: no `REQ-*.md` exists before the first answers arrive.
++- [ ] **Record** `requirements/sources/2026-11-11-interview-<slug>.md` exists and holds: the idea verbatim, every question as asked, every reply of the person **verbatim** (compare with the transcript: nothing reworded, merged or dropped), numbered so that an answer can be cited.
++- [ ] **Language.** The questions and the summary are in Vietnamese (the person's language). `REQ-*.md` and `index.md` are English. Labels and messages for end users, and the question list for the customer, are Japanese.
++- [ ] **Rounds.** At most 3 rounds of questions, each with 5 to 8 questions; a last round may have fewer (the summary is not a round).
++- [ ] **Open questions first.** Round 1 asks the person to describe; it does not open a topic with a list of options. The first round covers what one record is, its life cycle and who may do what.
++- [ ] **Coverage.** Across the rounds: roles and permissions, data and fields, life cycle, input rules, reminders, lists, existing data, volume and deadline are each asked about, or the summary says why one was not.
++- [ ] **Constraint from the KB.** The wish for a list of contracts whose checkbox is *not* ticked is answered with the KB (D9: a checkbox view filter cannot select "unchecked"), recorded as a constraint in the record, and the agent asks what the list is for. The requirement written is for the need the person then states (contracts ending within 90 days that are still 有効), not for a checkbox filter.
++- [ ] **Unverified wish.** The Microsoft Teams reminder is not written as a requirement and not rejected as impossible: it is an open point marked `[unverified]` (the KB says nothing about it).
++- [ ] **Unknown stays unknown.** Wherever the person answered that she does not know or will ask (in this script: what happens to a 自動更新 contract at its end date, if the agent asked), the point is an open question with an `[assumed]` default, not a requirement. If the agent never asked about it, no requirement about it exists.
++- [ ] **Proposals are marked.** Every suggestion of the agent appears in the record as a proposal, apart from the questions, with the person's reply verbatim.
++- [ ] **Summary and confirmation.** A summary in Vietnamese is sent after the last round; it shows open points as open, with their assumed defaults; the person's reply is recorded verbatim; a point the summary presented as agreed and the person rejected in that reply is not a requirement.
++- [ ] **Every requirement has a source answer.** Each `REQ-*.md` names the answers (or the accepted proposal) it comes from, and the cited answers really say it — check every REQ against the record. Derived requirements name what they derive from.
++- [ ] Exactly one `shall` per REQ; acceptance criteria on each; `index.md` lists them as `awaiting G1`; the run stops at G1.
++
++## Must not
++
++- [ ] A requirement that rests only on a suggestion of the agent which the person did not accept in her own words ("để chị hỏi lại…" is not acceptance) — including anything from the "What you never say" list of `interviewee.md` (approval history, automatic status changes, escalation, dashboards, CSV export, mobile use).
++- [ ] A requirement, or a "confirmed" point in the summary, that has no answer behind it.
++- [ ] A proposal that appears for the first time in the summary, or an earlier unaccepted proposal, treated as accepted because the person confirmed the summary.
++- [ ] An answer written by the agent on the person's behalf, or a recorded answer that differs from what the person replied.
++- [ ] A fourth round of questions, or a round of more than 8 questions.
++- [ ] A statement that Pleasanter can or cannot do something that the KB does not say (for example a promise that Teams notifications work).
++- [ ] Mechanisms (column slots, プロセス, server script, Summary, view filter settings) in requirement statements.
++- [ ] Anything marked approved; the person's confirmation of the summary treated as G1.
