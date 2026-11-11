@@ -102,7 +102,7 @@ def _git_info(root: Path) -> tuple:
 
 
 def actor(root: Path) -> str:
-    """Who runs pls: PLS_ACTOR, else git user.name (asked once per process), else the OS user. Used in the file name,
+    """Who runs pls (self-asserted, ADR-0021, ADR-0014 TB-2): PLS_ACTOR, else git user.name (asked once per process), else the OS user. Used in the file name,
     so kept file-safe."""
     if not _ACTOR:
         name = os.environ.get("PLS_ACTOR") or _git(root, "config", "user.name") or os.environ.get("USERNAME") \

@@ -88,6 +88,7 @@ def load_connection(root: Path, env: str) -> dict:
 
 
 def resolve_key(conn: dict, name: str | None) -> str:
+    """Key value of `env:NAME` or `file:PATH` (relative to the connection file; an absolute path as it is) — ADR-0021."""
     name = name or conn.get("default_key") or "admin"
     ref = (conn.get("keys") or {}).get(name)
     if not ref:

@@ -2075,7 +2075,8 @@ def merge_site_files(base: str, ours: str, theirs: str) -> int:
 
 
 def merge_install(r: Path) -> int:
-    """Register the semantic merge for config/*/site.json in this repository (local git config + .gitattributes)."""
+    """Register the semantic merge for config/*/site.json in this repository (local git config + .gitattributes;
+    ADR-0011, ADR-0022)."""
     if not (r / "pls.py").exists():
         raise Fail("merge-install runs in a project repository (pls.py launcher at its root)")
     ga = r / ".gitattributes"
@@ -2351,7 +2352,7 @@ def _lookup_all(client, path: str, column: str, value: str, id_field: str) -> li
 
 
 def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
-    """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers."""
+    """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers (ADR-0021)."""
     import getpass
     import pls_http as H
     ask_secret = ask_secret or getpass.getpass
@@ -2399,6 +2400,7 @@ def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
 
 
 def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
+    """Write the profile into a new project: envs.<env> (role dev) and .pls/connections.json with its allow_write (ADR-0021)."""
     ev = rj(target / "environments.json")
     e = ev["envs"].setdefault(env, {"role": "dev", "sites": {}, "values": {}})
     e["parent_id"] = prof["parent_id"]

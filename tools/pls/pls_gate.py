@@ -4,9 +4,10 @@ The agent never approves a gate. After the person states a decision, `pls gate` 
 under `gates/`, named by date, gate, time and a random suffix, so records of parallel branches never share a
 name and a record is never overwritten. The record is what other
 commands trust:
-- `release-plan` for a stg target needs a G3 approval of that release;
-- `apply` / `bootstrap` on stg need a G4 approval naming that release or bootstrap id, bound to its content
-  (pls_release_digest): a release changed after G4 is refused;
+- `release-plan` for a non-dev target needs a G3 approval of that release;
+- `apply` / `bootstrap` / `migrate` outside dev, and `package` everywhere, need a G4 approval naming that release
+  or bootstrap id, bound to its content (pls_release_digest): a release changed after G4 is refused; tests that
+  change records outside dev need that G4 or the person's confirmation;
 - lint L-GATE-01: every "G<n> approved" status line in a REQ, DES, G3 or approvals file has its record.
 Only names listed as approvers in the project profile (`CLAUDE.md`, row "Approvers") are accepted; once the row has a
 `pls profile set` record, the recorded value is the one read (pls_profile_records).

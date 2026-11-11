@@ -29,7 +29,9 @@ ADR-0008 says connections are local (`.pls/connections.json`, gitignored), keys 
 | `PLS_ACTOR` | the run-log actor (else git `user.name`, else the OS user); self-asserted, not an identity check | `tools/pls/pls_log.py` `actor` |
 | `PLS_HOME` | the framework checkout the project launcher runs (ADR-0022) | project `pls.py` launcher |
 
-What does not change with any of them: `role: prod` is never written; writes need `role` dev / stg from `environments.json` **and** `allow_write: true` in the connection used (`assert_writable`); stg needs G4 (ADR-0020).
+What does not change with any of them: `role: prod` is never written; writes need `role` dev / stg from `environments.json` **and** `allow_write: true` in the connection used (`assert_writable`); on stg, `apply` / `bootstrap` / `migrate` need G4, and tests that change records need G4 or the person's confirmation (ADR-0020).
+
+The table lists the variables that change what `pls` reads or who it records. Others only locate or label usage data and affect no guard: `CLAUDE_CONFIG_DIR` (where `pls usage` reads Claude Code transcripts, `tools/pls/pls_usage.py`) and `CLAUDE_CODE_SESSION_ID` (session of a run-log event, `pls_log.py`).
 
 ## Open questions
 

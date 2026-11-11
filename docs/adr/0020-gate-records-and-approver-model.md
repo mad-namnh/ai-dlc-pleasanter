@@ -20,14 +20,14 @@ This ADR writes the model down as built, so that a change to it is a decision, a
 - **Last decision counts:** per gate and item / release, the record with the latest instant in `at` wins; on the same instant any decision other than `approved` wins (`latest`). A record that cannot be read, has the wrong shape, or is dated more than 5 minutes in the future makes every gate check refuse until a person repairs or removes it (`load`, `_record_problem`).
 - `releases/R-*/approvals.md` is a note for people. The records `pls` checks are only those in `gates/`.
 
-**Where a record is required** (outside `role: dev`; on dev no gate record is checked):
+**Where a record is required** (outside `role: dev`, except `pls package`, which needs G4 in every environment; on dev no other gate record is checked):
 
 | Command | Record | Code |
 |---|---|---|
 | `pls release-plan` for a non-dev environment | G3 approval of the release | `tools/pls/pls.py` (`GT.require(r, "G3", …)`) |
 | `pls apply`, `pls bootstrap`, `pls migrate` on a non-dev environment | G4 approval of the release / bootstrap id, bound to its content (a release changed after G4 is refused) | `pls.py` (`GT.require(r, "G4", …)` in apply, bootstrap, migrate) |
-| `pls test` with specs that change records outside dev | G4 of the release under test (`--release`, same environment) or the person's typed confirmation at a terminal | `pls.py` (test command) |
-| `pls package` (production hand-over, ADR-0003) | G4 approval bound to the content | `pls.py` (package command) |
+| `pls test` with specs that change records outside dev | G4 of the release under test (`--release`, same environment), or the person's confirmation of this run: the environment name typed at a terminal, or `--yes` given on their instruction (`_confirm`) — **no gate record in that case** | `pls.py` (test command) |
+| `pls package` (production hand-over, ADR-0003), any environment | G4 approval bound to the content | `pls.py` (package command) |
 | lint L-GATE-01 | every "G<n> approved" status line in a REQ, DES, G3 or approvals file has a matching record by a profile approver | `pls_gate.py` `lint` |
 
 One approver per record. The profile decides who may approve which gate (`Nam (all gates)`, `Nam (G1, G2), Taro (G3, G4)`, `G1, G4: Nam; G2, G3: Taro`). No gate requires two records.
