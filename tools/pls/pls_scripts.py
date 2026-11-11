@@ -118,7 +118,7 @@ def _spans(s: str, contexts: list[str]) -> list[tuple[int, int]]:
 SITE_ID_NAME = r"(?:(?<![A-Za-z])site|Site|SITE)_?(?:Id|ID|id)(?:_\w*)?(?![A-Za-z0-9])"
 ID_CONTEXT = re.compile(r"""(?x)(?:
       %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*["']?            # siteId === 797, siteId: 797, getSiteId(797
-    | %(name)s["']\s*[:,]\s*                                       # "SiteId": 797, 'NOTIFICATION_SITE_ID', 116
+    | %(name)s["']\s*[:,]\s*["']?                                  # "SiteId": 797, "siteId": "797", 'NOTIFICATION_SITE_ID', 116
     | (?<![\w.$])items\.[A-Z]\w*\(\s*                              # server script items.Get(797, …) — PascalCase API only
     | \$p\.api\w*\(\s*\{[^()]{0,60}?(?<![\w$])["']?id["']?\s*:\s*  # client $p.apiGet({ … id: 797, … })
     | /items/                                                      # /api/items/797/get

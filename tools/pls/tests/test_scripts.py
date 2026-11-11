@@ -69,6 +69,20 @@ class PureTest(unittest.TestCase):
         self.assertNotIn("103", out)
         self.assertEqual(out.count("${site:x}"), 5)
 
+    def test_quoted_site_id_value_under_a_quoted_key_is_a_site_id(self):
+        # JSON-style configuration inside a script (the AI first-response script: "related": {"siteId": "44574", ...})
+        s = ('const CONF = {"related": {"siteId": "103", "link": "ClassA"}};\n'
+             "cfg = {'siteId': '103'};\nx = {\"SiteId\":\"103\"};\n_pick(\"NOTIFICATION_SITE_ID\", \"103\");\n"
+             "y = {\"siteId\": '103'};\n")                                           # mixed quotes
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 5)
+        self.assertIn('"siteId": "${site:x}"', out)                                  # the quotes stay
+        self.assertEqual(SX.unstable_refs('{"related": {"siteId": "${site:x}"}}', "s"), [])
+        self.assertEqual(SX.literal_left('{"siteId": "103"}', "103"), [12])          # lint L-REF-01 sees it too
+        kept = '{"siteIdx": "103", "website_id": "103", "status": "103", "siteId": "103px"}'
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+
     def test_hand_written_reference_outside_a_context_is_flagged(self):
         self.assertEqual(SX.unstable_refs("const ANKEN = ${site:anken};", "s"), ["anken"])
         self.assertEqual(SX.unstable_refs("const ANKEN_SITE_ID = ${site:anken}; items.Get(${site:anken});", "s"), [])
@@ -202,6 +216,15 @@ class CliTest(unittest.TestCase):
                                    ).replace('"SiteId": 797', '"SiteId": 9001'), encoding="utf-8")
         self.assertEqual(pls.main(["unpack", str(prod), "--env", "prod", "--site", "anken"]), 0)
         self.assertIn("var s = ${site:anken};", self.raw())
+
+    def test_quoted_site_id_in_a_script_config_survives_unpack_and_follows_the_environment(self):
+        body = 'const CONF = {"related": {"siteId": "797", "link": "ClassA"}};\n'
+        self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}])), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
+        self.assertIn('"siteId": "${site:anken}"', self.raw())
+        self.assertNotIn("L-REF-03", {i["rule"] for i in pls.lint(self.r)})
+        p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
+        self.assertIn('"siteId": "9001"', p["SiteSettings"]["Scripts"][0]["Body"])          # prod gets its own id
 
     def test_keep_needs_a_real_context(self):
         with self.assertRaises(pls.Fail):
