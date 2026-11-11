@@ -1,0 +1,24 @@
+# Log
+- state: brownfield-adr at 75dd68a; untracked eval results + p1-interview-mode/log.md belong to another task, left untouched.
+- Nam chose AU5 (2026-11-11) with "ADR + probe first, Nam runs the probe".
+- classified Critical; main session Opus 5.5 (strongest tier).
+- KB: only /api/users/get. Manual (not observed): users create/update/delete tenant manager only; API key issued by the user themself in the UI, no documented way for another user. Source on GitHub main (not observed): /users/authenticate, /users/createapikey.
+- STOP (agent-rules §1 items 1, 2, 5): new write path, test-user secrets, probe write on dev → ADR Proposed + probe only; nothing committed while the decision is pending.
+- written: docs/adr/0018 (Proposed, options A–D, recommendation C with B as fallback), README row, probe-user-create.py (stage A documented API, stage B screens, --api-only).
+- offline check (scratchpad fake client, stage A, --api-only): duplicate allowed / duplicate refused / crash during duplicate → cleanup deletes everything, no password, key or server in the output. Stage B not exercised offline.
+- budget: 0 subagent calls so far.
+- review round 1 (pls-x-reviewer, opus/high): accept with fixes — 0 Critical/High, 3 Medium (M1 delete question overstated, M2 ADR-0017 rule 3 not named, M3 Mandatory 1 vs test-user secrets), 8 Low. git status unchanged after the call. Subagent calls: 1. Review rounds: 1 of 2.
+- fixed: M1 (keys re-checked after delete; trash-box/LoginId question moved to "not answered"), M2, M3 (open questions + Mandatory 1 needs Nam), L1 (candidates scrubbed before the answer is printed), L2 (session result filled in place), L3 (stage B skipped when TenantManager), L4 (docstring: unconfirmed), L5 (no redirects in stage B), L6 (stdout utf-8), L7 (recommendation: a failure of the probe's own call does not decide against C), L8 (lifecycle open question).
+- re-run reviewer's offline harness (scratchpad, no network): all scenarios, no leak; Ctrl+C at createapikey keeps login/session results; key-in-Target no longer printed; cleanup-lookup failure deletes nothing.
+- fixes not re-reviewed independently (all Medium/Low); round 2 available if Nam wants it.
+- waiting: Nam runs the probe on dev; decisions on ADR-0018 and on Mandatory 1. Nothing committed.
+- probe run 1 by Nam (2026-11-11 19:03, dev): stage A — create 200 (Id 10062 = UserId), read-back Disabled/Lockout/TenantManager false, LockoutCounter 0, PasswordChangeTime/PasswordExpirationTime present as text; duplicate LoginId refused (HTTP 500, StatusCode 500, 「このログインIDは既に使用中です」); delete 200, not returned by get afterwards. Stage B skipped by a probe flaw: the login page has `Users_LoginId` + hidden `LoginId` and `Users_Password` + `Users_ChangedPassword*`, so the suffix match found two of each.
+- fixed: login fields picked by the observed exact names; only `ReturnUrl` sent with them (not the page's other hidden fields). Reviewer harness re-run with the observed form shape: no leak, cleanup complete. Not re-reviewed independently (selector-only change).
+- waiting: probe run 2 by Nam (stage B).
+- probe run 2 by Nam (19:05, dev): stage A as run 1 (Id 10064); login with the creation password OK (no change asked); API accepted the session without a key (/api/users/get); /users/createapikey issued one key, accepted by the API; after delete the key answers 401. Nothing left.
+- pls-kb-curator called (sonnet/medium) with the evidence of both runs. Subagent calls: 2.
+- ADR-0018: open questions of the probe answered; recommendation C (B fallback), preconditions Mandatory 1 + superseding ADR for ADR-0017 rules 2–3. README row updated.
+- KB: curator edited only api.md (9 rows, no secrets, LF); Orchestrator bumped KB 0.18 in skills/README.md. probes/index.json has no group/user entries: unchanged.
+- Nam (2026-11-11): ADR-0018 option C (B fallback); Mandatory 1 → proposed patch (written, `git apply --check` OK, not applied); ADR-0017 rules 2–3 → new superseding ADR (next); commit the evidence now.
+- docs: ADR-0018 Accepted (nothing built), README row, plan.md AU5, HANDOFF.
+- verify before commit: 3.12 404 OK (no skips), node 15 pass; tools/pls unchanged → 3.10 not needed. Committed (docs: ADR-0018 decided, KB 0.18, probe evidence). Subagent calls: 2 (1 review, 1 curator).
