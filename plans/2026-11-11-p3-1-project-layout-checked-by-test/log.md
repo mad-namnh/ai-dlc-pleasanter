@@ -22,3 +22,5 @@ Counts: subagent calls (not eval cases) 1/6, review rounds 1/2, fix attempts 1/3
 - 2026-11-11 | commit: docs(adr): ADR-0016 accepted by Nam after two trial tasks; patches proposed for the two protected files
 - 2026-11-11 | counts: subagent calls 1/6, review rounds 1/2, fix attempts 1/3
 - 2026-11-11 | REPORT SENT
+- 2026-11-11 | after the report: Nam applied and committed both patches (`bc8df4a`); checked — each patch reverses cleanly against HEAD (`git apply --check -R`), the commit touches only `docs/agent-rules.md` and `templates/project/CLAUDE.md`, working tree clean. `HANDOFF.md` updated (no patch waiting)
+- 2026-11-11 | REPORT SENT
