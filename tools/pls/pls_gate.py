@@ -1,4 +1,4 @@
-"""Gate decisions as records (invariant I4): who approved what, in their own words, checked against the profile.
+"""Gate decisions as records (invariant I4, ADR-0020): who approved what, in their own words, checked against the profile.
 
 The agent never approves a gate. After the person states a decision, `pls gate` writes one file per decision
 under `gates/`, named by date, gate, time and a random suffix, so records of parallel branches never share a

@@ -43,6 +43,7 @@ class UncertainOutcome(TransportError):
 # ---------------------------------------------------------------- connections
 
 def connections_file(root: Path) -> Path:
+    """`.pls/connections.json`, or the file named by PLS_CONNECTIONS (ADR-0021, ADR-0014 TB-9)."""
     p = os.environ.get("PLS_CONNECTIONS")
     return Path(p) if p else root / ".pls" / "connections.json"
 

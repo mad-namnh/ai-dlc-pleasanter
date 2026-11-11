@@ -2170,7 +2170,7 @@ def bind(r: Path, env: str, release: str, created: dict) -> int:
     return 0
 
 
-# ---------------------------------------------------------------- project scaffold and skills (Step 4b D3)
+# ---------------------------------------------------------------- project scaffold and skills (Step 4b D3, ADR-0022)
 
 FRAMEWORK = Path(__file__).resolve().parents[2]
 LAUNCHER = """#!/usr/bin/env python3
@@ -2308,7 +2308,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     sync_skills(target, fw)
 
 
-# ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification)
+# ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification, ADR-0021)
 
 def profile_dir() -> Path:
     import os

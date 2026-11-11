@@ -1,4 +1,4 @@
-"""Profile records: guard inputs a person states outside the four gates (invariant I4, ADR-0014 TB-1/TB-2).
+"""Profile records: guard inputs a person states outside the four gates (invariant I4, ADR-0020, ADR-0014 TB-1/TB-2).
 
 The guard inputs `pls gate`, `pls jobs-verified` and the onboarding check read — profile rows Approvers, Operators,
 Origin — and the `role` of an environment are set only through `pls profile set`, which records the person's words
