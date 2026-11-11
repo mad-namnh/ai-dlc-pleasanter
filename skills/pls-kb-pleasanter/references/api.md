@@ -69,11 +69,19 @@ Compared with getsite of the same site after mapping ids: 0 differences (setting
 
 - `POST /items/{siteId}/SetSiteSettings` with `ControlId=NewProcess` (or `NewProcessDataChange`, …) returns the **dialog HTML** with every field and option for that setting, without saving anything. Use it to learn the schema of a setting on the exact installed version.
 
-## Users and groups (1.5.2, verified 2026-11-05 with an admin session, read-only)
+## Users and groups (1.5.2; first three rows: read-only probe of 2026-11-05 with an admin session; rows marked "write probe": 2026-11-11, tenant administrator API key, build 201520)
 
 | Call | Result |
 |---|---|
 | `POST /api/groups/get` `{View: {ColumnFilterHash: {GroupName: "<name>"}}}` | `Response.Data[]` with `GroupId`, `GroupName`, …; page size 200 (`Offset` for more). The filter matched the one group with that name. `pls setup` still compares the name exactly |
 | `POST /api/users/get` `{View: {ColumnFilterHash: {LoginId: "<login>"}}}` | `Response.Data[]` with `UserId`, `LoginId`, … (also sensitive fields: never print or store the whole record) |
 | Either call with a non-admin user's API key | not verified: `pls setup` asks for the id when the lookup fails |
+| Write probe: `POST /api/groups/create` `{GroupName: "<name>", Body: "<text>"}` (no `GroupMembers`, no `GroupChildren`) | HTTP 200, `{"Id": 376, "StatusCode": 200, "Message": "\" <name> \" を作成しました。"}`. A lookup by name then returned GroupId 376: the `Id` of the create answer is the new GroupId |
+| Write probe: a second `create` with the **same** `GroupName` | HTTP 200, `{"Id": 377, … "を作成しました。"}`; lookup by name returned both [376, 377]. **The server does not refuse a duplicate group name.** A caller must look up first and refuse an ambiguous name itself |
+| Write probe: `POST /api/groups/{id}/delete` (body only `ApiVersion`/`ApiKey`) for both ids | HTTP 200 each, `{"Id": <id>, "StatusCode": 200, "Message": "\" <name> \" を削除しました。"}`; lookup by name afterwards: no group left |
+| Write probe: lookup with `ColumnFilterHash.GroupName` | Returned both duplicate groups for the exact name. Exact vs partial match was **not tested**; callers compare the name exactly |
+| `create` / `delete` with a non-administrator key | not verified. The Pleasanter manual says these are for the tenant administrator only (https://pleasanter.org/en/manual/developers-guide/api/group-operations/api-group-create/); not observed by us |
+| `create` with `GroupMembers` / `GroupChildren`; `POST /api/groups/{id}/update` | not verified |
+
+Write probe limits: group names of the form `zz_probe_group_<timestamp>`, on a dev environment; the probe created and deleted its own groups and the server URL was not recorded.
 

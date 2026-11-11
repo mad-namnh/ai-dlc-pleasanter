@@ -175,6 +175,13 @@ class Client:
         st, js, text = self.call(f"/api/items/{parent_id}/createsite", payload)
         return st, (js or {}).get("Id"), text[:200]
 
+    def create_group(self, name: str, body: str, members: list[str]) -> tuple[int, int | None, str]:
+        """POST /api/groups/create (tenant administrator; 1.5.2: `Id` of the answer is the new GroupId, and a
+        duplicate name is NOT refused — the caller looks every match up first, KB api.md "Users and groups")."""
+        st, js, text = self.call("/api/groups/create", {"GroupName": name, "Body": body, "GroupMembers": members})
+        gid = (js or {}).get("Id") if isinstance(js, dict) else None
+        return st, (gid if isinstance(gid, int) and not isinstance(gid, bool) and gid > 0 else None), text[:200]
+
     def backup_records(self, site_id: int, page: int = 200) -> dict:
         out: list = []
         offset = 0

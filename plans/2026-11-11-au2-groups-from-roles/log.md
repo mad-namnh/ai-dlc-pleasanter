@@ -1,0 +1,23 @@
+# Log
+- state: brownfield-adr, AU6 committed (b4e90dd); untracked eval results of another task left untouched.
+- classified Critical; main session Opus 5.5 (strongest tier).
+- KB: no group-create entry. Manual: /api/groups/create exists, tenant admin only (not observed).
+- STOP (agent-rules §1 items 1, 5): new write path + tenant-admin privilege + probe write on dev → asked Nam.
+- budget: 0 subagent calls.
+- Nam (2026-11-11): option "ADR first + probe"; dev key is a tenant administrator.
+- manual fetched (not observed): create /api/groups/create, delete /api/groups/{id}/delete, both tenant admin only; response {Id, StatusCode, Message}.
+- written: docs/adr/0017 (Proposed, option B proposed), README row, probe-group-create.py (operator runs it; dev only, assert_writable, typed confirmation, deletes what it created).
+- not committed: decision pending (ADR acceptance + probe result).
+- review round 1 (opus/high): accept with fixes, 1 High + 4 Medium + 4 Low; all fixed; offline fake-client check passed. Subagent calls: 2.
+- review round 2 (opus/high): accept with fixes, 1 High (R2-1, from the F2 fix) + 4 Low; all fixed, offline scenarios pass. Review rounds: 2 of 2 used; subagent calls: 3. Fix of R2-1 not re-reviewed independently — told Nam.
+- probe run by Nam 17:48 on dev: create 200 (Id = GroupId 376), duplicate name created (377) — server does not refuse duplicates, delete 200 both, nothing left. `pls version --env dev` was refused that run (version line not pasted); dev record: build 201520, KB says 1.5.2.
+- Nam: demo server uses one tenant on purpose; real dev and stg are different tenants. ADR-0017 open questions 1–4 answered.
+- pls-kb-curator called (sonnet) with the probe evidence. Subagent calls: 4.
+- Nam: ADR-0017 Accept Option B; members = the operator (admin).
+- KB: curator wrote api.md rows (in its path only); Orchestrator normalised CRLF→LF, KB 0.16 in skills/README.md.
+- built: pls_http.Client.create_group; pls.bind_principals (+ _lookup_all, --create/--yes); principals in LG.WRITING and test_write_guards (WRITES, ALLOWED_WRITE_SITES, CLIENT_WRITERS, WRITE_RUNNERS); fake server groups/create; tests test_principals_create_groups_on_dev_only.py (12) + write-guards dynamic (1).
+- docs: ADR-0017 Accepted + built, README row, ADR-0014 TB-14 controls, architecture.md, P2 0.8, lifecycle 0.18, demo/README, plan.md AU2, HANDOFF.
+- verify: 3.12 401 OK (ratchet ran, no skips); node 15; parent worktree b4e90dd: 12 FAIL/ERROR of 13 new (the 13th, "without --create nothing is written", is old behaviour), worktree removed.
+- BUDGET: review rounds 2 of 2 already used on the probe → the code change has no independent review yet: asked Nam for one more round.
+- Nam: allowed up to 2 more review rounds for the code. 3.10: see next line.
+- review round 3 (opus/high, extra): accept with fixes, 2 Medium + 4 Low; fixed or documented; suites 404 OK (3.12, 3.10 2 skipped), node 15. Subagent calls in AU2: 4 (3 reviews, 1 curator). Review rounds: 3 (2 + 1 of the 2 extra Nam allowed); no High open.

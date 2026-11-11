@@ -18,5 +18,6 @@
 | [0014](0014-trust-boundaries.md) | Trust boundaries — what `pls` enforces and what it trusts | Proposed (2026-11-09) |
 | [0015](0015-undoing-an-applied-release.md) | Undoing a release that was applied successfully (`pls rollback`) | Proposed (2026-11-11) — nothing built |
 | [0016](0016-agent-team-for-framework-development.md) | An agent team for developing the framework (Orchestrator + three subagents, permission rules) | Accepted (2026-11-11) — after two trial tasks; 4 open questions stay open |
+| [0017](0017-creating-groups-from-the-permission-design.md) | Creating the groups of the permission design on dev (`pls principals --create`) | Accepted (2026-11-11) — option B, built (`pls principals --create`) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

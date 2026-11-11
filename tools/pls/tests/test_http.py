@@ -26,6 +26,9 @@ class Fake:
                  "SiteSettings": {"Processes": [{"Id": 1, "Name": "return", "CurrentStatus": 100, "ChangedStatus": 900}]}},
         }
         self.records, self.next_id, self.calls = {}, 1000, []
+        self.groups = [{"GroupId": 374, "GroupName": "zz_demo_総務"}, {"GroupId": 3740, "GroupName": "zz_demo_総務2"},
+                       {"GroupId": 375, "GroupName": "zz_demo_社員"}]
+        self.group_bodies = []
         self.fail_update_on = None
         self.drop_on_save = None
         self.fail_restore_on = None
@@ -35,10 +38,16 @@ class Fake:
         self.calls.append((path, who))
         if not who:
             return 401, {"Message": "unauthorized"}
+        if path == "/api/groups/create":              # tenant administrator only; duplicates NOT refused (KB, 1.5.2)
+            if who != "admin":
+                return 403, {"Message": "forbidden"}
+            self.next_id += 1
+            self.groups.append({"GroupId": self.next_id, "GroupName": body["GroupName"]})
+            self.group_bodies.append(body)
+            return 200, {"Id": self.next_id, "StatusCode": 200, "Message": "created"}
         if path in ("/api/groups/get", "/api/users/get"):
             col = (body.get("View") or {}).get("ColumnFilterHash") or {}
-            rows = [{"GroupId": 374, "GroupName": "zz_demo_総務"}, {"GroupId": 3740, "GroupName": "zz_demo_総務2"},
-                    {"GroupId": 375, "GroupName": "zz_demo_社員"}] if "groups" in path else [{"UserId": 7, "LoginId": "nam"}]
+            rows = list(self.groups) if "groups" in path else [{"UserId": 7, "LoginId": "nam"}]
             rows = [r_ for r_ in rows if all(str(v) in str(r_.get(k)) for k, v in col.items())]   # like-match, as Pleasanter
             return 200, {"Response": {"Data": rows, "TotalCount": len(rows)}}
         parts = path.strip("/").split("/")          # api items {id} {action}

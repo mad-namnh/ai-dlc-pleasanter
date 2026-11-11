@@ -58,7 +58,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 `http-check` must show HTTP 200 and `writes: allowed`. Then open Claude Code in the folder and give it the spec. For the demo, follow [`demo/README.md`](../demo/README.md).
 
-**Permissions are designed, not set up.** The roles and their groups come out of the design (P2). After G2 the agent tells you which groups to create; they need no members in the demo. It then binds them with `python pls.py principals --env dev`.
+**Permissions are designed, not set up.** The roles and their groups come out of the design (P2). After G2, on dev, run `python pls.py principals --env dev --create` in your terminal: it lists the groups of the design that do not exist yet, asks you to type `dev`, creates them with you as the only member and binds them (ADR-0017; your dev key must be a tenant administrator). Elsewhere the agent tells you which groups to create in Pleasanter, then binds them with `python pls.py principals --env <env>`.
 
 **Demo stage:** role tests are deferred. The agent works with your key only, and proves the restrictions of the other roles in the configuration. Testing as each role, with a test user and key for each, comes in a later phase (TD-11).
 
@@ -92,7 +92,12 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `setup`: `folder …: HTTP 401` | Wrong or expired key: create a new one and run `setup` again. |
 | `setup`: `HTTP 404` or `not a folder` | The URL or folder id is wrong, or your user cannot see that folder. |
 | `setup` asks for your user id | It was not found by login id; type the id from the user management list. |
-| `principals`: `MISSING …` | Create that group in Pleasanter (name exactly as listed), then run it again. |
+| `principals`: `MISSING …` | On dev: `python pls.py principals --env dev --create`. Elsewhere: create that group in Pleasanter (name exactly as listed), then run it again. |
+| `principals`: `matches N groups` | Pleasanter allows two groups with the same name. Delete or rename the extra ones in Pleasanter, then run it again. |
+| `principals`: `lookup of group … failed` | The lookup did not return a complete answer (connection, rights, or more than one page). Nothing was created; check `http-check` and run it again. |
+| `principals --create`: `principals.admin is …` | Your own user is not bound. Create the project with a profile (`pls setup`, `pls init`) or add `"admin": "User,<your id>"` to the env's `principals`. |
+| `principals --create`: `not a group with a final name` | `design/roles.json` has a role that is not `principal: "Group"` or still has a placeholder `group_name`. The design is fixed first (P2). |
+| `principals --create`: `answered HTTP 403` | Your key is not a tenant administrator. Create the groups in Pleasanter instead. |
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |
 | `L-REF-04` from `lint` | An environment value that is a number or shorter than 6 characters is used inside longer text. Use it as the whole value of its field, or put the surrounding text into the value (`values` in `environments.json`). |

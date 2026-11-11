@@ -2323,6 +2323,31 @@ def _lookup(client, path: str, column: str, value: str, id_field: str) -> int | 
     return int(hits[0][id_field]) if st == 200 and len(hits) == 1 else None
 
 
+def _lookup_all(client, path: str, column: str, value: str, id_field: str) -> list[int] | None:
+    """Every id whose `column` is exactly `value` (the API filter is not proven exact); None when the lookup itself
+    failed — a caller that would create on "not found" must treat None as unknown, never as missing."""
+    try:
+        st, js, _ = client.call(path, {"View": {"ColumnFilterHash": {column: value}}})
+    except Exception:          # noqa: BLE001 — reported by the caller as an unknown result
+        return None
+    if st != 200 or not isinstance(js, dict):
+        return None
+    resp = js.get("Response") or {}
+    data = resp.get("Data") or []
+    total = resp.get("TotalCount")
+    if (isinstance(total, int) and total > len(data)) or (total is None and len(data) >= 200):
+        return None            # one page of several (page size 200, filter maybe a partial match): not the whole answer
+    out = []
+    for x in data:
+        if x.get(column) != value:
+            continue
+        try:
+            out.append(int(x[id_field]))
+        except (KeyError, TypeError, ValueError):
+            return None
+    return sorted(out)
+
+
 def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
     """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers."""
     import getpass
@@ -2381,34 +2406,98 @@ def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
                                                     "allow_write": prof.get("allow_write", True)}})
 
 
-def bind_principals(r: Path, env: str, client) -> list[str]:
-    """design/roles.json (written by P2, permission design) → envs.<env>.principals, ids looked up by name.
-    Returns the groups/users that do not exist yet (the person creates them in Pleasanter)."""
+def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict | None = None,
+                    yes: bool = False) -> list[str]:
+    """design/roles.json (written by P2, permission design) → envs.<env>.principals, ids looked up by exact name.
+    Returns the groups/users that do not exist yet. A group name that matches more than one group is refused: the
+    server does not refuse duplicate names (KB api.md "Users and groups"), so the person removes the extra ones.
+    With `create` (ADR-0017): the missing groups are created first — dev environments only (not a sandbox, writes
+    allowed), no update or delete of any group, the operator (`admin`) as the only member, one typed confirmation."""
+    import pls_http as H
     rf = r / "design" / "roles.json"
     if not rf.exists():
         raise Fail("design/roles.json not found - the roles come from the permission design in P2")
     roles = rj(rf).get("roles") or {}
     ev = rj(r / "environments.json")
     e = ev["envs"][env]
+    if create:
+        if e.get("role") != "dev" or e.get("sandbox_of") or e.get("connection"):
+            raise Fail(f"principals --create: only on a dev environment that is not a sandbox ({env}: role "
+                       f"{e.get('role')!r}, sandbox of {e.get('sandbox_of')!r}) — groups are tenant-wide; on stg and "
+                       "prod they are created by the customer (ADR-0017)")
+        try:
+            H.assert_writable(e, conn or {}, env)
+        except H.TransportError as ex:
+            raise Fail(str(ex))
     pr = e.setdefault("principals", {})
-    missing = []
+    missing, to_create = [], []
     for role, spec in roles.items():
         if pr.get(role) and "<" not in str(pr[role]):
             print(f"{role}: {pr[role]} (already bound)")
             continue
         if spec.get("principal") == "User":
             uid = _lookup(client, "/api/users/get", "LoginId", spec.get("login", ""), "UserId")
-            found, what = (f"User,{uid}" if uid else None), f"user with login '{spec.get('login')}'"
+            if uid:
+                pr[role] = f"User,{uid}"
+                print(f"{role}: {pr[role]} (user with login '{spec.get('login')}')")
+            else:
+                missing.append(f"user with login '{spec.get('login')}'")
+                print(f"{role}: MISSING - create the user with login '{spec.get('login')}' in Pleasanter, then run "
+                      "pls principals again")
+            continue
+        name = spec.get("group_name") or role
+        ids = _lookup_all(client, "/api/groups/get", "GroupName", name, "GroupId")
+        if ids is None:
+            raise Fail(f"{role}: the lookup of group '{name}' failed — nothing created; check the connection and run "
+                       "pls principals again")
+        if len(ids) > 1:
+            raise Fail(f"{role}: group name '{name}' matches {len(ids)} groups (ids {', '.join(map(str, ids))}) — "
+                       "Pleasanter allows duplicate names; delete or rename the extra ones, then run pls principals again")
+        if ids:
+            pr[role] = f"Group,{ids[0]}"
+            print(f"{role}: {pr[role]} (group '{name}')")
+        elif create:
+            gname = spec.get("group_name")
+            if spec.get("principal") != "Group" or not isinstance(gname, str) or not gname.strip() \
+                    or gname != gname.strip() or "<" in gname or ">" in gname:
+                raise Fail(f"principals --create: role '{role}' is not a group with a final name in design/roles.json "
+                           f"(principal {spec.get('principal')!r}, group_name {gname!r}) — nothing created; fix the "
+                           "permission design first")
+            to_create.append((role, name))
         else:
-            gid = _lookup(client, "/api/groups/get", "GroupName", spec.get("group_name") or role, "GroupId")
-            found, what = (f"Group,{gid}" if gid else None), f"group '{spec.get('group_name') or role}'"
-        if found:
-            pr[role] = found
-            print(f"{role}: {found} ({what})")
-        else:
-            missing.append(what)
-            print(f"{role}: MISSING - create the {what} in Pleasanter, then run pls principals again")
-    wj(r / "environments.json", ev)
+            missing.append(f"group '{name}'")
+            print(f"{role}: MISSING - create the group '{name}' in Pleasanter (on dev: pls principals --env {env} "
+                  "--create), then run pls principals again")
+    created = []
+    try:
+        if to_create:
+            admin = str(pr.get("admin") or "")
+            if not re.fullmatch(r"User,\d+", admin):
+                raise Fail(f"principals --create: envs.{env}.principals.admin is {admin or 'not set'} — the operator is "
+                           "the member of every created group; bind it first (pls init / pls setup)")
+            names = ", ".join(f"'{n}'" for _, n in to_create)
+            if not _confirm(env, yes, f"creates {len(to_create)} group(s) on {env} (tenant-wide), member {admin}: {names}",
+                            "the environment name"):
+                raise Fail("not confirmed — no group created")
+            for role, name in to_create:
+                st, gid, text = client.create_group(name, f"pls: role {role} (design/roles.json)", [f"{admin},False"])
+                if st != 200 or not gid:
+                    raise Fail(f"{role}: creating group '{name}' answered HTTP {st} {text} — check the groups named "
+                               f"'{name}' in Pleasanter before running it again")
+                created.append(gid)
+                again = _lookup_all(client, "/api/groups/get", "GroupName", name, "GroupId")
+                if again != [gid]:
+                    raise Fail(f"{role}: after creating group '{name}' (id {gid}) the lookup found {again} — check the "
+                               "groups with that name in Pleasanter; nothing is retried")
+                pr[role] = f"Group,{gid}"
+                print(f"{role}: {pr[role]} (group '{name}' created, member {admin} — check the membership once in "
+                      "Pleasanter: GroupMembers is not yet observed on 1.5.2)")
+    except H.UncertainOutcome as ex:
+        raise Fail(f"{ex} — the group may exist now: run pls principals --env {env} (without --create) to bind it")
+    finally:
+        if created:
+            LG.record_metric(groups_created=created, _env=env)
+        wj(r / "environments.json", ev)
     return missing
 
 
@@ -3225,8 +3314,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--no-git", action="store_true", help="do not run git init / first commit")
     s = sp.add_parser("setup", help="one-time: connect this machine to a Pleasanter environment (profile for every pls init)")
     s.add_argument("--profile", default="dev")
-    s = sp.add_parser("principals", help="bind the roles of design/roles.json to group/user ids of an environment (read-only lookup)")
+    s = sp.add_parser("principals", help="bind the roles of design/roles.json to group/user ids of an environment; "
+                                         "--create also creates the missing groups (dev only, ADR-0017)")
     s.add_argument("--env", required=True)
+    s.add_argument("--create", action="store_true", help="create the missing groups first (dev, not a sandbox; typed confirmation)")
+    s.add_argument("--yes", action="store_true", help="the person's confirmation, given on their instruction")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     return ap
@@ -3274,8 +3366,8 @@ def _main(argv=None) -> int:
     if a.cmd == "principals":
         import pls_http as H
         try:
-            _, _, c = _client(r, a.env)
-            missing = bind_principals(r, a.env, c)
+            _, conn, c = _client(r, a.env)
+            missing = bind_principals(r, a.env, c, create=a.create, conn=conn, yes=a.yes)
         except H.TransportError as ex:
             print(f"pls: {ex}", file=sys.stderr)
             return 2
