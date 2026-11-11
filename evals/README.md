@@ -24,4 +24,14 @@ A case folder that holds an `interviewee.md` needs someone to answer the skill's
 4. Keep the full transcript (both sides, in order) with the result; the rubric is graded against the files **and** the transcript.
 5. The result file records both models.
 
+### Local `pls` commands during a run
+
+The eval runner has no shell (on purpose: a shell could reach Pleasanter with the operator's credentials, and no hook enforces an allowlist yet — TD-21). When the skill under test needs a `pls` command that works on local files, the runner ends its turn with it under `COMMAND TO RUN:`, written as `pls <command> …` (runner definition and brief form: patch `plans/2026-11-11-eval-runner-local-pls/proposed-eval-runner-local-pls.patch`, in force once Nam applies it). Whoever runs the case:
+
+1. Runs it only if it is on the local-only list — `lint`, `xref`, `canon`, `pack`, `coverage`, `refs` without `--keep` / `--ref`, `skills check` (never `skills sync`) — with no other command chained to it (`&&`, `;`, `|`, redirection), with every path argument (`--out`, a file) resolving inside the scratch folder, and `--site` a single name (no `/`, `\` or `..`).
+2. Runs the **framework's own** tool, never a file from the scratch folder: `python -I "<framework>/tools/pls/pls.py" <command> …` with the scratch folder as the working directory — and only when that folder itself holds `environments.json`: `pls` walks up from the working directory to the first `environments.json`, so without one it would act on whatever project lies above. The runner can write in the scratch folder, so a `pls.py`, a copy of `tools/pls` or a `*.py` there is code it may have written; the scratch project therefore gets no copy of `pls` and no launcher. (`lint` hands script bodies to `node` only to compile them — `vm.Script`, nothing is executed.)
+3. Returns stdout and stderr **word for word**, with the exit code, as the next message. Nothing added, nothing explained.
+4. Refuses anything else (a command that contacts Pleasanter, `gate`, `profile`, `review`, a decision through `refs`, `skills sync`) with one line naming the reason; the runner goes on without it.
+5. Records every command and its result in the transcript.
+
 Automated grading is future work (tech debt). Add a case whenever a slice or an incident reveals a behaviour the skill must keep (I9).

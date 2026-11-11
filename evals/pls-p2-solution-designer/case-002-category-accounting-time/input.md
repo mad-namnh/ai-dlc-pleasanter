@@ -5,4 +5,6 @@ The scratch project is the same as in P1 case 002, plus:
 - `config/responses/` under git (commit `021a0d0`);
 - an empty `traceability.json` entry for slice #2.
 
-No Pleasanter environment is reachable, so probes are written down, not run. The KB must be the version under test; for a clean measurement of the probe rule, use a KB **without** D19/D20.
+No Pleasanter environment is reachable, so probes are written down, not run. The KB is the version under test, **in full**.
+
+Until 2026-11-11 this case removed D19/D20 from the KB, to measure whether the probe rule alone leads to a probe that combines permission, process and display condition. Since then the P2 skill itself names D19/D20 (process buttons a role may press), so removing the KB rows no longer hides the lesson; the case now measures that skill and KB together lead to a stated, safe design for the read-only role's process buttons (`evals/results/pls-p2-solution-designer/2026-11-11-v07.md`, validity note).
