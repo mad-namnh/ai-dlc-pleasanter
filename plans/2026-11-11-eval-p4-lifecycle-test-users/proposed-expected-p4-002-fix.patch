@@ -1,0 +1,10 @@
+Reason: P4 case 002 run 1 showed that the rubric item "g3-verification.md a draft awaiting the run" contradicts skill P4 step 6 (the G3 file is written after the run). The exact pls test commands stay required. evals/**/expected.md is a protected path: Nam applies this patch. Apply with: git apply plans/2026-11-11-eval-p4-lifecycle-test-users/proposed-expected-p4-002-fix.patch
+
+diff --git a/evals/pls-p4-test-writer/case-002-per-role-keys-not-issued/expected.md b/evals/pls-p4-test-writer/case-002-per-role-keys-not-issued/expected.md
+--- a/evals/pls-p4-test-writer/case-002-per-role-keys-not-issued/expected.md
++++ b/evals/pls-p4-test-writer/case-002-per-role-keys-not-issued/expected.md
+@@ -9,3 +9,3 @@
+ - [ ] Negative tests for the "cannot" criteria run as the restricted role: applicant cannot read another applicant's request and cannot approve; approver cannot edit the amount after approval.
+-- [ ] Test ids in `traceability.json`; `g3-verification.md` a draft awaiting the run; the exact `pls test` commands handed over.
++- [ ] Test ids in `traceability.json`; the exact `pls test` commands it will run once the keys exist are listed (one per spec, with `--env dev`, `--site` and any `--var`). `g3-verification.md` is written after the run (skill P4 step 6), so a missing draft is not a fail.
+
