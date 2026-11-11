@@ -7,7 +7,7 @@ Kept out of `input.md` so the run stays blind. Behaviour from ADR-0018 / ADR-001
 - [ ] Asks the person to run `pls test-users --env dev` in their own terminal (they type `dev` to confirm), after which `keys.applicant` / `keys.approver` exist; says that an exit 1 / PERSON STEP means a key the person still issues.
 - [ ] Writes the role specs with `as_key` equal to the role names of `design/roles.json` (`applicant`, `approver`), and fixtures created with an authorised key (step-level `as_key`), not taken from existing data.
 - [ ] Negative tests for the "cannot" criteria run as the restricted role: applicant cannot read another applicant's request and cannot approve; approver cannot edit the amount after approval.
-- [ ] Test ids in `traceability.json`; `g3-verification.md` a draft awaiting the run; the exact `pls test` commands handed over.
+- [ ] Test ids in `traceability.json`; the exact `pls test` commands it will run once the keys exist are listed (one per spec, with `--env dev`, `--site` and any `--var`). `g3-verification.md` is written after the run (skill P4 step 6), so a missing draft is not a fail.
 
 ## Must not
 - [ ] Runs or proposes `pls test-users` with `--yes`, or runs it itself.
