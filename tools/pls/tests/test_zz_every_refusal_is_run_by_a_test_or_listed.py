@@ -1,7 +1,7 @@
 """Every refusal of pls is run by at least one test of this suite, or is named in refusals_without_a_test.txt.
 
-A refusal is a statement of tools/pls/*.py that stops a command: a `raise`, or a `print` / `return` whose text says
-REFUSED, NOT marked or NOT VERIFIED. While the suite runs, this module records which lines of tools/pls/*.py are
+A refusal is a statement of tools/pls/*.py that stops a command: a `raise`, a `sys.exit` with a message, or a
+`print` / `return` whose text says REFUSED, NOT marked or NOT VERIFIED. While the suite runs, this module records which lines of tools/pls/*.py are
 executed (sys.monitoring, Python 3.12+). Its tests run last (the module name sorts after every other test module):
 
   - a refusal that no test ran and the list does not name fails the suite: write a test that reaches it;
@@ -10,9 +10,12 @@ executed (sys.monitoring, Python 3.12+). Its tests run last (the module name sor
 The list only gets shorter. An entry is the file, the function and the text of the statement — not a line number —
 so moving code does not change it.
 
-Not checked: that the test which reaches a refusal asserts anything about it (the review of the test does that);
-refusals reached only in a child process (the launcher) count as not run; Python 3.10 and 3.11 (no sys.monitoring)
-and a partial run (one file, `-k`) skip the comparison.
+Not checked: a refusal written in another form — a message without those words followed by `return 1`, a message
+collected in a list — is not seen, so write refusals in one of the forms above; that the test which reaches a
+refusal asserts anything about it (the review of the test does that). Refusals reached only in a child process
+(the launcher) count as not run. Python 3.10 and 3.11 (no sys.monitoring), a partial run (one file, `-k`) and a
+run under another coverage tool skip the comparison: a run of the whole suite on Python 3.12+ that reports no
+skipped test is the one that counts.
 
     python -m unittest discover -s tools/pls/tests -v
 """
@@ -57,6 +60,10 @@ RECORDING = _start_recording()                   # at import: unittest imports e
 def _is_refusal(stmt: ast.stmt) -> bool:
     if isinstance(stmt, ast.Raise):
         return stmt.exc is not None              # a bare `raise` passes an error on; it is not a refusal of its own
+    call = stmt.value if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call) else None
+    if call is not None and ast.unparse(call.func) == "sys.exit":          # sys.exit("why") stops; sys.exit(main()) reports
+        return bool(call.args) and (isinstance(call.args[0], ast.JoinedStr)
+                                    or (isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str)))
     prints = isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call) and getattr(stmt.value.func, "id", "") == "print"
     if not (prints or isinstance(stmt, ast.Return)):
         return False
@@ -162,11 +169,15 @@ class EveryRefusalHasATestOrIsListed(unittest.TestCase):
                           "    try:\n"
                           "        return int(a)\n"
                           "    except ValueError:\n"
-                          "        raise\n"}
+                          "        raise\n"
+                          "    if a == 4:\n"
+                          "        sys.exit(f'x needs {a}')\n"
+                          "    sys.exit(f(a))\n"}
         found = refusals(source)
-        one, two, three = ("x.py | f | raise ValueError('one')", "x.py | f | print( 'x: REFUSED - two')",
-                           "x.py | f | return False, ['NOT marked: three']")
-        self.assertEqual(sorted(found), sorted([one, two, three]))            # `return 1` and the bare raise are not
+        one, two, three, four = ("x.py | f | raise ValueError('one')", "x.py | f | print( 'x: REFUSED - two')",
+                                 "x.py | f | return False, ['NOT marked: three']", "x.py | f | sys.exit(f'x needs {a}')")
+        self.assertEqual(sorted(found), sorted([one, two, three, four]))      # not: `return 1`, the bare raise, sys.exit(f(a))
+        del found[four]
         ran_one_and_two = {("x.py", 3), ("x.py", 6)}                          # the print is reported at its last line
         self.assertEqual(compare(found, ran_one_and_two, [three]), NOTHING)
         self.assertEqual(compare(found, ran_one_and_two, []),

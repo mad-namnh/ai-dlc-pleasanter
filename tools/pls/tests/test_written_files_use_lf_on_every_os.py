@@ -47,6 +47,20 @@ class MinimumPython(unittest.TestCase):
         self.assertIn("Python 3.10+", setup)
         self.assertIn("sys.version_info < (3, 10)", (HERE.parents[1] / "pls.py").read_text(encoding="utf-8"))
 
+    def test_an_older_python_is_refused_before_the_other_imports(self):
+        """Runs the first statements of pls.py — up to the guard, before `import argparse` — as an older Python."""
+        from unittest import mock
+        source = (HERE.parents[1] / "pls.py").read_text(encoding="utf-8")
+        head = source[:source.index("\nimport argparse\n")]
+        self.assertIn("sys.exit(", head)                                      # the guard comes before the other imports
+        code = compile(head, str(HERE.parents[1] / "pls.py"), "exec")
+        with mock.patch.object(sys, "version_info", (3, 9, 18, "final", 0)), self.assertRaises(SystemExit) as stopped:
+            exec(code, {"__name__": "pls_head"})
+        self.assertIn("pls needs Python 3.10 or newer", str(stopped.exception.code))
+        self.assertIn("docs/setup.md", str(stopped.exception.code))
+        with mock.patch.object(sys, "version_info", (3, 10, 0, "final", 0)):
+            exec(code, {"__name__": "pls_head"})                              # the minimum itself is accepted
+
     def test_no_backslash_inside_an_f_string_expression(self):
         """The construct that silently raised the minimum to 3.12 (PEP 701). The suite itself runs on 3.10 before a
         release; this catches the common case on any version."""
