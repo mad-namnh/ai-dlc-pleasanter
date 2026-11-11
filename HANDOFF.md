@@ -19,9 +19,10 @@
 5. Confirm the migration order of Accepted ADR-0004 (conversion **before** the configuration; `architecture.md` said "after" and was aligned to the ADR in P0-5).
 6. Older open items from the review: WS-7 disputes D-1 (F4 → PARTIAL) and D-2 (G2 → FAIL); standard v2.2 (65 criteria; violated sub-part → FAIL).
 
-**Agent-team permission checks — still to check** (`plans/2026-11-11-agent-team-setup/permission-checks.md`, run 2026-11-11):
-- Row 0 is not verified: the task prompt named the skill. Nam's next task statement will **not** name it; record in that file whether the new session finds `pls-x-dev-orchestrator` (and the three subagents) by itself.
-- Row 2 (`git -C . push`) was not denied; Nam added deny rules for `git -C` and `git -c` (commit `5ef09eb`). Re-run row 2 in the next new session and record the result.
+**Agent-team permission checks** (`plans/2026-11-11-agent-team-setup/permission-checks.md`): re-checked in a second new session on 2026-11-11.
+- Row 2 (`git -C . push`) is now denied before execution (deny rules of `5ef09eb`): passed.
+- Row 0: Nam's task statement named no skill; the session started `pls-x-dev-orchestrator` by itself and listed the three subagents. The cold question as written was not asked.
+- Still not verified: row 15 (the reviewer has no write tool; row 16 covers the question). Known limit, in ADR-0016: other spellings of a push (absolute path to git, `sh -c`, a script).
 
 **Next build work (roadmap order):** P2-3, P2-6, P2-7, then P3. Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
 
