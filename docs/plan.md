@@ -131,6 +131,34 @@ Migrations over HTTP, reviewer agents, CI, Playwright smoke, prod / customer-sid
 
 **Order rationale:** BR1 first (safety before any test); BR2–BR3 before any write to a candidate site (D4: `updatesite` replaces everything); BR4–BR5 give value read-only (diff and history) before the workflow changes; BR6 changes how the team works, so it comes after they have seen the diffs.
 
+## Step 4d — Spec-to-app automation — PROPOSED (Nam, 2026-11-11)
+
+**Why:** the aim of the framework is to go from a specification to a running app on dev with a person only at the gates. The trial `pls-demo-contracts` (vendor contracts, new app, 2026-11-11: P1 → G1 → P2 → G2) showed where a person still has to act by hand outside the gates. Each item below removes one of them; items that touch a write guard or a trust boundary need an ADR and Nam's decision before any code.
+
+**Facts from the trial:**
+- P2 depended on behaviour the KB does not cover (server script reading the stored status, relative date view filter, aggregation, reminder timing, per-record visibility by a column). The framework's only answer was a manual probe in the UI; Nam rejected that ("mục đích … là có thể từ spec tạo app lên Pleasanter") and the design moved the checks to the automated P3 round trip and P4 API tests (`pls-demo-contracts` DES-001, C-1…C-5).
+- `pls kb-verify` already runs probes on dev automatically (ADR-0009), but forbids server scripts, mail and other users' keys by design.
+- After G2 the person must create Pleasanter groups by hand before `pls principals --env dev` can bind them.
+- `pls bootstrap` / `pls apply` / `pls migrate` on dev need a typed confirmation or a `--yes` the person allows each time.
+- Whether dev sends real mail (`side_effects.mail`) is recorded by a person; reminder and notification timing cannot be tested without it.
+- Role tests are `deferred` at stage demo: no test user or key per role.
+- `pls usage collect` found no transcripts when the Claude Code session was opened in another folder.
+
+### Work items (proposed order)
+
+| # | Item | Content | Decision needed first | Done when |
+|---|---|---|---|---|
+| AU1 | **Design-time probes on dev, automated** | P2 writes a probe spec for every behaviour the KB lacks (format of `references/probes/*.json`); a `pls` command runs it in the dev probe folder, records the result, deletes the probe site, and the KB curator records the entry. Extends the kb-verify runner to server scripts and a second user's key under explicit guards (dev only, probe folder only, no mail) | ADR (amends ADR-0009 safety rules) | DES-001 C-1 and C-2 of the trial run as probes before G2, with no UI step |
+| AU2 | **Groups from `design/roles.json`** | After G2, `pls principals --env dev --create` creates the missing groups and binds them | KB probe: can the 1.5.x API create a group (unknown); if not, the item stays a person step | the three groups of the trial exist on dev without a UI step |
+| AU3 | **Dev writes without a typed confirmation, once allowed** | The person records once per project, in their words (`pls profile set …`), that the agent may run `bootstrap` / `apply` / `migrate` on `role: dev`; stg and prod unchanged | ADR (ADR-0008, ADR-0014 TB-3) — Critical, write guard | the trial's P3 runs on dev without a typed confirmation, and stg still refuses |
+| AU4 | **Mail on dev made testable** | A mail catcher (or a dev mail setting) recorded as `side_effects.mail`; P4 tests read the caught mails, so reminders and notifications are tested automatically | infrastructure choice (Nam); ADR-0010 | DES-001 C-4 (reminder once or daily) is answered by a P4 test |
+| AU5 | **Role tests without hand work** | Test users per role on dev, keys stored by the operator's tooling, `as_key` tests in P4 | TD-11; whether the API can create users (KB probe) | REQ-012-style "refused for role X" tests run in P4 at stage demo |
+| AU6 | **Usage from any session folder** | `pls usage collect` finds the transcripts of the session that ran the project (or takes them from the run log) | none | the trial's usage is collected without `--transcripts` |
+
+**Not automatable, stays a person input:** business data the customer must supply (e.g. the 6 department names of the trial) — P1 asks for it; P3 waits for it.
+
+**Definition of done:** a new app from a natural-language spec reaches G4 on dev with person actions only at G1–G4 (and the customer inputs above).
+
 ## Step 5 — Real pilot & metrics (after the demo)
 
 Metrics:
