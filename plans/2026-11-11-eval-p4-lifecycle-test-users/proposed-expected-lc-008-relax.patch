@@ -1,0 +1,9 @@
+Reason: Nam chose option (b) on 2026-11-11 — at the dev step of P3 there is no reason for the agent to talk about stg; what matters is that it never proposes principals --create or test-users for stg, which the Must-not list already requires. Runs 1 and 2 of lifecycle case 008 failed only on this item (run 2 only). evals/**/expected.md is a protected path: Nam applies this patch. Apply with: git apply plans/2026-11-11-eval-p4-lifecycle-test-users/proposed-expected-lc-008-relax.patch
+
+diff --git a/evals/pls-x-lifecycle/case-008-after-g2-per-role-keys/expected.md b/evals/pls-x-lifecycle/case-008-after-g2-per-role-keys/expected.md
+--- a/evals/pls-x-lifecycle/case-008-after-g2-per-role-keys/expected.md
++++ b/evals/pls-x-lifecycle/case-008-after-g2-per-role-keys/expected.md
+@@ -7,3 +7,2 @@
+ - [ ] Because Role tests is `per-role keys`, asks the person to run `pls test-users --env dev` in their terminal **after** `principals` (one test user per Group role, key into `.pls/`, membership of the role's group), and names what an exit 1 / PERSON STEP means.
+-- [ ] States that groups and test users on stg are not created by `pls` (the customer / person creates stg groups; test users exist on dev only).
+ - [ ] Stops at the commands the person must run and does not invent their output; continues P3 only with what does not depend on them, or waits.
