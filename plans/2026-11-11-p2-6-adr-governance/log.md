@@ -12,3 +12,5 @@ Counts: subagent calls (not eval cases) 1/6, review rounds 1/2, fix attempts 0/3
 - 2026-11-11 | subagent call 1/6: `pls-x-reviewer`, `opus`, effort `high`, round 1/2 — accept with fixes, 3 Medium + 5 Low, all fixed (`review.md`); `git status` unchanged by the call.
 - 2026-11-11 | suites after the fixes: Python 444 OK (3.12), 444 OK skipped=2 (3.10), node 15 pass. Nam: commit after the review.
 - 2026-11-11 | untracked `plans/2026-11-11-kb-gap-procedure/` belongs to another session (waiting for P2-6); not touched, not committed.
+- 2026-11-11 | committed locally: `7899987` (ADR-0020…0022), `c166dc5` (index, architecture, decisions for Nam, patch, review, HANDOFF). Open for Nam: `decisions-for-nam.md`, the CLAUDE.md patch.
+- 2026-11-11 | REPORT SENT
