@@ -29,10 +29,11 @@ In interview mode you ask in at most 3 rounds, keep the questions and answers ve
 
 1. **Save the source** verbatim. Note who asked and when. Never paraphrase it away.
 2. **Read the current configuration** of the sites involved (`config/<site>/site.json`, scripts). List the columns, statuses, views, notifications and scripts the request touches.
+   For every notification, reminder, aggregation and process, record **what decides when it acts**, not only who receives it: the columns it watches, the view it uses as its condition (a notification's `BeforeCondition` / `AfterCondition` hold a view id — KB `schema.md`; a reminder may carry a condition too — its field and meaning are not in the KB, so read the exported `site.json`, compare it with the site's views, and record what you find as unverified) and a process's own filter (`View.ColumnFilterHash`). An element whose condition is a view takes over that view's filter — if the view filters on status, the element depends on status although its own settings never name one.
    For every "add / record / show X" in the request, check whether an **existing** column, choice or feature already holds or does X (compare labels, types and the data actually present in exports). If one does, do not write a requirement for a new element: write the requirement against the existing one and raise the overlap as a question with an `[assumed]` default (e.g. on a loan site asked to "record the extended due date": 「既存の『返却予定日』を延長後の期限として更新してよいですか？」).
 3. **Extract requirements** as EARS statements (see `references/ears.md`). One behaviour per requirement, so **exactly one `shall`** in the statement. "Refuse X and show message Y" is two behaviours: keep the refusal as the requirement and put the message in the acceptance criteria (or split into two requirements).
 4. **Derive hidden requirements** from impact on existing behaviour. Typical triggers:
-   - a new status → every view / notification / script that enumerates statuses;
+   - a new status — or an open question whose answer could add one → every view that filters on status, every notification, reminder or process whose condition is such a view (step 2), aggregations by status, and scripts that enumerate statuses. When the status is only possible (an open question), name these elements in the impact analysis so the answer at G1 shows its whole impact;
    - a new column → grid, filters, editor layout, exports;
    - a new action → who may do it, can it repeat, what if conditions are not met.
    Mark them `(derived)` and state the source of the derivation.
@@ -58,7 +59,7 @@ IDs are sequential across the project (`REQ-001`, `REQ-002`, …) and never reus
 
 - [ ] Every requirement is a single EARS statement with a named trigger/state and a system response — count the `shall`s in each `## Requirement` section: exactly one.
 - [ ] Every requirement has ≥ 1 acceptance criterion; untestable ones are flagged.
-- [ ] Impact on existing statuses, views, notifications, scripts and permissions was checked; derived requirements recorded.
+- [ ] Impact on existing statuses, views, notifications, reminders, scripts and permissions was checked — each element by its condition (watched columns, condition view), not only by its recipient; derived requirements recorded.
 - [ ] No requirement asks for a new element where an existing column or feature already covers it (overlaps are questions).
 - [ ] Ambiguities are questions with explicit assumptions, not silent choices. Every `[assumed]` in a REQ file points to a question number in `index.md`.
 - [ ] No derived requirement adds behaviour beyond the request that no existing element needs (those are questions).
