@@ -16,3 +16,9 @@ Counts: subagent calls (not eval cases) 1/6, review rounds 1/2, fix attempts 1/3
 - 2026-11-11 | after the review: comment of `approvals.md` in the tree reworded (not "legacy"); review limit L1 added to `HANDOFF.md`; suites again: Python 357 OK (3.12), 357 OK skipped=1 (3.10), node 15 pass
 - 2026-11-11 | commit: test(pls): architecture project layout is checked against what pls init creates and the path names of pls
 - 2026-11-11 | REPORT SENT
+- 2026-11-11 | Nam's decisions after the report: (1) keep the definition of "reality" and the "Planned, not built" sentence; (2) row 0 stays passed, with his note; (3) template `CLAUDE.md`: a patch with only the folders the skills use and a pointer to §3.2, he applies it; (4) a patch for `docs/agent-rules.md` with the patch procedure for protected paths; (5) ADR-0016 Accepted (2026-11-11) on the two trials — his words are quoted in the ADR
+- 2026-11-11 | written, not applied: `proposed-template-claude-md.patch`, `proposed-agent-rules-md.patch` (`git apply --check` passes for both); ADR-0016 status and "Acceptance" section, `docs/adr/README.md`, `CLAUDE.md` ("Working as an agent team": status word only), `HANDOFF.md`, permission-checks row 0. Light follow-up (documents and Nam's own decision), no review
+- 2026-11-11 | verified: Python 357 OK (3.12), 357 OK skipped=1 (3.10), node 15 pass; both patches applied in a temporary worktree `../_agent-scratch/patch-check` (HEAD `c8df4ea`, removed afterwards) → Python 357 OK there. The patches are not applied in the repository
+- 2026-11-11 | commit: docs(adr): ADR-0016 accepted by Nam after two trial tasks; patches proposed for the two protected files
+- 2026-11-11 | counts: subagent calls 1/6, review rounds 1/2, fix attempts 1/3
+- 2026-11-11 | REPORT SENT

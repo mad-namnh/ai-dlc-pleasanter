@@ -1,6 +1,6 @@
 # ADR-0016 — An agent team for developing the framework
 
-- **Status:** Proposed (2026-11-11) — Nam decides. The trial described below is not acceptance.
+- **Status:** Accepted (2026-11-11) — decided by Nam after two trial tasks; see "Acceptance" below. The 4 open questions stay open.
 - **Context owner:** Nam
 - **Related:** I4 (humans approve; AI never approves its own work), I6, I9; ADR-0013 (tool-first work), ADR-0014 (trust boundaries, TB-2, TB-5); review of the setup prompt `plans/reports/2026-11-11-agent-team-prompt-review.md`
 
@@ -29,7 +29,7 @@ A first design (seven specialist subagents, a self-written PreToolUse hook, the 
 ### Option D — Claude Code experimental Agent Teams
 - Not considered further: experimental, multi-session, more than this repository needs.
 
-## Decision (proposed)
+## Decision
 
 Option C.
 
@@ -70,10 +70,32 @@ Details and quotations: `plans/2026-11-11-agent-team-setup/log.md`.
 
 ## Trial
 
-One small task in a **new** session (chosen by Nam: a test that keeps `docs/architecture.md` §7.1 / §7.2 in line with the commands and lint rules `pls` really has — roadmap P3-1). It shows whether a cold-start session finds and uses the team and whether the permission rules fire. It is operational evidence only: it does not accept this ADR.
+One small task in a **new** session (chosen by Nam: a test that keeps `docs/architecture.md` §7.1 / §7.2 in line with the commands and lint rules `pls` really has — roadmap P3-1). It shows whether a cold-start session finds and uses the team and whether the permission rules fire. It is operational evidence only: it does not accept this ADR. (Written before the trial; what the trials showed and Nam's decision are in "Acceptance".)
 
-## Consequences (if accepted)
+## Acceptance (2026-11-11)
+
+Nam's decision, in his words (Vietnamese, given in the session that ran the second trial task):
+
+> ADR của đội agent: tôi, Nam, quyết định Accepted (2026-11-11), dựa trên hai lần trial: P3-1 phần 1 và phần 2 (skill tự tìm thấy, git -C push bị chặn, quy trình chạy trọn).
+
+(The agent-team ADR is Accepted, based on two trials — P3-1 part 1 and part 2: the skill was found unprompted, `git -C … push` is blocked, the workflow ran from start to end.)
+
+What the two trials showed (evidence, not part of the decision text):
+
+| | Trial 1 — P3-1, §7.1 / §7.2 | Trial 2 — P3-1, §3.2 |
+|---|---|---|
+| Session | new session; the task prompt named the skill | second new session; the task statement named no skill and no subagent — the session started `pls-x-dev-orchestrator` by itself |
+| Result | commit `60e104b`; review: accept, 3 Low | commit `c8df4ea`; review: accept, 3 Low |
+| Evidence | `plans/2026-11-11-p3-1-architecture-tables-checked-by-test/` | `plans/2026-11-11-p3-1-project-layout-checked-by-test/` |
+
+Permission checks (`plans/2026-11-11-agent-team-setup/permission-checks.md`): the `deny` rules fired in a session that started cold, also for a subagent and for `.pls/` outside the project. `git -C . push` was **not** denied in the first run; Nam added deny rules for `git -C` and `git -c` (`5ef09eb`) and the re-run in the second session was denied. This supersedes two sentences under "Limits": "Interception is not yet shown", and `git -C . push` as the example of a spelling no rule matches. The limit itself stands — an absolute path to git, `sh -c` or a script is still not matched. One check stays not verified: a write attempt by `pls-x-reviewer` (it has no write tool; the same question passed with a subagent that has Edit).
+
+Decided with the acceptance: a change to a protected path is handed to Nam as a patch file, `plans/<date>-<slug>/proposed-<file>.patch`, with its reason; Nam applies and commits it (to be written into `docs/agent-rules.md` by Nam).
+
+Not decided: the 4 open questions above.
+
+## Consequences
 
 - Easier: one task in, one reviewed local commit and a report out; evals and KB edits follow one path.
 - Harder / costs: a review per Standard or Critical change (tokens and time); protected paths need Nam for every change, including improvements to the team itself; the briefs must be kept honest.
-- Follow-up: TD-21 (hook); decide the open questions after the trial.
+- Follow-up: TD-21 (hook); the 4 open questions.

@@ -53,7 +53,7 @@ Applies to every task in this repository. It never overrides the Mandatory rules
 
 ## Working as an agent team
 
-Framework tasks are run by the main session as Orchestrator, with the skill `pls-x-dev-orchestrator` (`.claude/skills/`). Design: [ADR-0016](docs/adr/0016-agent-team-for-framework-development.md) (Proposed). Rules — stop points, who writes what, scratch space, budget: [`docs/agent-rules.md`](docs/agent-rules.md).
+Framework tasks are run by the main session as Orchestrator, with the skill `pls-x-dev-orchestrator` (`.claude/skills/`). Design: [ADR-0016](docs/adr/0016-agent-team-for-framework-development.md) (Accepted 2026-11-11). Rules — stop points, who writes what, scratch space, budget: [`docs/agent-rules.md`](docs/agent-rules.md).
 
 - The Orchestrator plans, implements, verifies and commits locally itself. Three subagents (`.claude/agents/`) do only what must be separate: `pls-x-reviewer` — read-only review of a Standard or Critical change; `pls-x-eval-case-runner` — one blind eval case per call; `pls-kb-curator` — knowledge-base edits from supplied evidence.
 - Nam's global rules (`~/.claude/rules`) stay in force. Where they name an agent, this repository uses:
