@@ -139,7 +139,9 @@ class EveryRefusalHasATestOrIsListed(unittest.TestCase):
             self.skipTest(f"only meaningful when the whole suite runs: {partial}")
         self.assertGreater(len(LINES_RUN), 3000, "the line recorder saw almost nothing — it is not recording")
         result = compare(refusals(pls_sources()), LINES_RUN, listed(LIST_FILE.read_text(encoding="utf-8")))
-        self.assertEqual(result, NOTHING, f"refusals and {LIST_FILE.name} differ")
+        if result != NOTHING:                                                # one name per line, ready to copy
+            self.fail(f"refusals of pls and {LIST_FILE.name} differ:\n" + "\n".join(
+                f"\n{what}:\n" + "\n".join(f"  {name}" for name in names) for what, names in result.items() if names))
 
     def test_the_list_holds_only_names_of_refusals(self):                  # also on Python 3.10: no recording needed
         found = refusals(pls_sources())

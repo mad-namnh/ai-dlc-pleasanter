@@ -235,8 +235,11 @@ class HttpSideEffectsTest(unittest.TestCase):
         self.fake.sites[TH.EQ]["SiteSettings"]["Notifications"] = NOTIFY
         self.write_spec([{"op": "siteConfig", "expect": {"Notifications.0.Id": 1}}])
         self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 0)
+        self.assertTrue((self.r / "x.json").exists())                         # the read-only test ran and was recorded
+        self.assertEqual(self.fake.records, {})                               # and changed no record
         self.write_spec([{"op": "create", "site": "${site:loans}", "save": "l", "data": {}}])     # loans sends no mail
         self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "loans", "--out", "y.json"]), 0)
+        self.assertEqual(len(self.fake.records), 1)                           # the writing test was sent
 
     def test_apply_of_a_release_changing_mail_elements_is_refused_while_mail_is_unknown(self):
         self.full_plan(["Notifications[1] added"])

@@ -8,9 +8,6 @@
 # Remaining work and its deadline: docs/tech-debt.md.
 pls.py | _git | raise Fail(f"git not available: {ex}")
 pls.py | _git | raise Fail(f"git {' '.join(args)}: {res.stderr.strip()[:200]}")
-pls.py | _main | print(f"NOT marked again: {a.release} is already recorded as {plan.get('status')} ({plan.get('applied_at')})")
-pls.py | _main | print(f"NOT marked: the export is site {site_data(exp).get('SiteId')}, the release is for site {sid}")
-pls.py | _main | print(f"NOT marked: {a.release} has status {status!r}")
 pls.py | _main | raise Fail("only multi-site release plans (release-plan) are packaged")
 pls.py | _main | raise Fail("sandbox create needs --sites and --parent (the developer's folder id)")
 pls.py | _main | raise Fail(f"config/{a.site} not found (adopt the site first)")
@@ -38,10 +35,8 @@ pls.py | bootstrap_plan | raise Fail(f"environments.json envs.{env}.parent_id (f
 pls.py | bootstrap_plan | raise Fail(f"envs.{env}.sites.{site}.title is missing")
 pls.py | coverage | raise BadFile("traceability.json: must be an object of requirement id → {design, config, tests}")
 pls.py | env_compare | raise Fail("give at least two --source ENV=FILE (or --source git)")
-pls.py | harvest | raise Fail("harvest reads development environments (dev, sandboxes, stg); prod changes come through drift (P6)")
 pls.py | harvest | raise Fail(f"{site} has no id in {env}")
 pls.py | http_cmd | raise Fail(f"--from-package {a.from_package}: {ex}")
-pls.py | http_cmd | raise H.TransportError("kb-verify creates probe sites: only on a dev environment (not a sandbox)")
 pls.py | http_cmd | raise H.TransportError("single-site plans: use pls release-plan (multi-site format) for the HTTP transport")
 pls.py | http_cmd | raise H.TransportError(f"createsite → HTTP {code}")
 pls.py | http_cmd | raise H.TransportError(f"envs.{a.env}.{ex}")
@@ -58,17 +53,10 @@ pls.py | http_cmd | raise H.TransportError(f"{a.env}: login page not readable ({
 pls.py | http_cmd | raise H.TransportError(f"{a.env}: no site id or parent_id to read")
 pls.py | http_cmd | raise H.TransportError(f"{a.release} carries no migration (release-plan --migration DIR)")
 pls.py | http_cmd | raise ValueError("not a site package (no HeaderInfo/Sites)")
-pls.py | jobs_verified | raise Fail("--quote: the person's own words are required (I4)")
-pls.py | jobs_verified | raise Fail(f"releases/{release}/plan.json not found")
-pls.py | jobs_verified | raise Fail(f"{release} records no scheduled-script changes — nothing to verify")
 pls.py | merge_install | raise Fail("merge-install runs in a project repository (pls.py launcher at its root)")
 pls.py | payload | raise Fail(f"{site}: permissions.inherit '{inh}' is not resolvable in this environment")
-pls.py | plan_site | return False, [dtext, f"{site}: REFUSED — the environment drifted from its last release (I2, D11)"], {}
-pls.py | plan_site | return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
-pls.py | plan_site | return False, [f"{site}: REFUSED — design/slot-ledger.json is missing (A2)"], {}
 pls.py | readback_state | raise Fail(f"plan.json has no rollback step for {site}")
 pls.py | refs_cmd | raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
-pls.py | release_plan | print("release plan REFUSED: data-impacting change needs a migration (ADR-0004); no files written")
 pls.py | release_plan | raise Fail(f"site '{site}' is not in environments.json for {env}")
 pls.py | rj | raise BadFile(f"{p}: cannot be read ({ex.strerror or ex})")
 pls.py | root | raise Fail("environments.json not found (run inside a project repository)")
@@ -88,7 +76,6 @@ pls.py | sub | raise Fail(f"unresolved reference ${{principal:{name}}} — add i
 pls.py | sub | raise Fail(f"unresolved reference ${{site:{name}}}")
 pls_gate.py | record | raise GateError(f"decision must be one of {', '.join(DECISIONS)}")
 pls_gate.py | record | raise GateError(f"gate must be one of {', '.join(GATES)}")
-pls_http.py | apply | raise TransportError(f"payload missing {k} (I2)")
 pls_http.py | backup_records | raise TransportError(f"get {site_id} offset {offset}: HTTP {st}")
 pls_http.py | load_connection | raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL " "(keys go in environment
 pls_http.py | load_connection | raise TransportError(f"{f}: no url for environment '{env}'")

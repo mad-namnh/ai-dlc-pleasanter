@@ -73,6 +73,7 @@ class ReleasePlanTest(TP.PlsTest):
         site["Formulas"] = [{"Id": 1}]
         git_a.write_text(json.dumps(site), encoding="utf-8")
         self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]), 1)
+        self.assertFalse((self.r / "releases/R1").exists())                               # refused: nothing written
 
     def test_missing_decision_record_is_an_error(self):
         with self.assertRaises(pls.Fail):

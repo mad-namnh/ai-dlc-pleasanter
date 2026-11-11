@@ -45,6 +45,15 @@ class PlsTest(unittest.TestCase):
         os.environ.pop("PLS_PROFILE_DIR", None)
         self.tmp.cleanup()
 
+    def printed(self, argv):
+        """Run a pls command: (exit code, what it printed)."""
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = pls.main(argv)
+        return rc, out.getvalue()
+
     def unpack_dev(self, **kw):
         exp = self.r / "dev.json"
         exp.write_text(json.dumps(export(101, 102, "http://dev.internal", **kw)), encoding="utf-8")
@@ -74,12 +83,17 @@ class PlsTest(unittest.TestCase):
         changed = export(201, 202, "http://stg.internal",
                          extra_cols=[{"ColumnName": "ClassZ", "LabelText": "added in UI"}])
         (self.r / "stg.json").write_text(json.dumps(changed), encoding="utf-8")
-        self.assertEqual(pls.main(["drift", str(self.r / "stg.json"), "--env", "stg", "--site", "a"]), 1)
+        rc, out = self.printed(["drift", str(self.r / "stg.json"), "--env", "stg", "--site", "a"])
+        self.assertEqual(rc, 1)
+        self.assertIn("1 difference(s).", out)
+        self.assertIn("| `settings.Columns[ClassZ]` | only on stg (live) | added in UI |", out)
 
     def test_no_drift_across_envs_when_equal(self):
         self.unpack_dev()
         (self.r / "stg.json").write_text(json.dumps(export(201, 202, "http://stg.internal")), encoding="utf-8")
-        self.assertEqual(pls.main(["drift", str(self.r / "stg.json"), "--env", "stg", "--site", "a"]), 0)
+        rc, out = self.printed(["drift", str(self.r / "stg.json"), "--env", "stg", "--site", "a"])
+        self.assertEqual(rc, 0)
+        self.assertIn("0 difference(s).", out)                               # ids and URL differ per env: mapped, not drift
 
     def test_lint_rules(self):
         scripts = [{"Id": 1, "Name": "env", "Shared": True, "Body": "const U = 'x';"},
@@ -305,7 +319,10 @@ class PlsTest(unittest.TestCase):
 
     def test_slots_missing_ledger_refuses_plan(self):
         self.unpack_dev()
-        self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a", "--release", "R1"]), 1)
+        rc, out = self.printed(["plan", str(self._stg_live()), "--env", "stg", "--site", "a", "--release", "R1"])
+        self.assertEqual(rc, 1)
+        self.assertIn("plan REFUSED: design/slot-ledger.json is missing", out)
+        self.assertFalse((self.r / "releases/R1").exists())                  # a refused plan writes nothing
 
     # ---------------------------------------------------------- multi-site release plan (A3)
 
@@ -770,7 +787,16 @@ class PlsTest(unittest.TestCase):
         exp.write_text(json.dumps(export(101, 102, "http://dev.internal", scripts=[
             {"Id": 1, "Name": "s1", "Body": "var a = 1;\r\nvar b = 2;\r\n", "BeforeCreate": True}])), encoding="utf-8")
         self.assertEqual(pls.main(["unpack", str(exp), "--env", "dev", "--site", "a"]), 0)
-        self.assertEqual(pls.main(["diff", str(exp), "--env", "dev", "--site", "a"]), 0)
+        script = self.r / "config/a/server-scripts/s1.js"
+        self.assertEqual(script.read_bytes(), b"var a = 1;\r\nvar b = 2;\r\n")          # stored byte for byte
+        body = pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["dev"], "a")["SiteSettings"]["ServerScripts"][0]["Body"]
+        self.assertEqual(body, "var a = 1;\r\nvar b = 2;\r\n")                           # and sent back as it was
+        rc, out = self.printed(["diff", str(exp), "--env", "dev", "--site", "a"])       # `diff` always returns 0:
+        self.assertEqual(rc, 0)
+        self.assertIn("0 difference(s).", out)                                          # the count is what says "equal"
+        script.write_bytes(script.read_bytes().replace(b"\r\n", b"\n"))                # an editor converts the line ends
+        rc, out = self.printed(["diff", str(exp), "--env", "dev", "--site", "a"])
+        self.assertIn("1 difference(s).", out)                                          # that is a difference, not noise
 
 if __name__ == "__main__":
     unittest.main()

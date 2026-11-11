@@ -414,9 +414,18 @@ class HttpTest(unittest.TestCase):
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["envs"]["dev"]["sites"] = {"loans": {"id": LO, "title": "dev_L"}}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
-        self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)                     # staff → 404 = valid key
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)                 # staff → 404 = valid key
+        self.assertIn(f"dev key 'staff': getsite {LO} → HTTP 404", out.getvalue())
         (self.r / ".pls/staff.key").write_text("K-WRONG", encoding="utf-8")
-        self.assertEqual(pls.main(["http-check", "--env", "dev"]), 1)                     # 401 = bad key
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["http-check", "--env", "dev"]), 1)                 # 401 = bad key
+        self.assertIn(f"dev key 'staff': getsite {LO} → HTTP 401", out.getvalue())
+        self.assertFalse(any(p.endswith("/updatesite") for p, _ in self.fake.calls))      # a check never writes
 
 
     def test_setup_once_then_init_then_principals_after_design(self):                     # D4 + permission design in P2
