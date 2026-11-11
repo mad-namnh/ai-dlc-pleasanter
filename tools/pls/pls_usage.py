@@ -8,6 +8,13 @@ response may be split into several lines with the same `requestId`, so usage is 
 A request is attributed to the step that was open at its timestamp (step markers in the run log, `pls step`).
 `pls usage collect` writes one file per transcript session, `ops/usage/<session>.json`, overwritten on every collect
 (idempotent; one file per session, so parallel developers never edit the same file).
+
+A session started in another folder (e.g. the framework repository) keeps its transcript under that folder. The run
+log names the session of every event (`session`), so collect finds it there too — and counts only its requests from
+the first step it opened in this project to its last logged event here: whatever it did elsewhere before or after is
+not this project's. Limits: the window is one span, so work done elsewhere *between* two visits to this project is
+counted here; the last reply after the last command is missed; a session that logged commands here but never opened a
+step (`pls step`) here is not collected.
 """
 from __future__ import annotations
 
@@ -21,10 +28,28 @@ from pathlib import Path
 FIELDS = ("input", "cache_creation", "cache_read", "output")
 
 
+def _base() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+
+
 def transcripts_dir(project: Path) -> Path:
     """Where Claude Code keeps the transcripts of sessions started in `project` (every non-alphanumeric → '-')."""
-    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
-    return base / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project.resolve()))
+    return _base() / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(project.resolve()))
+
+
+def foreign_sessions(events: list[dict], own: Path) -> dict[str, tuple[Path, datetime, datetime]]:
+    """Sessions named in the run log whose transcript is not in `own` but in another folder of the Claude Code
+    config: session id → (its folder, first step it opened here, last event it logged here)."""
+    out: dict[str, tuple[Path, datetime, datetime]] = {}
+    for sid in sorted({e.get("session") for e in events if e.get("session")}):
+        if not re.fullmatch(r"[A-Za-z0-9-]+", sid) or (own / f"{sid}.jsonl").exists():
+            continue                               # a session id is a file name: nothing else is looked up
+        found = sorted((_base() / "projects").glob(f"*/{sid}.jsonl")) if (_base() / "projects").exists() else []
+        starts = [t for e in events if e.get("session") == sid and e.get("kind") == "step" and (t := _ts(e.get("ts")))]
+        ends = [t for e in events if e.get("session") == sid and (t := _ts(e.get("ts")))]
+        if found and starts:
+            out[sid] = (found[0].parent, min(starts), max(ends))
+    return out
 
 
 STEP_TIMEOUT = timedelta(hours=24)       # a step not followed by another one counts as closed after a day
@@ -110,15 +135,24 @@ def attribute(requests: list[dict], steps: list[dict]) -> list[dict]:
     return sorted(agg.values(), key=lambda a: a["first"] or "")
 
 
-def collect(project: Path, steps: list[dict], tdir: Path | None = None, since: str | None = None) -> list[Path]:
+def collect(project: Path, steps: list[dict], tdir: Path | None = None, since: str | None = None,
+            foreign: dict[str, tuple[Path, datetime, datetime]] | None = None) -> list[Path]:
     """Write ops/usage/<session>.json for every transcript session. `since` (ISO date) selects the sessions with a
-    request on or after it; a selected session is always counted whole, so the file never loses earlier requests."""
+    request on or after it; a selected session is always counted whole, so the file never loses earlier requests.
+    `foreign` (from foreign_sessions): sessions of other folders, counted only inside their window."""
     tdir = tdir or transcripts_dir(project)
+    todo = {sid: (files, None) for sid, files in (sessions(tdir).items() if tdir.exists() else [])}
+    for sid, (folder, start, end) in (foreign or {}).items():
+        files = sessions(folder).get(sid)
+        if files:
+            todo[sid] = (files, (start, end))
     written = []
-    for sid, files in sessions(tdir).items():
+    for sid, (files, window) in todo.items():
         reqs = []
         for f, label in files:
             reqs += list(_requests(f, label).values())
+        if window:
+            reqs = [r for r in reqs if (t := _ts(r["ts"])) and window[0] <= t <= window[1]]
         if not reqs or (since and not any((r["ts"] or "") >= since for r in reqs)):
             continue
         rows = attribute(reqs, steps)

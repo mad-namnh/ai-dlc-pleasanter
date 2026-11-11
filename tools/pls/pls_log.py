@@ -9,7 +9,10 @@ Event schema v1 (every field always present; unknown values are null):
   result ("ok" | "refused" | "error"), exit_code, duration_ms, writes (true when the command may write to Pleasanter),
   metrics (small numbers a command reports: issues, changes, tests passed …; `written` = site ids a writing command
   sent a write to), message (first line of an error),
-  phase / title (step markers only).
+  phase / title (step markers only),
+  session (the Claude Code session that ran the command — env CLAUDE_CODE_SESSION_ID, seen in Claude Code 2.1.322;
+  null outside Claude Code): `pls usage collect` finds that session's transcript even when it was started in another
+  folder.
 A step marker opens a step; LLM token usage (`pls usage collect`) is attributed to the step open at that time.
 """
 from __future__ import annotations
@@ -136,7 +139,7 @@ def append(root: Path, event: dict) -> Path:
                 "branch": branch, "head": head,
                 "cmd": None, "args": None, "env": None, "site": None, "release": None, "result": None,
                 "exit_code": None, "duration_ms": None, "writes": None, "metrics": None, "message": None,
-                "phase": None, "title": None}
+                "phase": None, "title": None, "session": os.environ.get("CLAUDE_CODE_SESSION_ID") or None}
         base.update({k: v for k, v in event.items() if k in base})
         f = log_file(root, who, now.date().isoformat())
         f.parent.mkdir(parents=True, exist_ok=True)

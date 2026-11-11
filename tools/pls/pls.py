@@ -3392,11 +3392,13 @@ def _main(argv=None) -> int:
     if a.cmd == "usage":
         if a.action == "collect":
             tdir = Path(a.transcripts) if a.transcripts else US.transcripts_dir(r)
-            if not tdir.exists():
-                raise Fail(f"no transcripts at {tdir} (pass --transcripts)")
             me = LG.actor(r)                         # my transcripts, my steps: never a teammate's after a pull
-            steps = [e for e in LG.read(r) if e.get("kind") == "step" and e.get("actor") == me]
-            files = US.collect(r, steps, tdir, a.since)
+            mine = [e for e in LG.read(r) if e.get("actor") == me]
+            steps = [e for e in mine if e.get("kind") == "step"]
+            foreign = US.foreign_sessions(mine, tdir)    # sessions started in another folder (run-log `session`)
+            if not tdir.exists() and not foreign:
+                raise Fail(f"no transcripts at {tdir}, and no session of the run log found elsewhere (pass --transcripts)")
+            files = US.collect(r, steps, tdir, a.since, foreign)
             LG.record_metric(sessions=len(files))
             print(f"{len(files)} session(s) → ops/usage/ ({len(steps)} step marker(s) in the run log)")
             return 0

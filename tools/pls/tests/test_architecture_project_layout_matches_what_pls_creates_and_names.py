@@ -53,6 +53,8 @@ NOT_IN_A_PROJECT = {
     "dev.json": "machine profile of `pls setup`, under the user's home folder",
     "projects": "Claude Code transcripts, under the user's home folder (pls usage)",
     "subagents": "Claude Code transcripts, under the user's home folder (pls usage)",
+    "*.jsonl": "a Claude Code transcript <session>.jsonl, under the user's home folder (pls usage); the run log "
+               "<day>-<actor>.jsonl is in the tree",
 }
 
 

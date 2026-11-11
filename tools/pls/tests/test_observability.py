@@ -16,7 +16,7 @@ import pls_usage as US  # noqa: E402
 import test_http as TH  # noqa: E402
 
 KEYS = {"v", "ts", "kind", "run_id", "actor", "branch", "head", "cmd", "args", "env", "site", "release", "result",
-        "exit_code", "duration_ms", "writes", "metrics", "message", "phase", "title"}
+        "exit_code", "duration_ms", "writes", "metrics", "message", "phase", "title", "session"}
 
 
 def line(rid, ts, out, model="claude-x", inp=10, cr=100, cw=5, typ="assistant"):
@@ -60,6 +60,20 @@ class LogTest(unittest.TestCase):
         self.assertEqual((ev[2]["cmd"], ev[2]["result"], ev[2]["site"]), ("refs", "error", "nowhere"))
         self.assertTrue(ev[2]["message"])
         self.assertTrue(list((self.r / "ops/log").glob("*-tester.jsonl")))
+
+    def test_every_event_names_the_claude_code_session_that_ran_it(self):
+        saved = os.environ.pop("CLAUDE_CODE_SESSION_ID", None)       # the suite itself may run inside Claude Code
+        try:
+            os.environ["CLAUDE_CODE_SESSION_ID"] = "sess-1"
+            pls.main(["step", "P2", "design"])
+            pls.main(["lint", "--summary"])
+            os.environ.pop("CLAUDE_CODE_SESSION_ID")
+            pls.main(["lint", "--summary"])                                         # outside Claude Code
+        finally:
+            os.environ.pop("CLAUDE_CODE_SESSION_ID", None)
+            if saved is not None:
+                os.environ["CLAUDE_CODE_SESSION_ID"] = saved
+        self.assertEqual([e["session"] for e in self.events()], ["sess-1", "sess-1", None])
 
     def test_writing_commands_are_marked(self):
         import test_write_guards as WG
@@ -217,6 +231,71 @@ class UsageTest(unittest.TestCase):
             _os.environ.pop("PLS_ACTOR", None)
             LG._ACTOR.clear()
         self.assertNotIn("Z", {r["step"] for r in US.load(root)})
+
+    def test_a_session_started_in_another_folder_counts_only_while_it_worked_on_this_project(self):
+        # The session was opened in the framework folder and worked on this project between 10:00 and 10:30 (+09:00):
+        # its transcript lies under another project folder; work before the first step and after the last logged
+        # command of that session is not this project's.
+        base = Path(self.tmp.name) / "claude"
+        other = base / "projects" / "C--elsewhere"
+        other.mkdir(parents=True)
+        (other / "s9.jsonl").write_text("\n".join([
+            line("f1", "2026-11-08T00:50:00Z", 100),        # 09:50 — framework work before the first step
+            line("p1", "2026-11-08T01:05:00Z", 3),          # 10:05 — inside
+            line("p2", "2026-11-08T01:29:00Z", 4),          # 10:29 — inside
+            line("f2", "2026-11-08T01:45:00Z", 200)]) + "\n", encoding="utf-8")   # 10:45 — after its last event
+        root = self.p
+        (root / "environments.json").write_text('{"envs": {}}', encoding="utf-8")
+        (root / "ops/log").mkdir(parents=True)
+        ev = [{"v": 1, "kind": "step", "run_id": "S", "actor": "me", "phase": "P2", "title": "design",
+               "ts": "2026-11-08T10:00:00.000+09:00", "session": "s9"},
+              {"v": 1, "kind": "command", "run_id": "L", "actor": "me", "cmd": "lint",
+               "ts": "2026-11-08T10:30:00.000+09:00", "session": "s9"}]
+        (root / "ops/log/2026-11-08-me.jsonl").write_text("".join(json.dumps(e) + chr(10) for e in ev), encoding="utf-8")
+        cwd = os.getcwd()
+        os.chdir(root)
+        os.environ.update(PLS_ACTOR="me", CLAUDE_CONFIG_DIR=str(base))
+        LG._ACTOR.clear()
+        try:
+            self.assertEqual(pls.main(["usage", "collect"]), 0)         # no transcript folder of its own: still found
+        finally:
+            os.chdir(cwd)
+            for k in ("PLS_ACTOR", "CLAUDE_CONFIG_DIR"):
+                os.environ.pop(k, None)
+            LG._ACTOR.clear()
+        rows = US.load(root)
+        self.assertEqual(sorted(r["output"] for r in rows), [7])               # p1 + p2, both in step S
+        self.assertEqual({(r["step"], r["session"]) for r in rows}, {("S", "s9")})
+
+    def test_a_session_of_the_project_folder_is_counted_whole_even_when_the_run_log_names_it(self):
+        # s1 lies in the project's own transcript folder (and, as a copy, under another folder): it is not windowed,
+        # so r1 (10:00, before the session's only step here at 11:00) is still counted.
+        base = Path(self.tmp.name) / "claude"
+        (base / "projects" / "C--elsewhere").mkdir(parents=True)
+        (base / "projects" / "C--elsewhere" / "s1.jsonl").write_text((self.t / "s1.jsonl").read_text(encoding="utf-8"),
+                                                                     encoding="utf-8")
+        events = [dict(self.steps[1], session="s1")]
+        os.environ["CLAUDE_CONFIG_DIR"] = str(base)
+        try:
+            foreign = US.foreign_sessions(events, self.t)
+            US.collect(self.p, self.steps, self.t, None, foreign)
+        finally:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
+        self.assertEqual(foreign, {})
+        self.assertEqual(sum(r["requests"] for r in US.load(self.p)), 3)
+
+    def test_no_transcripts_anywhere_is_still_a_clear_error(self):
+        root = self.p
+        (root / "environments.json").write_text('{"envs": {}}', encoding="utf-8")
+        cwd = os.getcwd()
+        os.chdir(root)
+        os.environ["CLAUDE_CONFIG_DIR"] = str(Path(self.tmp.name) / "empty-claude")
+        try:
+            with self.assertRaises(pls.Fail):
+                pls.main(["usage", "collect"])
+        finally:
+            os.chdir(cwd)
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
 
     def test_transcript_folder_name(self):
         self.assertEqual(US.transcripts_dir(Path("C:/Workspace/MADLAB/01. Project/demo")).name,

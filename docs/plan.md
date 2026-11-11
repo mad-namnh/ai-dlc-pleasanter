@@ -153,7 +153,7 @@ Migrations over HTTP, reviewer agents, CI, Playwright smoke, prod / customer-sid
 | AU3 | **Dev writes without a typed confirmation, once allowed** | The person records once per project, in their words (`pls profile set …`), that the agent may run `bootstrap` / `apply` / `migrate` on `role: dev`; stg and prod unchanged | ADR (ADR-0008, ADR-0014 TB-3) — Critical, write guard | the trial's P3 runs on dev without a typed confirmation, and stg still refuses |
 | AU4 | **Mail on dev made testable** | A mail catcher (or a dev mail setting) recorded as `side_effects.mail`; P4 tests read the caught mails, so reminders and notifications are tested automatically | infrastructure choice (Nam); ADR-0010 | DES-001 C-4 (reminder once or daily) is answered by a P4 test |
 | AU5 | **Role tests without hand work** | Test users per role on dev, keys stored by the operator's tooling, `as_key` tests in P4 | TD-11; whether the API can create users (KB probe) | REQ-012-style "refused for role X" tests run in P4 at stage demo |
-| AU6 | **Usage from any session folder** | `pls usage collect` finds the transcripts of the session that ran the project (or takes them from the run log) | none | the trial's usage is collected without `--transcripts` |
+| AU6 | **Usage from any session folder** | `pls usage collect` finds the transcripts of the session that ran the project (or takes them from the run log) | none | the trial's usage is collected without `--transcripts` — **done 2026-11-11** (run-log `session`; ADR-0013 Token usage) |
 
 **Not automatable, stays a person input:** business data the customer must supply (e.g. the 6 department names of the trial) — P1 asks for it; P3 waits for it.
 
