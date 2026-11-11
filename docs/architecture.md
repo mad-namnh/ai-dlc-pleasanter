@@ -90,7 +90,10 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 │  │  ├─ <env>-<site>-harvest-<stamp>.json
 │  │  ├─ <env>-<site>-adopt-<stamp>.json
 │  │  └─ <env>-<site>-after-<release>.json
-│  └─ kb-probes-<env>.json        # state of a pls kb-verify run
+│  ├─ kb-probes-<env>.json        # state of a pls kb-verify run
+│  └─ test-users/                 # pls test-users (ADR-0018): dev test users' secrets, never printed
+│     ├─ <env>-<role>.password    # random password of the role's test user
+│     └─ <env>-<role>.key         # its API key (connections.json keys.<role> = file:test-users/<env>-<role>.key)
 ├─ migrations/
 │  └─ <migration>/
 │     ├─ migration.json           # site, keys, data, rollback (ADR-0004)
@@ -332,6 +335,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework | **0.6** |
 | `pls bootstrap-plan` / `bootstrap` / `bind` | P3, P5 | Create skeleton sites for a new app and bind their IDs per environment (ADR-0007) | **0.4–0.5** |
 | `pls principals` | P3 (after G2) | Bind the roles of `design/roles.json` to group / user ids of an environment by exact name; a name that matches several groups is refused; exit 1 while a role has no id. `--create` (dev only, not a sandbox, typed confirmation): creates the missing groups with the operator as member first (ADR-0017) | built (2026-11-05); `--create` 2026-11-11 |
+| `pls test-users` | P3 (after `pls principals`), before P4 role tests | Dev only (not a sandbox, writes allowed, typed confirmation): for each Group role of `design/roles.json`, a test user `zz_test_<project>_<role>` (random password in `.pls/test-users/`), its API key issued through the screens only on a version where KB D32 is verified (else a person issues it, exit 1), `keys.<role>` added to `.pls/connections.json` when absent (never replaced), and the user added to the role's group by read, add, write, check (ADR-0018 option C, ADR-0019 option B). Removal and rotation: TD-24 | built (2026-11-11) |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | built — the rules it reports are listed in §7.2 only |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |

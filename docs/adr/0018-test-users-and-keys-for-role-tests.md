@@ -1,6 +1,6 @@
 # ADR-0018: Test users and their API keys for role tests on dev
 
-- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; nothing built. The CLAUDE.md Mandatory 1 exception is applied (`20fe494`); test users join their groups as ADR-0019 (Accepted, option B) says
+- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; built 2026-11-11 (`pls test-users`, KB D32). The CLAUDE.md Mandatory 1 exception is applied (`20fe494`); test users join their groups as ADR-0019 (Accepted, option B) says
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** ADR-0008 (HTTP transport, `as_key`, keys in `.pls/`), ADR-0017 (groups from the permission design), ADR-0014 (TB-14 shared tenant resources, TB-15 API key privilege), ADR-0009 (KB verification); TD-11, TD-13; `docs/plan.md` Step 4d AU5
@@ -36,8 +36,9 @@ Answered by the probe `plans/2026-11-11-au5-role-test-users/probe-user-create.py
 
 Not answered by the probe:
 - [ ] Is a deleted user kept in the trash box so that its `LoginId` stays taken (a second create with the same `LoginId` after the delete is not tried)?
-- [ ] Where `pls` keeps a test user's password and key: file names under `.pls/`, whether `pls` adds the `keys.<role>: file:…` reference to `.pls/connections.json` itself, and whether the password file is removed once the key exists (see Mandatory 1 above).
-- [ ] Lifecycle of test users: when they, their passwords and their keys are disabled or deleted (end of project, key rotation), and by whom.
+- [x] Where `pls` keeps a test user's password and key, whether it adds the `keys.<role>` reference itself, and whether the password file is kept? **Nam, 2026-11-11:** `.pls/test-users/<env>-<role>.password` and `.pls/test-users/<env>-<role>.key` in the project's `.pls/` only; `pls` adds `keys.<role>: file:test-users/<env>-<role>.key` to `.pls/connections.json` when the role has no key yet and never replaces one; the password file is kept (a key can be issued again).
+- [x] Lifecycle of test users (removal, key rotation)? **Nam, 2026-11-11:** not built now; tech debt TD-24.
+- [ ] How to tell, on 1.5.x, which user an API key belongs to. `pls` checks only that the API accepts a key and that it is not the operator's own; a key of another user saved by hand (fallback B) is not detected.
 - [x] Does `/api/groups/{id}/update` with `GroupMembers` replace the member list or add to it? **Replaces** (ADR-0019 probe); test users join groups as ADR-0019 option B says.
 - [ ] Departments (`principal: "Dept"`): a test user's department is a user field; not covered.
 - [ ] Password policy of the customer's dev (length, expiry, forced change): may differ from MADLAB dev.
@@ -52,12 +53,12 @@ The operator creates each test user in the UI, logs in as it, creates its key an
 - Cons: the step AU5 wants to remove; repeated for every project and every role; passwords chosen by hand.
 
 ### Option B — `pls` creates the users by the documented API; a person issues each key once
-`pls` creates the missing test users (`/api/users/create`), with a random password written only to the operator's `.pls/` file, and adds them to the role's group at the group's creation. The person logs in once per test user, creates its key, and saves it where `pls` says (`.pls/keys/<env>-<role>.key`).
+`pls` creates the missing test users (`/api/users/create`), with a random password written only to the operator's `.pls/` file, and adds them to the role's group at the group's creation. The person logs in once per test user, creates its key, and saves it where `pls` says (`.pls/test-users/<env>-<role>.key`).
 - Pros: only documented API; the password is never typed or seen by an agent.
 - Cons: one UI step per role per project remains; groups that already exist need a person (or a change of ADR-0017 rule 2).
 
 ### Option C — B, and `pls` also issues the key through the web endpoints
-After creating a user, `pls` logs in as it (`/users/authenticate` with the stored password), calls `/users/createapikey`, checks that the API accepts the key, and writes it only to `.pls/keys/<env>-<role>.key`.
+After creating a user, `pls` logs in as it (`/users/authenticate` with the stored password), calls `/users/createapikey`, checks that the API accepts the key, and writes it only to `.pls/test-users/<env>-<role>.key`.
 - Pros: no person step at all — the AU5 "done when".
 - Cons: depends on undocumented screen endpoints that may change between versions — it needs a KB entry per version and a refusal on a version where it is not verified (ADR-0009), with option B as the fallback; a tool now handles a password and logs in as another user.
 
@@ -70,7 +71,7 @@ After creating a user, `pls` logs in as it (`/users/authenticate` with the store
 
 **Option C, with B as the fallback** (Nam, 2026-11-11). Nam also decided: CLAUDE.md Mandatory 1 gets an explicit exception for the dev test users `pls` creates (patch `plans/2026-11-11-au5-role-test-users/proposed-CLAUDE.md.patch`, applied by Nam); test users join their role's group through a new ADR that supersedes ADR-0017 rules 2–3 (needs a probe of `/api/groups/{id}/update` first).
 
-Reasoning given before the decision: the probe showed on 1.5.2 that the login and key issue work, so the recommendation is **C, with B as the fallback** on a version where `pls kb-verify` has not confirmed the screen path. C is preferred over D: the result is an ordinary key, so `pls test` and ADR-0008 stay as they are, and D was observed for one call only. Before C is built: Nam's reading or change of CLAUDE.md Mandatory 1 (test-user passwords and keys in `.pls/`), and a superseding ADR for ADR-0017 rules 2–3 (test users in groups).
+Reasoning given before the decision: the probe showed on 1.5.2 that the login and key issue work, so the recommendation is **C, with B as the fallback** on a version not in the `verified_on` of KB entry D32 (the screen path; updated from a probe, ADR-0009). C is preferred over D: the result is an ordinary key, so `pls test` and ADR-0008 stay as they are, and D was observed for one call only. Before C is built: Nam's reading or change of CLAUDE.md Mandatory 1 (test-user passwords and keys in `.pls/`), and a superseding ADR for ADR-0017 rules 2–3 (test users in groups).
 
 ## Consequences
 

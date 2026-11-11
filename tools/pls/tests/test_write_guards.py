@@ -21,19 +21,24 @@ sys.path.insert(0, str(HERE.parent))
 import pls  # noqa: E402
 import test_http as TH  # noqa: E402
 
-WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals"}       # principals: only with --create (ADR-0017)
+WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals",       # principals: only with --create (ADR-0017)
+          "test-users"}                                                        # ADR-0018, ADR-0019
 NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest", "sandbox"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
          "skills", "gate", "step", "usage", "spec-skeleton", "jobs-verified", "profile", "review", "package"}
-WRITE_ENDPOINT = re.compile(r"/(updatesite|createsite|bulkupsert|create|update|delete)\b|\{op\}")
+WRITE_ENDPOINT = re.compile(r"/(updatesite|createsite|bulkupsert|create|update|delete|createapikey)\b|\{op\}")
 ALLOWED_WRITE_SITES = {("pls_http", "Client.apply"), ("pls_http", "Client.create_site"), ("pls_http", "Client.bulk_upsert"),
                        ("pls_http", "run_tests"), ("pls", "http_cmd"),
-                       ("pls_http", "Client.create_group")}
+                       ("pls_http", "Client.create_group"), ("pls_http", "Client.create_user"),
+                       ("pls_http", "Client.update_group"), ("pls_test_users", "ScreenSession.issue_api_key")}
 CLIENT_WRITERS = {"apply": {"apply_release", "rollback"}, "create_site": {"bootstrap"}, "bulk_upsert": {"migrate"},
-                  "create_group": {"bind_principals"}}
+                  "create_group": {"bind_principals"}, "create_user": {"write_test_users"},
+                  "update_group": {"add_test_user_to_group"}, "issue_api_key": {"issue_test_user_key"}}
 WRITE_RUNNERS = {"apply_release": {"http_cmd"}, "rollback": {"apply_release"}, "bootstrap": {"http_cmd"}, "migrate": {"http_cmd"},
-                 "run_tests": {"http_cmd"}, "bind_principals": {"_main"}}
+                 "run_tests": {"http_cmd"}, "bind_principals": {"_main"}, "test_users": {"_main"},
+                 "write_test_users": {"test_users"}, "add_test_user_to_group": {"write_test_users"},
+                 "issue_test_user_key": {"write_test_users"}}
 
 
 def subcommands() -> set[str]:
@@ -98,9 +103,9 @@ class StaticTest(unittest.TestCase):
                     f = node.func
                     attr = f.attr if isinstance(f, ast.Attribute) else (f.id if isinstance(f, ast.Name) else "")
                     owner = f.value.id if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) else ""
-                    if attr in CLIENT_WRITERS and owner in ("client", "c", "self"):
+                    if attr in CLIENT_WRITERS and owner in ("client", "c", "self", "s"):
                         calls[attr].add(short)
-                    if attr in WRITE_RUNNERS and (owner in ("H", "") or m.stem == "pls_http"):
+                    if attr in WRITE_RUNNERS and (owner in ("H", "TU", "") or m.stem in ("pls_http", "pls_test_users")):
                         calls[attr].add(short)
         for helper, allowed in {**CLIENT_WRITERS, **WRITE_RUNNERS}.items():
             self.assertEqual(calls[helper] - allowed, set(), f"{helper} called from a new place")
@@ -113,7 +118,7 @@ class DynamicTest(unittest.TestCase):
     plan = TH.HttpTest.plan
 
     def writes(self, n=0):
-        return [p for p, _ in self.fake.calls[n:] if re.search(r"/(updatesite|createsite|bulkupsert|create|update|delete)$", p)]
+        return [p for p, _ in self.fake.calls[n:] if re.search(r"/(updatesite|createsite|bulkupsert|create|update|delete|createapikey)$", p)]
 
     def deny_writes(self):
         c = json.loads((self.r / ".pls/connections.json").read_text(encoding="utf-8"))
@@ -154,6 +159,16 @@ class DynamicTest(unittest.TestCase):
         n = len(self.fake.calls)
         with self.assertRaises(pls.Fail):
             pls.main(["principals", "--env", "dev", "--create", "--yes"])
+        self.assertEqual(self.writes(n), [])
+
+    def test_test_users_sends_nothing_without_allow_write(self):
+        (self.r / "design").mkdir()
+        (self.r / "design/roles.json").write_text(json.dumps({"roles": {"x": {"principal": "Group", "group_name": "zz_demo_社員"}}}),
+                                                  encoding="utf-8")
+        self.deny_writes()
+        n = len(self.fake.calls)
+        with self.assertRaises(pls.Fail):
+            pls.main(["test-users", "--env", "dev", "--yes"])
         self.assertEqual(self.writes(n), [])
 
     def test_prod_is_never_written(self):

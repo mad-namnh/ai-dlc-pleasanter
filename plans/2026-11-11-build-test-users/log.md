@@ -1,0 +1,18 @@
+# Log
+- state: brownfield-adr at f9d6ddf; other task's files untouched.
+- classified Critical; main session Opus 5.5.
+- Nam: connections.json key added by pls when absent (refuse when different); password kept; lifecycle → tech debt.
+- design: new subcommand `pls test-users`; version gate via KB entry D32 (curator); fallback B message.
+- KB: curator added D32 (behaviours.md + probes/index.json, verified_on 1.5.2); JSON valid. Subagent calls: 1.
+- built: tools/pls/pls_test_users.py (new), pls_http Client.create_user / update_group, pls.py test_users + subcommand, pls_log WRITING; docs/architecture.md §3.2 (.pls/test-users/) and §7.1 (command row).
+- tests: tests/test_test_users_on_dev_only.py (22), test_write_guards.py (test-users classified, createapikey a write endpoint, new write sites/helpers, dynamic allow_write test).
+- verify: 3.12 427 OK (ratchet ran: every new refusal reached by a test), 3.10 427 OK (2 skipped), node 15 pass.
+- parent f9d6ddf worktree (../_agent-scratch/, removed): 22 of 22 new tests ERROR (import made optional in the copy only, to see each test), write_guards: 1 FAIL + 1 ERROR of the new ones.
+- review round 1 started (pls-x-reviewer, opus/high); git status hash recorded. Subagent calls: 2.
+- review round 1 (opus/high): accept with fixes — F1 High, F2–F6 Medium, F7–F8 Low; git status unchanged. Subagent calls: 2.
+- fixed F1–F6, F7a/c/d/e, F8 (review.md); F7b/F7f = ADR-0018 text → ask Nam.
+- verify: 3.12 435 OK, 3.10 435 OK (2 skipped), node 15; parent worktree: 30/30 new test-users tests fail; worktree removed.
+- review round 2 started (opus/high). Subagent calls: 3.
+- review round 2 (opus/high): accept with fixes — R2-1 Medium, R2-2..6 Low; git status unchanged. Subagent calls: 3; review rounds 2 of 2.
+- fixed R2-1..R2-6 (R2-2 partly: owner identity left as ADR open question); 8 new tests; ADR-0018 wording per Nam ("sửa theo build").
+- verify: 3.12 443 OK, 3.10 443 OK (2 skipped), node 15 pass. Round-2 fixes not independently re-reviewed (budget).

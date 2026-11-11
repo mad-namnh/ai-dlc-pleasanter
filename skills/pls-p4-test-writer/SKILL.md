@@ -6,7 +6,7 @@ description: Phase P4 of AI-DLC for Pleasanter. Turns acceptance criteria into A
 # pls-p4-test-writer
 
 **Goal:** every in-scope acceptance criterion is proven on dev by a passing test, or explicitly marked as manual. Restricted roles are proven as the project profile says (**Role tests**):
-- `per-role keys`: each restricted role is tested with its own key.
+- `per-role keys`: each restricted role is tested with its own key. On dev the keys come from `pls test-users --env dev`, run by the person after `pls principals` (one test user per Group role, its key in `.pls/`, `keys.<role>` in `.pls/connections.json`; ADR-0018). An exit 1 of that command names the keys a person must still issue.
 - `deferred` (demo stage): only the operator's key exists. Role restrictions are proven in the configuration (permissions entries and process access control, checked with `siteConfig` and by the 0-difference round trip) and listed in G3 as "role test deferred".
 **Tests prove the requirement, not the configuration.** A test that passes because it was bent to the build is worse than a failing one.
 

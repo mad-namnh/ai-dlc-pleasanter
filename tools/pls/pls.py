@@ -77,6 +77,7 @@ import pls_gate as GT                                       # noqa: E402 — gat
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
+import pls_test_users as TU                                 # noqa: E402 — test users for role tests (ADR-0018/0019)
 import pls_package as PK                                    # noqa: E402 — release package for the customer (ADR-0003)
 import pls_release_digest as RD                             # noqa: E402 — content a G4 approval covers
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
@@ -2500,6 +2501,83 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     return missing
 
 
+def test_users(r: Path, env: str, yes: bool = False) -> int:
+    """`pls test-users --env <dev env>` (ADR-0018 option C, ADR-0019 option B): one test user per Group role of
+    design/roles.json, its API key in the operator's .pls/, and its membership of the role's group. Dev only (not a
+    sandbox, writes allowed), typed confirmation. Returns 1 when a person must still issue a key (fallback B)."""
+    import pls_http as H
+    e = env_conf(r, env)
+    if e.get("role") != "dev" or e.get("sandbox_of") or e.get("connection"):
+        raise Fail(f"test-users: only on a dev environment that is not a sandbox ({env}: role {e.get('role')!r}, "
+                   f"sandbox of {e.get('sandbox_of')!r}) — test users exist on dev only (ADR-0018)")
+    rf = r / "design" / "roles.json"
+    if not rf.exists():
+        raise Fail("design/roles.json not found - the roles come from the permission design in P2")
+    roles = rj(rf).get("roles") or {}
+    _, conn, client = _client(r, env)
+    try:
+        H.assert_writable(e, conn, env)
+    except H.TransportError as ex:
+        raise Fail(str(ex))
+    app = (e.get("pleasanter") or {}).get("app")
+    try:
+        index = rj(FRAMEWORK / "skills" / "pls-kb-pleasanter" / "references" / "probes" / "index.json")
+        unverified = PV.kb_unverified(index, app)
+    except ValueError:
+        unverified = None
+    may_issue = TU.screen_path_verified(index if unverified is not None else None, unverified)
+    cf = H.connections_file(r)
+    if cf.resolve().parent != (r / ".pls").resolve():
+        raise Fail(f"test-users: the connections file {cf} is not the project's .pls/connections.json (PLS_CONNECTIONS) "
+                   "— test users' passwords and keys are kept only under the project's .pls/ (CLAUDE.md Mandatory 1); "
+                   "unset PLS_CONNECTIONS to run it")
+    client_for = lambda k: H.Client(conn["url"], k, timeout=H.conn_timeout(conn))   # noqa: E731
+    try:
+        entries = TU.plan_roles(roles, e.get("principals") or {}, conn, r / ".pls", r.name, env, client, client_for)
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users: {ex}")
+    if not entries:
+        print("no role with principal Group in design/roles.json — nothing to do")
+        return 0
+    work = [f"{x['role']}: {x['login']} — {', '.join(w)}" for x in entries for w in [TU.pending(x, may_issue)] if w]
+    if not work and all(x["key_ok"] and not x["add_ref"] for x in entries):
+        for x in entries:
+            print(f"{x['role']}: {x['login']} (User,{x['uid']}) ready")
+        return 0
+    if not may_issue:
+        print(f"keys are issued by a person: KB {TU.KB_ENTRY} (screen login and key issue) is not verified on "
+              f"Pleasanter {app or 'unknown'} of {env} — record the version with pls version --env {env}")
+    if work and not _confirm(env, yes, f"writes on {env} (tenant-wide users and groups):\n  " + "\n  ".join(work),
+                             "the environment name"):
+        raise Fail("not confirmed — nothing written")
+    made: dict = {"test_users_created": [], "group_members_added": []}
+
+    def log(**kw):
+        for k, v in kw.items():
+            made[k].append(v)
+
+    def add_key_ref(role: str, ref: str) -> None:
+        cur = rj(cf)
+        keys = cur[env].setdefault("keys", {})
+        if keys.get(role) not in (None, ref):          # the value may be a key typed by mistake: never shown
+            raise TU.TestUsersError(f"{cf}: keys.{role} was set meanwhile — not replaced")
+        keys[role] = ref
+        wj(cf, cur)
+
+    try:
+        left = TU.write_test_users(entries, client, client_for, lambda: TU.ScreenSession(conn["url"], H.conn_timeout(conn)),
+                                   may_issue, add_key_ref, log)
+    except H.UncertainOutcome as ex:
+        raise Fail(f"test-users: {ex} — run pls test-users --env {env} again: it looks the user and the group up first")
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users: {ex}")
+    finally:
+        LG.record_metric(**{k: v for k, v in made.items() if v}, _env=env)
+    for line in left:
+        print(f"PERSON STEP — {line}")
+    return 1 if left else 0
+
+
 def _git_first_commit(target: Path) -> str:
     import subprocess
     try:
@@ -3318,6 +3396,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--env", required=True)
     s.add_argument("--create", action="store_true", help="create the missing groups first (dev, not a sandbox; typed confirmation)")
     s.add_argument("--yes", action="store_true", help="the person's confirmation, given on their instruction")
+    s = sp.add_parser("test-users", help="dev only: one test user per Group role of design/roles.json, its API key "
+                                         "in .pls/ and its membership of the role's group (ADR-0018, ADR-0019)")
+    s.add_argument("--env", required=True)
+    s.add_argument("--yes", action="store_true", help="the person's confirmation, given on their instruction")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     return ap
@@ -3361,6 +3443,14 @@ def _main(argv=None) -> int:
         problems = skills_check(r)
         print("\n".join(problems) if problems else "skills match the lock and the framework")
         return 1 if problems else 0
+
+    if a.cmd == "test-users":
+        import pls_http as H
+        try:
+            return test_users(r, a.env, yes=a.yes)
+        except H.TransportError as ex:
+            print(f"pls: {ex}", file=sys.stderr)
+            return 2
 
     if a.cmd == "principals":
         import pls_http as H

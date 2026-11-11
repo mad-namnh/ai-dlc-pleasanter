@@ -25,7 +25,7 @@ The browser was needed only because the agent sandbox had no network path to Ple
 | `pls test SPEC… --env E --site S [--var k=v] [--release R \| --yes]` | same spec format as the runner; each spec's `as_key` picks the role's key, so role tests need no login switch |
 | `pls backup --env E --site S --out DIR` | every record, for migrations (ADR-0004) |
 
-**Connections are local, never in git:** `.pls/connections.json` (gitignored; template `connections.example.json`) holds the URL per environment, key references and `allow_write`. Keys are referenced as `env:NAME` (environment variable) or `file:NAME` (file under `.pls/`); literal keys are refused. Each person uses their own keys; test users' keys belong to the test users.
+**Connections are local, never in git:** `.pls/connections.json` (gitignored; template `connections.example.json`) holds the URL per environment, key references and `allow_write`. Keys are referenced as `env:NAME` (environment variable) or `file:NAME` (file under `.pls/`); literal keys are refused. Each person uses their own keys; test users' keys belong to the test users. On dev, `pls test-users` creates a test user per role and issues its key into the operator's `.pls/test-users/` (ADR-0018).
 
 **Write guard:** environments.json `role` dev or stg **and** local `allow_write: true`; `role: prod` is never written by this tool. `apply` and `bootstrap` ask the operator to type the release id (agents do not pass `--yes` unless the person asks).
 

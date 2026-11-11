@@ -28,7 +28,7 @@ from pathlib import Path
 
 SCHEMA = 1
 PHASES = ("onboarding", "P1", "P2", "P3", "P4", "P5", "P6", "G1", "G2", "G3", "G4", "other")
-WRITING = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals"}          # may write to Pleasanter (test_write_guards keeps this true)
+WRITING = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals", "test-users"}          # may write to Pleasanter (test_write_guards keeps this true)
 METRICS: dict = {}                                            # filled by the running command (record_metric)
 _DEPTH = [0]
 

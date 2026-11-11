@@ -1,6 +1,6 @@
 # ADR-0019: Test users in their role's group (supersedes ADR-0017 rules 2–3)
 
-- **Status:** Accepted (2026-11-11) — option B, decided by Nam after the probe; nothing built (built together with ADR-0018 option C)
+- **Status:** Accepted (2026-11-11) — option B, decided by Nam after the probe; built 2026-11-11 with ADR-0018 option C (`pls test-users`)
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Supersedes (once accepted, depending on the option):** ADR-0017 rule 3 (members of a created group) with A or B; with B also the sentence of rule 2 "Never update or delete an existing group", which becomes "Never delete an existing group; update one only to add a test user (option B)". The rest of ADR-0017 stays as it is.

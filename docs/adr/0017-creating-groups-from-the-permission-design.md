@@ -1,6 +1,6 @@
 # ADR-0017: Creating the groups of the permission design on dev (`pls principals --create`)
 
-- **Status:** Accepted (2026-11-11) — Option B, decided by Nam after the probe; built the same day (`pls principals --create`). Rule 3 and the sentence "Never update or delete an existing group" of rule 2 superseded by ADR-0019 (Accepted 2026-11-11, not built yet)
+- **Status:** Accepted (2026-11-11) — Option B, decided by Nam after the probe; built the same day (`pls principals --create`). Rule 3 and the sentence "Never update or delete an existing group" of rule 2 superseded by ADR-0019 (Accepted and built 2026-11-11, `pls test-users`)
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** ADR-0006 (site permissions in git, logical principals), ADR-0008 (HTTP transport, `assert_writable`), ADR-0014 (TB-14 shared tenant resources, TB-15 API key privilege), ADR-0009 (KB verification); `docs/plan.md` Step 4d AU2
