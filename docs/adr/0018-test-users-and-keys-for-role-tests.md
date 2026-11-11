@@ -1,6 +1,6 @@
 # ADR-0018: Test users and their API keys for role tests on dev
 
-- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; built 2026-11-11 (`pls test-users`, KB D32). The CLAUDE.md Mandatory 1 exception is applied (`20fe494`); test users join their groups as ADR-0019 (Accepted, option B) says
+- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; built 2026-11-11 (`pls test-users`, KB D32); trial on dev 2026-11-11 (`pls-demo-contracts`, Nam): three test users created (ids 10067–10069), each added to its role's group (378–380), keys issued through the screens; a second run reported every role ready with no write; Nam checked the members of the three groups in the UI. The CLAUDE.md Mandatory 1 exception is applied (`20fe494`); test users join their groups as ADR-0019 (Accepted, option B) says
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** ADR-0008 (HTTP transport, `as_key`, keys in `.pls/`), ADR-0017 (groups from the permission design), ADR-0014 (TB-14 shared tenant resources, TB-15 API key privilege), ADR-0009 (KB verification); TD-11, TD-13; `docs/plan.md` Step 4d AU5

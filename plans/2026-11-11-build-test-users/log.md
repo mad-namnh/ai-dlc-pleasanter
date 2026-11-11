@@ -16,3 +16,5 @@
 - review round 2 (opus/high): accept with fixes — R2-1 Medium, R2-2..6 Low; git status unchanged. Subagent calls: 3; review rounds 2 of 2.
 - fixed R2-1..R2-6 (R2-2 partly: owner identity left as ADR open question); 8 new tests; ADR-0018 wording per Nam ("sửa theo build").
 - verify: 3.12 443 OK, 3.10 443 OK (2 skipped), node 15 pass. Round-2 fixes not independently re-reviewed (budget).
+- trial by Nam on pls-demo-contracts dev: first run created users 10067–10069, joined groups 380/379/378 (project run log); second run: all three roles "ready", no write; Nam confirmed the members of the three groups in the UI. http-check not run (the ready run checks each key with the API).
+- closing change: docs only (plan.md AU5 done, HANDOFF, ADR-0018 status) — Light, no review; tools/pls unchanged since the suites ran (3.12 443 OK, 3.10 443 OK, node 15).
