@@ -1,0 +1,14 @@
+# Log
+- state: brownfield-adr at 20fe494 (Nam applied the Mandatory 1 patch); other task's files untouched.
+- classified Critical; main session Opus 5.5.
+- manual fetched (not observed): groups update, GroupMembers = full list.
+- STOP (agent-rules §1 items 1, 5): changes an Accepted ADR + probe write on dev → ADR Proposed + probe only.
+- written: docs/adr/0019 (Proposed; A join at creation only, B add by read-add-write-check, C recreate rejected; recommendation B if members readable and update replaces, else A), README row, probe-group-members.py.
+- offline check (scratchpad fake): members readable / not readable (UI prompt) / Ctrl+C at the Body-only update → cleanup complete, no password, key or server in output. A shallow-copy artifact of the fake (not of the probe) showed in one read.
+- review round 1 (pls-x-reviewer, opus/high): accept with fixes — 0 Critical/High, 2 Medium, 6 Low; git status unchanged. Subagent calls: 1; review rounds 1 of 2.
+- all fixed (review.md); reviewer's harness re-run, 15 scenarios: no leak, nothing else touched, leftovers reported. Not re-reviewed.
+- waiting: Nam runs the probe on dev.
+- probe run by Nam (19:42, dev): members readable (`GroupMembers` "User,<id>,<flag>"), update replaces the list, admin flag kept, omitted GroupName/Body kept, a deleted user leaves the group (API + UI), record has UpdatedTime/Ver; nothing left.
+- pls-kb-curator (sonnet/medium): api.md only; KB 0.19 in skills/README.md. Subagent calls: 2 (1 review, 1 curator).
+- Nam: ADR-0019 option B. Docs: ADR-0019 Accepted, ADR-0017 status line (rules superseded), ADR-0018 open question + status, README rows, plan.md AU5, HANDOFF.
+- verify: 3.12 404 OK, node 15 pass; tools/pls unchanged → 3.10 not needed. Committed.

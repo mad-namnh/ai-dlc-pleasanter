@@ -19,6 +19,7 @@
 | [0015](0015-undoing-an-applied-release.md) | Undoing a release that was applied successfully (`pls rollback`) | Proposed (2026-11-11) — nothing built |
 | [0016](0016-agent-team-for-framework-development.md) | An agent team for developing the framework (Orchestrator + three subagents, permission rules) | Accepted (2026-11-11) — after two trial tasks; 4 open questions stay open |
 | [0017](0017-creating-groups-from-the-permission-design.md) | Creating the groups of the permission design on dev (`pls principals --create`) | Accepted (2026-11-11) — option B, built (`pls principals --create`) |
-| [0018](0018-test-users-and-keys-for-role-tests.md) | Test users and their API keys for role tests on dev | Accepted (2026-11-11) — option C (B fallback); nothing built: waits for the Mandatory 1 patch and the ADR superseding ADR-0017 rules 2–3 |
+| [0018](0018-test-users-and-keys-for-role-tests.md) | Test users and their API keys for role tests on dev | Accepted (2026-11-11) — option C (B fallback); nothing built; test users join groups per ADR-0019 |
+| [0019](0019-test-users-in-role-groups.md) | Test users in their role's group (supersedes ADR-0017 rules 2–3) | Accepted (2026-11-11) — option B; nothing built (with ADR-0018 C) |
 
 New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".

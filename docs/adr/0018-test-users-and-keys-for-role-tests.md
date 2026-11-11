@@ -1,6 +1,6 @@
 # ADR-0018: Test users and their API keys for role tests on dev
 
-- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; nothing built. Building waits for the CLAUDE.md Mandatory 1 exception (patch proposed) and the ADR that supersedes ADR-0017 rules 2–3
+- **Status:** Accepted (2026-11-11) — option C with B as the fallback, decided by Nam after the probe; nothing built. The CLAUDE.md Mandatory 1 exception is applied (`20fe494`); test users join their groups as ADR-0019 (Accepted, option B) says
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** ADR-0008 (HTTP transport, `as_key`, keys in `.pls/`), ADR-0017 (groups from the permission design), ADR-0014 (TB-14 shared tenant resources, TB-15 API key privilege), ADR-0009 (KB verification); TD-11, TD-13; `docs/plan.md` Step 4d AU5
@@ -38,7 +38,7 @@ Not answered by the probe:
 - [ ] Is a deleted user kept in the trash box so that its `LoginId` stays taken (a second create with the same `LoginId` after the delete is not tried)?
 - [ ] Where `pls` keeps a test user's password and key: file names under `.pls/`, whether `pls` adds the `keys.<role>: file:…` reference to `.pls/connections.json` itself, and whether the password file is removed once the key exists (see Mandatory 1 above).
 - [ ] Lifecycle of test users: when they, their passwords and their keys are disabled or deleted (end of project, key rotation), and by whom.
-- [ ] Does `/api/groups/{id}/update` with `GroupMembers` replace the member list or add to it? Needed only if test users must join groups that already exist (changes ADR-0017 rule 2).
+- [x] Does `/api/groups/{id}/update` with `GroupMembers` replace the member list or add to it? **Replaces** (ADR-0019 probe); test users join groups as ADR-0019 option B says.
 - [ ] Departments (`principal: "Dept"`): a test user's department is a user field; not covered.
 - [ ] Password policy of the customer's dev (length, expiry, forced change): may differ from MADLAB dev.
 
