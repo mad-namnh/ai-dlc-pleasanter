@@ -23,3 +23,4 @@
 - Nam: option (b) for case 008 Must 3; fix the lint defect; write the brief patch.
 - fix: pls.lint skips the site loop when config/ does not exist; test test_pls.PlsTest.test_lint_runs_on_a_new_project_before_bootstrap — ERROR (FileNotFoundError) on the unfixed code (= HEAD 2980f7e), OK after; lint on the case-008 scratch now reports 4 L-PRF-01 instead of a traceback. Suites: 3.12 444 OK, 3.10 444 OK (2 skipped), node 15. Light (one guard, isolated): no review.
 - patches written: proposed-expected-lc-008-relax.patch, proposed-eval-case-brief.patch (git apply --check OK); results and HANDOFF updated.
+- Nam applied both patches (89a6376); case 008 run 2 = PASS under the changed rubric; results and HANDOFF updated. Task closed.
