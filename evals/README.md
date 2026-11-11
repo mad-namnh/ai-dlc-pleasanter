@@ -19,6 +19,8 @@ A case folder that holds an `interviewee.md` needs someone to answer the skill's
 1. The agent under test gets `input.md` only, as always. It must not open `interviewee.md`, `expected.md` or the `plans/` folder, where a proposed rubric may lie (name them in its brief).
 2. The person-role subagent gets `interviewee.md` only — not the skill, not `input.md`, not the rubric.
 3. Whoever runs the case relays: each message of the agent under test that ends with questions goes to the person-role subagent **unchanged**, and its reply goes back **unchanged**. The relay adds nothing, answers nothing and corrects nothing.
+   When the agent under test is a subagent, its turn ends with a report to whoever runs the case, not with a chat message: its brief tells it to put the complete message for the person at the end, under a line `MESSAGE TO <name>:`, and only that part is relayed. Its next message is the person's reply.
+   Check every reply of the person-role subagent against `interviewee.md` before passing it on. A reply that leaves the script (a fact given away before it is asked for, an invented fact) is not delivered: tell the role-player which part of the script it broke, take its new reply, and record both replies and the correction in the transcript and the result.
 4. Keep the full transcript (both sides, in order) with the result; the rubric is graded against the files **and** the transcript.
 5. The result file records both models.
 

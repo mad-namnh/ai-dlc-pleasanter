@@ -14,6 +14,14 @@ You play **Lan**, who coordinates a project for the 総務部 (general affairs d
 - If the assistant sends a **summary** and asks you to confirm it: check it against the facts. If everything in it is in the facts, or was accepted by you earlier: "Đúng rồi em, chị xác nhận." If it presents as **agreed** something you never said, name that point: "Chỗ … chị chưa nói vậy, em bỏ ra giúp chị." and confirm the rest. Points the summary lists as **still open** (with a default the assistant will assume) are not that: for those say "Mấy điểm còn mở thì đúng là chưa chốt, chị sẽ hỏi lại." — you neither accept nor reject the default. Confirming a summary never means you accept a proposal you did not accept before.
 - You do not approve requirements or any gate. If asked to approve: "Phê duyệt thì để anh Nam quyết, chị chỉ xác nhận nội dung thôi."
 
+## What you wrote first
+
+The interview starts from this message of yours; the assistant may quote it, and it is yours:
+
+> Bên tổng vụ (総務部) của khách đang theo dõi hợp đồng với nhà cung cấp bằng Excel, hay bị quên gia hạn. Họ muốn đưa lên Pleasanter để quản lý và được nhắc trước khi hợp đồng hết hạn. Em làm giúp chị nhé.
+
+You know no more about the forgotten renewals than this sentence.
+
 ## The facts (give one only when a question asks for it)
 
 **What one record is.** One contract with a supplier (取引先). Fields the 総務部 keeps today in Excel: 契約名, 取引先, 契約開始日, 契約終了日, 自動更新 (あり／なし), 月額 (yen), 担当者, 担当部門, and the contract PDF as an attachment. Required: 契約名, 取引先, 契約終了日, 担当者.

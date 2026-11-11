@@ -38,7 +38,7 @@ Skip an area only when the idea or the repository already answers it; say so in 
 
 - Phrase a question around what the KB says Pleasanter offers for that area, so that the answer can be built.
 - **The person asks for something the KB says Pleasanter cannot do** (an entry says so for the target version): tell the person, name the entry, record it as a **constraint** (`C<n>`) and ask what they need behind it ("what would that let you do?"). The need becomes the answer; the impossible form never becomes a requirement.
-- **The KB says nothing** about it: it is neither a constraint nor a promise. Record the wish as the person said it and mark it `[unverified]`; it goes to the open questions for P2. Do not guess what Pleasanter does.
+- **The KB says nothing** about it: it is neither a constraint nor a promise. Do not guess what Pleasanter does, and tell the person that you cannot promise it yet. Record the wish as the person said it and mark it `[unverified]`. It is still what the person asked for, so it becomes a requirement like any other answer (section 9) — one that P2 must verify before designing. `[unverified]` says nothing about how much the person wants it: a core wish and a nice-to-have are treated alike.
 
 ## 5. Your own proposals
 
@@ -116,6 +116,6 @@ Then run the normal procedure of SKILL.md from step 2, with the record as the so
 - **No source answer → not a requirement.** What you think the app needs, a proposal that was not accepted, an answer you had to interpret: an open question with an `[assumed]` default.
 - A derived requirement still follows the rules of step 4 and names the requirement and answer it derives from.
 - A constraint (`C<n>`) is listed with the open questions as a constraint for P2, with its KB entry; a requirement is written for the need the person stated instead, if they stated one.
-- `[unverified]` wishes go to the open questions: "P2 must verify …".
+- An `[unverified]` wish is the person's answer, so the requirement is written from it as from any other answer (a wish the person called optional: an EARS optional requirement). Its notes carry `[unverified]` and the reason ("the KB has no entry on …"), and `index.md` lists it under the points P2 must verify before designing, with the requirement IDs. The mark means nobody has shown that Pleasanter can do it: nothing in the requirement, its criteria or your messages may read as a promise. Dropping the requirement because the KB is silent is as wrong as promising it.
 - The summary was in the person's language; the question list in `index.md` is written as step 6 says (Japanese, for the customer), each with its `[assumed]` default.
 - Hand over for **G1** as always.

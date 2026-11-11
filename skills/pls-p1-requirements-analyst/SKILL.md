@@ -63,7 +63,7 @@ IDs are sequential across the project (`REQ-001`, `REQ-002`, …) and never reus
 - [ ] Ambiguities are questions with explicit assumptions, not silent choices. Every `[assumed]` in a REQ file points to a question number in `index.md`.
 - [ ] No derived requirement adds behaviour beyond the request that no existing element needs (those are questions).
 - [ ] Customer-facing text (questions, labels) is in Japanese; the rest of the document is English.
-- [ ] Nothing in the requirements depends on a Pleasanter behaviour you have not verified (`pls-kb-pleasanter`).
+- [ ] Nothing in the requirements depends on a Pleasanter behaviour you have not verified (`pls-kb-pleasanter`). Interview mode: what the person asked for and the KB does not cover is a requirement marked `[unverified]` and listed for P2 to verify (`references/interview.md` sections 4 and 9), never dropped and never promised.
 - [ ] Interview mode: every requirement names the answers it comes from (`A<n>`, or `P<n> accepted`; a derived requirement names the requirement and answer it derives from); a proposal of yours that the person did not accept in their own words is a question, not a requirement; the record holds the questions, answers, proposals and the confirmation verbatim.
 
 ## Example (illustrative — not a template to copy)

@@ -15,3 +15,14 @@ Reviewer: subagent `pls-x-reviewer`, model `sonnet`, effort `medium`, round 1 of
 | L4 | Low | The example "what do you use that list for?" is the move case 003 needs | Fixed: reworded to "what would that let you do?" |
 
 Not sent for a second review round: no Critical or High finding; the fixes are wording in the reviewed files.
+
+## Second review — the `[unverified]` rule (0.6), 2026-11-11
+
+Reviewer: subagent `pls-x-reviewer`, model `sonnet`, effort `medium`. Reviewed: working tree against `30126a9` plus `proposed-case-003-expected-md-unverified-wish.patch`. This is review round 2 of 2 of this plan folder. `git status` before and after the call: identical.
+
+**Verdict: accept** — no Critical, High or Medium finding; 2 Low. All 8 acceptance criteria met (skill sections 4 and 9 unambiguous; no contradiction in `SKILL.md` or the references; no Pleasanter capability stated; 0.6 and `docs/architecture.md` agree; the patch applies and matches the skill and `interviewee.md`; the person's first message in `interviewee.md` is identical to `input.md`; relay mechanics in `evals/README.md`; no example gives away case 003). Not verified by the reviewer: the two suites (its combined run gave no readable summary — the Orchestrator ran them: see `log.md`), and how a model behaves with the new text (case 003 run 2).
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| L1 | Low | `skills/README.md`: the 0.5 history still read as an open question ("Nam decides") | Fixed: "(resolved in 0.6)" |
+| L2 | Low | The rubric does not check that the agent tells the person it cannot promise an `[unverified]` wish, although `interview.md` section 4 asks for it | Not changed: a rubric item is Nam's (protected path); offered to him as an optional tightening |
