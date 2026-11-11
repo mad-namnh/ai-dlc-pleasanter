@@ -62,6 +62,10 @@ def from_refs(settings: dict, principals: dict, site: str, fail: Callable[[str],
             if typ not in ("Group", "User", "Dept") or not pid.isdigit():
                 raise fail(f"{site}: principal '{m.group(1)}' is {val!r}, not a Group, User or Dept id")
             return f"[{typ}{pid}]"
+        raw = TOKEN.search(s)
+        if raw:                     # an id of the environment the export came from would mail other people elsewhere
+            raise fail(f"{site}: a mail address uses the environment-specific id {raw.group(0)} (L-PERM-01) — "
+                       "map the principal in environments.json principals")
         return REF.sub(one, s)
     _each_element(settings, fn)
 

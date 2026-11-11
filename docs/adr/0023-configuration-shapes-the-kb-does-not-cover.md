@@ -30,7 +30,7 @@ Order of sources when a shape is missing:
 1. the KB (`pls-kb-pleasanter`);
 2. canonical exports already in git for the same environment (another project's `config/`);
 3. the Pleasanter source at the tag of the environment's recorded version (`Pleasanter_<app version>`), cited by file and tag; written into the KB as **source-derived, not verified**;
-4. a probe in `references/probes/` (stored shape with `expect_stored`, behaviour with record tests; date variables take day offsets `$today+N`);
+4. a probe in `references/probes/` (stored shape with `expect_stored`, behaviour with record tests; kb-verify's date variables take day offsets `$today+N`);
 5. `pls kb-verify --env <dev>` — a write to dev, so the person runs it or names `--yes`;
 6. on pass: the KB entry is verified on that version, and a new top-level key goes into `pls_scope.VERIFIED_KEYS` with the evidence; on fail: the KB says so and the design goes back to P2 (or the requirement to P1).
 
@@ -50,5 +50,5 @@ Proposed: **Option A**. The scope refusal is the reason the framework is safe to
 
 - Easier: the next project that needs a near-completion view, an aggregation or a group recipient finds it in the KB; P2 can design with it; P3 builds it without a person in the UI.
 - Harder: P3 of the first project stops until the framework has the probe and the evidence (here: `D33`, scope keys `NearCompletionTimeBeforeDays/AfterDays`).
-- Built with this ADR (2026-11-11): date offsets `$name±N` in probe and test variables (`pls_http._subst`); principals inside mail addresses of notifications and reminders (`pls_address_principals.py`, lint L-PERM-01 for a raw `[Group<id>]`); probe `D33`; skills P2, P3 and lifecycle name this procedure.
+- Built with this ADR (2026-11-11): date offsets `$name±N` for date variables (`pls_http._subst`); only `kb-verify` provides date variables (`$today`, `$yesterday`, …) — `pls test` and the browser runner have none, so a P4 spec passes such dates with `--var`; principals inside mail addresses of notifications and reminders (`pls_address_principals.py`; a raw `[Group<id>]` is lint L-PERM-01 and refused by `pack`; an `${env:x}` value holding such an id is L-PERM-01 too); probe `D33`; skills P2, P3 and lifecycle name this procedure.
 - Follow-up: after `kb-verify` passes, `VERIFIED_KEYS` gains `NearCompletionTimeBeforeDays`, `NearCompletionTimeAfterDays` (separate commit with the report as evidence).

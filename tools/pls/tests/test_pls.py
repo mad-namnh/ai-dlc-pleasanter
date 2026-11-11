@@ -800,12 +800,24 @@ class PlsTest(unittest.TestCase):
         perm = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
         self.assertTrue(any("[Dept4]" in m for m in perm), perm)                 # unmapped → reported
         self.assertFalse(any("[Group379]" in m or "[User1]" in m for m in perm), perm)
+        with self.assertRaisesRegex(pls.Fail, r"environment-specific id \[Dept4\]"):   # pack refuses a raw id too
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        site["Processes"][0]["Notifications"][0]["Address"] = "[${principal:admin}]"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
         pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
         self.assertEqual(pl["Reminders"][0]["To"], "[Group12],[ClassD]")        # resolved per environment
-        self.assertEqual(pl["Processes"][0]["Notifications"][0]["Address"], "[User1];[Dept4]")
+        self.assertEqual(pl["Processes"][0]["Notifications"][0]["Address"], "[User1]")
         envs["envs"]["stg"]["principals"]["manager"] = "Role,12"                 # not an address principal
         with self.assertRaisesRegex(pls.Fail, "not a Group, User or Dept"):
             pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        envs["envs"]["stg"]["principals"]["manager"] = "Group,12"
+        for k in ("dev", "stg"):                                               # an address id carried as an env value
+            envs["envs"][k].setdefault("values", {})["mgr_to"] = "[Group379]" if k == "dev" else "[Group12]"
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        site["Reminders"][0]["To"] = "${env:mgr_to}"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        perm = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("${env:mgr_to}" in m and "[Group379]" in m for m in perm), perm)
         site["Reminders"][0]["To"] = "[${principal:nobody}]"
         (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
         with self.assertRaisesRegex(pls.Fail, "unresolved reference"):

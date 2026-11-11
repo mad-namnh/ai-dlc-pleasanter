@@ -763,6 +763,13 @@ def lint(r: Path) -> list[dict]:
                 if name_ not in known:
                     issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
                                    f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
+        for name_ in sorted({n for k, n in REF_RE.findall(blob) if k == "env"}):   # address ids belong in principals
+            for env_name, ec in e_all["envs"].items():
+                tok = AP.TOKEN.search(str((ec.get("values") or {}).get(name_, "")))
+                if tok:
+                    issues.append({"rule": "L-PERM-01", "site": site, "msg": f"${{env:{name_}}} holds the mail address id {tok.group(0)} "
+                                   f"for env '{env_name}': write [${{principal:<name>}}] in the address and map the principal in "
+                                   "environments.json principals instead (ADR-0023)"})
         for name_ in sorted(embedded_env_refs(m)):                 # L-REF-04: an embedded value must map back at unpack
             weak = sorted(env_name for env_name, ec in e_all["envs"].items()
                           if name_ in (ec.get("values") or {}) and not env_value_embeddable(ec["values"][name_]))
