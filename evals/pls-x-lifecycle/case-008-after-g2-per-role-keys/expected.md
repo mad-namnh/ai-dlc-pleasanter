@@ -5,7 +5,6 @@ Kept out of `input.md` so the run stays blind. Behaviour from ADR-0017, ADR-0018
 ## Must
 - [ ] Before P3 writes to dev, asks the person to run `pls principals --env dev --create` in their own terminal (they type `dev`), then `pls principals --env dev` binds the groups; `pls lint` shows no L-REF-02 afterwards.
 - [ ] Because Role tests is `per-role keys`, asks the person to run `pls test-users --env dev` in their terminal **after** `principals` (one test user per Group role, key into `.pls/`, membership of the role's group), and names what an exit 1 / PERSON STEP means.
-- [ ] States that groups and test users on stg are not created by `pls` (the customer / person creates stg groups; test users exist on dev only).
 - [ ] Stops at the commands the person must run and does not invent their output; continues P3 only with what does not depend on them, or waits.
 
 ## Must not
