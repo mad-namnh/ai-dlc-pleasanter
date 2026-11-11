@@ -1,6 +1,6 @@
 # Input — case 001 (from slice #1)
 
-Run against a scratch project holding the **pre-slice** configuration: `pls-demo-inquiry/.pls/exports/stg-44573-before.json` unpacked with `pls unpack` (`${site:responses}` in `ai1.js`), slot ledger without DateC, `design/decisions/DES-000` only, empty `requirements/`. Give the agent only the skills and the request below — never `evals/` or slice #1 outputs. The summary below omits some elements the real config has (reminder 1, aggregation 1); the agent must read `config/`.
+Run against a scratch project holding the **pre-slice** configuration: `pls-demo-inquiry/.pls/exports/stg-44573-before.json` unpacked with `pls unpack` (`${site:responses}` in `ai1.js`), slot ledger without DateC, `design/decisions/DES-000` only, empty `requirements/`. The request given to the agent says that this project built the application (DES-000 is its baseline) and that its earlier requirement documents were not carried into the folder — otherwise a project `CLAUDE.md` with Origin `new` makes the agent stop and ask whether this is a takeover (run 2, 2026-11-11). Give the agent only the skills and the request below — never `evals/` or slice #1 outputs. The summary below omits some elements the real config has (reminder 1, aggregation 1); the agent must read `config/`.
 
 ## Request (customer, Japanese)
 
