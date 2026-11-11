@@ -51,7 +51,7 @@ Filled in when the project is created; the lifecycle skill reads it.
 | Path | Holds |
 |---|---|
 | `requirements/` | `sources/` (spec verbatim), `REQ-*.md`, `index.md` (status + questions) |
-| `design/` | `decisions/DES-*.md`, `probes/`, `slot-ledger.json`, `roles.json` (permission design: roles → groups) |
+| `design/` | `decisions/DES-*.md`, `probes/`, `slot-ledger.json`, `roles.json` (permission design: roles → groups), `as-is/<site>.md` (what an existing site does today), `refs-literal.json` (site ids kept as literal numbers) |
 | `config/<site>/` | desired configuration (unpacked): `site.json`, `meta.json`, scripts, `permissions.json` |
 | `environments.json` | environments: role, `parent_id`, site ids, principals |
 | `tests/api/` | test specs; `tests/results/` results |
@@ -60,7 +60,12 @@ Filled in when the project is created; the lifecycle skill reads it.
 | `handover/customer-responsibilities.md` | who approves, runs, backs up and recovers on customer environments — filled in and signed before the first cstg / prod release |
 | `dist/` | release packages for the customer (`pls package`, gitignored); the manifest stays in `releases/<R>/` |
 | `ops/drift/` | drift baselines and decisions |
+| `ops/log/`, `ops/usage/` | run log of every `pls` command; LLM token usage per session (`pls usage`) |
+| `ops/onboarding/`, `ops/adopt/`, `ops/xref/` | taking over an existing app: onboarding summary, adopt reports, which script uses which column and site |
+| `ops/triage/` | maintenance triage notes (P6) |
 | `traceability.json` | REQ → design → config → tests |
 | `.pls/` | gitignored: connection, exports, local files |
+
+Full layout: `docs/architecture.md` §3.2 in the framework repository (`ai-dlc-pleasanter`).
 
 Language: project documents in English; questions for the customer, labels and messages for Pleasanter end users in Japanese.
