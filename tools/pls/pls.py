@@ -743,7 +743,8 @@ def lint(r: Path) -> list[dict]:
     for x in SE.job_problems(r):                                  # L-JOB-01: scheduled scripts declared consistently (ADR-0012)
         issues.append({"rule": "L-JOB-01", "site": "_tenant", "msg": f"{SE.JOBS_DIR.as_posix()}/{x}"})
     issues += lint_jobs(r, e_all, all_ids)
-    for site_dir in sorted((r / "config").iterdir()):
+    config_dirs = sorted((r / "config").iterdir()) if (r / "config").is_dir() else []   # none before bootstrap (P3)
+    for site_dir in config_dirs:
         if not site_dir.is_dir():
             continue
         site = site_dir.name

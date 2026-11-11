@@ -772,6 +772,14 @@ class PlsTest(unittest.TestCase):
         with self.assertRaises(pls.Fail):
             pls.release_plan(self.r, "dev", "R-Y", {"a": str(exp)}, "no-such-decision.md")
 
+    def test_lint_runs_on_a_new_project_before_bootstrap(self):
+        """After G2 a new app has no config/ yet (bootstrap and unpack create it): lint still checks the rest."""
+        self.assertFalse((self.r / "config").exists())
+        rules = {i["rule"] for i in pls.lint(self.r)}
+        self.assertIn("L-PRF-01", rules)                     # the profile check still ran (Approvers has no record)
+        rc, _ = self.printed(["lint"])
+        self.assertEqual(rc, 1)                              # issues reported, no traceback
+
     def test_lint_skips_meta_only_sites_and_flags_unresolved_references(self):           # S5
         self.unpack_dev()
         (self.r / "config/newsite").mkdir()

@@ -20,3 +20,5 @@
 - lifecycle case-008 run 2 final: FAIL on Must 3 only (stg not mentioned); handled the lint crash correctly (no placeholder config/, reported it as a framework gap). Musts 1, 2, 4 met; no Must-not.
 - P4 case-002 run 2 (opus, rubric after Nam's fix 2026-11-11): PASS — all five Musts (incl. exact pls test commands with --env/--site/--var), no Must-not. Runner note: the brief's two endings (COMMAND TO RUN vs MESSAGE TO Nam) cannot both close a turn, so it asked for no local command.
 - step 4: results evals/results/pls-p4-test-writer/2026-11-11.md and pls-x-lifecycle/2026-11-11.md; commit with lifecycle 0.20 (skill text only, Light: no review; tools/pls unchanged → suites not re-run).
+- Nam: option (b) for case 008 Must 3; fix the lint defect; write the brief patch.
+- fix: pls.lint skips the site loop when config/ does not exist; test test_pls.PlsTest.test_lint_runs_on_a_new_project_before_bootstrap — ERROR (FileNotFoundError) on the unfixed code (= HEAD 2980f7e), OK after; lint on the case-008 scratch now reports 4 L-PRF-01 instead of a traceback. Suites: 3.12 444 OK, 3.10 444 OK (2 skipped), node 15. Light (one guard, isolated): no review.
