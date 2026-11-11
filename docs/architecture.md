@@ -40,55 +40,112 @@ These rules hold in every phase. Each one is enforced by a deterministic check o
 | **Framework** (`ai-dlc-pleasanter`, this repo) | MADLAB | Architecture, ADRs, `pls` toolchain, check rules, skill/agent/hook templates, project template, evals, patterns | Customer configuration or data |
 | **Project** (one per customer system) | MADLAB + customer | Requirements, design, unpacked configuration, tests, environment maps, release records, ops records | Secret values, business data |
 
-### 3.2 Project repository layout (target)
+### 3.2 Project repository layout
 
 Machine-read files are JSON (stdlib only). Reference implementations: `pls-demo-inquiry` (changes to existing sites: slices #1, 1.5, #2) and `pls-demo-equipment` (a new app: slice #3).
 
+The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout_matches_what_pls_creates_and_names.py`): it holds everything `pls init` creates and every name `pls` joins into a project path, and it names nothing that neither `pls`, a skill nor the project template names. One name per line; `<…>` marks a part that varies. The comments are not checked.
+
 ```
 <customer>-<system>/
-├─ CLAUDE.md                      # generated from the framework template + project rules
-├─ .claude/                       # skills, agents, hooks installed from the framework (pinned version)
+├─ CLAUDE.md                      # project profile and rules, from the framework template (pls init)
+├─ pls.py                         # launcher: runs the framework's pls for this project
+├─ .gitignore                     # .pls/, tests/seed/, migration backups, dist/
+├─ .gitattributes                 # config/, releases/, migrations/ are stored byte for byte
+├─ .claude/
+│  ├─ skills/                     # skills installed from the framework (pls skills sync)
+│  └─ framework.lock              # framework path and commit, version and hash of every installed skill
 ├─ requirements/
-│  ├─ REQ-001-<slug>.md           # EARS statements, acceptance criteria, source (meeting, ticket)
-│  └─ index.md                    # status per requirement (draft / G1-approved / released)
+│  ├─ sources/                    # what the customer gave, verbatim
+│  ├─ REQ-<nnn>-<slug>.md         # EARS statements, acceptance criteria, source
+│  └─ index.md                    # status per requirement, open questions
 ├─ design/
-│  ├─ sites.md                    # site map, table types, links, ownership zone per site
+│  ├─ decisions/
+│  │  └─ DES-<nnn>-<slug>.md      # design decisions incl. ladder rung + reason (I5)
+│  ├─ probes/                     # probes run for design decisions
+│  ├─ as-is/
+│  │  └─ <site>.md                # what an existing site does today (pls spec-skeleton; reviewed with pls review)
 │  ├─ slot-ledger.json            # column-slot allocation: site → slot → logical name → zone (ADR-0002)
-│  ├─ permissions.md              # role × site × operation matrix
-│  ├─ decisions/DES-001-*.md      # design decisions incl. ladder rung + reason (I5)
-│  └─ 設計書/                     # generated design documents for the customer (Japanese)
+│  ├─ roles.json                  # permission design: roles → groups (bound with pls principals)
+│  └─ refs-literal.json           # site ids in scripts that a person decided to keep as literal numbers (pls refs)
 ├─ config/                        # UNPACKED desired state (I1)
-│  └─ <site-logical-name>/
-│     ├─ site.json                # SiteSettings without scripts, IDs replaced by logical references
-│     ├─ server-scripts/*.js
-│     ├─ scripts/*.js  styles/*.css
-│     ├─ meta.yaml                # logical name, reference type, parent, zone
-│     └─ permissions.json         # optional (ADR-0006): inherit + entries with ${principal:x}
+│  ├─ <site>/
+│  │  ├─ site.json                # SiteSettings without scripts, IDs replaced by logical references
+│  │  ├─ meta.json                # logical name, reference type, parent, zone
+│  │  ├─ permissions.json         # optional (ADR-0006): inherit + entries with ${principal:x}
+│  │  ├─ server-scripts/
+│  │  │  ├─ <name>.js
+│  │  │  └─ _index.json           # the settings of each script of the folder, without its body
+│  │  ├─ scripts/                 # same form as server-scripts/
+│  │  ├─ styles/                  # same form, .css
+│  │  └─ htmls/                   # same form, .html
+│  └─ _tenant/
+│     └─ scheduled-scripts/       # tenant-level scheduled scripts (ADR-0010, ADR-0012)
 ├─ environments.json              # dev/stg/prod: base URL, role, logical name → SiteId map, ${env:} values, principals
-├─ secrets.catalog.json           # secret NAMES per environment, owner — no values (I7)
 ├─ connections.example.json       # template for the operator's .pls/connections.json (ADR-0008, no keys)
-├─ .pls/                          # gitignored: operator connections + key files, exports, bundles
+├─ .pls/                          # gitignored: operator-local files
+│  ├─ connections.json            # URL, allow_write and key references of this operator (ADR-0008)
+│  ├─ exports/
+│  │  ├─ <env>-<site>-<stamp>.json            # site exports (pls export, harvest, adopt, apply read-back)
+│  │  ├─ <env>-<site>-harvest-<stamp>.json
+│  │  ├─ <env>-<site>-adopt-<stamp>.json
+│  │  └─ <env>-<site>-after-<release>.json
+│  └─ kb-probes-<env>.json        # state of a pls kb-verify run
 ├─ migrations/
-│  └─ M<n>-<slug>/                # migration.json (site, keys, rollback), dry-run.md, backup/ (gitignored, I7)
+│  └─ <migration>/
+│     ├─ migration.json           # site, keys, data, rollback (ADR-0004)
+│     ├─ dry-run.md               # log of the dry run on a copy
+│     └─ backup/                  # gitignored (I7): records exported before the conversion
 ├─ tests/
 │  ├─ api/                        # behaviour tests through the Pleasanter API
-│  ├─ permissions/                # permission matrix tests (users × operations)
-│  ├─ smoke/                      # few Playwright flows
-│  ├─ results/                    # test results per environment and run
+│  ├─ results/
+│  │  └─ <env>-<date>-<name>-http.json        # results per environment and run (pls test)
 │  └─ seed/                       # gitignored: test-user credentials for dev
 ├─ traceability.json              # REQ ↔ design element ↔ config path ↔ test (I8)
+├─ gates/                         # the person's decisions, one file each, never overwritten (I4)
+│  ├─ <date>-<gate>-<time>-<id>.json          # gate decision G1–G4 (pls gate)
+│  ├─ profile/                    # profile values as the person stated them (pls profile set)
+│  └─ review/                     # reviews of as-is documents (pls review as-is)
 ├─ releases/
-│  └─ R-YYYYMMDD-NN/
-│     ├─ plan.json                # deploy plan: ordered steps, snapshot refs, rollback
-│     ├─ payload-<site>.json      # complete SiteSettings per site (I2); rollback-<site>.json = snapshot
+│  └─ <release>/
+│     ├─ plan.json                # release plan: ordered steps, snapshot refs, rollback, status
+│     ├─ bootstrap.json           # plan for sites that do not exist yet (ADR-0007)
+│     ├─ payload-<site>.json      # complete SiteSettings per site (I2)
+│     ├─ rollback-<site>.json     # the site as it was when the release was planned
+│     ├─ raw-diff-<site>.md       # live (before) against git (after), per site
+│     ├─ payload.json             # single-site form of the three files above (pls plan)
+│     ├─ rollback.json
+│     ├─ raw-diff.md
+│     ├─ scheduled-scripts/       # scheduled scripts resolved for the target, deployed by hand
+│     ├─ diff-report.operator.md  # operator's report, written by pls
+│     ├─ diff-report.md           # business-language summary (AI)
 │     ├─ g3-verification.md       # G3 evidence
-│     ├─ diff-report.md           # business-language diff (AI) + raw diff (code)
-│     ├─ checks.json              # results of every automated check
-│     └─ approvals.md             # G3/G4 approvers, date, scope
+│     ├─ approvals.md             # approvals note for people; the records pls checks are in gates/
+│     ├─ apply-log.json           # outcome of the apply: transport, who ran it, how it was confirmed, status
+│     ├─ live-<site>.json         # what the site held after an apply that differs from the payload
+│     └─ package-manifest.json    # files and digests of the customer package (pls package)
+├─ dist/                          # gitignored: packages for the customer
+│  └─ <release>-<env>.zip
+├─ handover/
+│  └─ customer-responsibilities.md            # who approves, runs, backs up and recovers on customer environments
 └─ ops/
-   ├─ drift/                      # drift reports and their resolution (accept / revert)
-   └─ incidents/                  # incident → root cause → new rule (I9)
+   ├─ drift/                      # drift baselines and decisions (accept / revert)
+   ├─ log/
+   │  └─ <day>-<actor>.jsonl      # run log of every pls command (ADR-0013)
+   ├─ usage/
+   │  └─ <session>.json           # LLM token usage per session (pls usage)
+   ├─ adopt/
+   │  └─ <date>-<env>-<site>.md   # report of an existing site brought into the project (pls adopt)
+   ├─ env-compare/                # one site compared across environments (pls env-compare)
+   ├─ kb-verify/
+   │  └─ <date>-<env>.md          # knowledge-base probes run against an environment
+   ├─ xref/
+   │  └─ <site>.json              # which script uses which column and site (pls xref)
+   ├─ onboarding/                 # onboarding summaries of a project taken over (Origin existing)
+   └─ triage/                     # maintenance triage notes (P6)
 ```
+
+**Planned, not built** (in no project today, not in the tree, not checked): `secrets.catalog.json` (secret names per environment, I7), `design/sites.md` and `design/permissions.md`, generated customer design documents (`design/設計書/`), `tests/permissions/` and `tests/smoke/`, `releases/<release>/checks.json`, `ops/incidents/` (I9).
 
 ### 3.3 Environments
 
