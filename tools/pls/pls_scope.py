@@ -8,7 +8,10 @@ Evidence (0 differences after export → updatesite → export, and through pls 
 - spike round 1 and slices #1–#3 (MADLAB dev and stg, 1.5.2; releases marked applied with 0 differences in
   pls-demo-inquiry, pls-demo-equipment, demo-equipment): every key below except the four BR3 ones;
 - BR3 probe 2026-11-05 (`spike/round-trip/report-br3-20261105.md`): Scripts, Styles, Htmls, DashboardParts of types
-  1 (timeline), 3 (HTML) and 4 (calendar).
+  1 (timeline), 3 (HTML) and 4 (calendar);
+- KB probe D33 2026-11-12 (`pls kb-verify`, MADLAB dev 1.5.2.0, ADR-0023): NearCompletionTimeBeforeDays /
+  NearCompletionTimeAfterDays stored as sent (0 and 90 — above the UI maximum 30 of General.json) and used by a view
+  with NearCompletionTime.
 Add a key here only with such evidence (I9), and record it in the KB and the spike checklist.
 
 Granularity: the evidence is per **top-level key** with the attributes those sites used (columns: label, type,
@@ -28,6 +31,8 @@ VERIFIED_KEYS = frozenset({
     "Notifications", "Reminders", "Processes", "Summaries", "Aggregations",
     # code
     "ServerScripts", "Scripts", "Styles", "Htmls",
+    # the 完了間近 range of NearCompletionTime views (KB D33, ADR-0023)
+    "NearCompletionTimeBeforeDays", "NearCompletionTimeAfterDays",
     # dashboards (part types checked separately)
     "DashboardParts",
 })

@@ -20,7 +20,7 @@ What the source showed in that case (tag `Pleasanter_1.5.2.0`): `View.NearComple
 
 ## Open questions
 
-- [ ] Is a site value above `General.json` `…Max` (e.g. `NearCompletionTimeAfterDays` 90 > 30) stored and used through `updatesite`? — the probe `D33` on MADLAB dev answers it for 1.5.2.
+- [x] Is a site value above `General.json` `…Max` (e.g. `NearCompletionTimeAfterDays` 90 > 30) stored and used through `updatesite`? — yes on 1.5.2: probe `D33-near-completion-range` passed on MADLAB dev (`pls kb-verify`, 2026-11-12); 90 was stored as `90.0` and used by the filter (KB D33). A customer installation may still change `General.json`.
 - [ ] Customer environments may change `General.json`; does the KB need a per-environment parameter check (`pls version` reads only the version today)? — later, with the first stg / prod release that relies on such a parameter.
 
 ## Options
