@@ -780,6 +780,37 @@ class PlsTest(unittest.TestCase):
         rc, _ = self.printed(["lint"])
         self.assertEqual(rc, 1)                              # issues reported, no traceback
 
+    def test_mail_address_principal_refs(self):
+        """[Group<id>] / [User<id>] in reminder and notification addresses are ids per environment (Addresses.cs):
+        git holds [${principal:x}], pack writes the target's id; an unmapped id stays raw (lint L-PERM-01)."""
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"manager": "Group,379", "admin": "User,1"}
+        envs["envs"]["stg"]["principals"] = {"manager": "Group,12", "admin": "User,1"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        ss["Reminders"] = [{"Id": 2, "Column": "CompletionTime", "Subject": "s", "To": "[Group379],[ClassD]"}]
+        ss["Processes"] = [{"Id": 1, "Name": "cancel", "View": {}, "Notifications": [{"Id": 1, "Type": 1, "Address": "[User1];[Dept4]"}]}]
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        self.assertEqual(site["Reminders"][0]["To"], "[${principal:manager}],[ClassD]")
+        self.assertEqual(site["Processes"][0]["Notifications"][0]["Address"], "[${principal:admin}];[Dept4]")
+        perm = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("[Dept4]" in m for m in perm), perm)                 # unmapped → reported
+        self.assertFalse(any("[Group379]" in m or "[User1]" in m for m in perm), perm)
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["Reminders"][0]["To"], "[Group12],[ClassD]")        # resolved per environment
+        self.assertEqual(pl["Processes"][0]["Notifications"][0]["Address"], "[User1];[Dept4]")
+        envs["envs"]["stg"]["principals"]["manager"] = "Role,12"                 # not an address principal
+        with self.assertRaisesRegex(pls.Fail, "not a Group, User or Dept"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        site["Reminders"][0]["To"] = "[${principal:nobody}]"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        with self.assertRaisesRegex(pls.Fail, "unresolved reference"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+
     def test_lint_skips_meta_only_sites_and_flags_unresolved_references(self):           # S5
         self.unpack_dev()
         (self.r / "config/newsite").mkdir()

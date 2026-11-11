@@ -84,6 +84,7 @@ import pls_log as LG                                        # noqa: E402 — run
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
+import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -388,6 +389,7 @@ def logical(export: Any, e: dict) -> dict:
                            reference=SX.references_for(ids.get(str(d.get("SiteId"))), ids)),
     }
     acl_to_refs(model["settings"], e)
+    AP.to_refs(model["settings"], e.get("principals") or {})
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
     if "Title" in d:      # per environment (environments.json title): compared on read-back, never written to git
@@ -503,6 +505,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
+    AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
     m = from_refs(m0, e)
     ss = m["settings"]
     for kind, items in m["scripts"].items():
@@ -797,6 +800,9 @@ def lint(r: Path) -> list[dict]:
                 for x in proc.get(key) or []:
                     if not str(x).startswith("${principal:"):
                         issues.append({"rule": "L-PERM-01", "site": site, "msg": f"process '{proc.get('Name')}' {key} uses an environment-specific id {x}; map it in environments.json principals"})
+        for path, tok in AP.raw_tokens(m["settings"]):
+            issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{path}: mail address {tok} uses an environment-specific id; "
+                           "map the principal in environments.json principals (git holds [${principal:<name>}])"})
         perms = m.get("permissions")
         if perms is not None:
             if not str(perms.get("inherit", "")).startswith("${site:"):

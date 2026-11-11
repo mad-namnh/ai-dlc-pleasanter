@@ -379,7 +379,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason: a `design/decisions/DES-*.md` that names the script **and** its site as whole names (a name inside a longer word, a decision about another site, or any other file under `design/` does not count). Shared server scripts are not checked (open: decide in an ADR). `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
-| L-PERM-01 | D15, ADR-0006 | `permissions.json` uses only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
+| L-PERM-01 | D15, ADR-0006, ADR-0023 | `permissions.json`, process access control and mail addresses of notifications / reminders (`[${principal:x}]`) use only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
 | L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
 | L-ENV-01 | `docs/setup.md` | Environment setup is finished: no principal id left as a `<…>` placeholder, no `parent_id` of 0 |
