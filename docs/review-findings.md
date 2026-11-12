@@ -68,7 +68,7 @@ Items of `docs/reviews/architect-review-d3.md`, `docs/reviews/demo-readiness.md`
 | Source | Item | Trace | Status |
 |---|---|---|---|
 | architect-review-d3 | S6 empty traceability passes coverage | R `pls coverage` reports GAP when `traceability.json` lists no requirement (roadmap P2-2) | Closed |
-| architect-review-d3 | S8 "test data only" override on dev | TD-28 | Open |
+| architect-review-d3 | S8 "test data only" override on dev | TD-28 | Closed 2026-11-12: dropped by Nam (the migration gate stays the same on dev) |
 | architect-review-d3 | S9 person-run commands and keys | `docs/setup.md` (own terminal, `file:` keys); TD-29 (template settings) | Partly closed |
 | architect-review-d3 | S10 stale docs (README, framework `CLAUDE.md` spike-era rule) | CLAUDE.md patch proposed in P2-6 (`plans/2026-11-11-p2-6-adr-governance/`); TD-33 | Open |
 | architect-review-d3 | N1, N2, N4 skills sync, launcher message, unpack overwrite | TD-30 | Open |
