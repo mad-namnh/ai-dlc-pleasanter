@@ -19,7 +19,7 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 | Ids | Never a numeric site, group or user id in a body: `${site:x}`, `${principal:x}`, `${env:x}`. `pls refs --site <s>` shows every site reference | D3, L-REF-01 |
 | Numbers that look like ids | Only numbers written as site ids (`…SiteId`/`SITE_ID` names, `items.X(`, `$p.api…({ id:`, `/items/`, `[[`, `~`) become `${site:x}`; every other number stays as the customer wrote it and `pls refs` lists it as POSSIBLE. Whether a POSSIBLE number is a site id (`pls refs --ref`) or a recognised one must stay literal (`--keep`) is the person's decision — tell them, never record it | BR7 |
 | Shared server scripts | No top-level `const`/`let` (`var` only): shared scripts are concatenated | D7, L-SCR-01 |
-| Time | A server script is cut off at ~10 s; external calls need a shorter timeout | KB fact 8 |
+| Time | A server script runs under a time limit (10 s as shipped, source-derived); external calls need a shorter timeout. What happens to the save when it is hit is not verified | KB D35 |
 | Errors to users | `context.Error('…')` with a short Japanese message rejects the save | D25 |
 | Secrets | None in any script; call external services through a gateway | D5, L-SEC-01 |
 | Client scripts | They run as written in the browser: no top-level `return` | L-SCR-02 |
@@ -47,6 +47,12 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 - Settings changed in the sandbox UI along the way: `pls harvest --env dev-<you> --site <s>`, review `git diff`, commit.
 - Behaviour is proven in P4 by API tests (`pls test`): a server script's effect on a record, a `context.Error` refusal (expect HTTP 500 with the message), never by reading the code alone.
 
-## Hand-over to P4
+## Checklist before P4
 
-Scripts changed, the rule each implements, the xref impact list, lint 0 for L-SCR-01/02 and L-REF-01, and which acceptance criteria exercise each change.
+- [ ] Every changed script is named in a DES with its rung-3 reason; nothing else in the script changed (minimal diff, line endings kept).
+- [ ] `pls lint`: 0 for L-SCR-01, L-SCR-02, L-REF-01, L-REF-02, L-REF-04, L-SEC-01 — or each remaining L-REF-01 is listed with the person's decision pending.
+- [ ] `pls xref --site <s>` impact list written into the hand-over; behaviour changes of other scripts sent back to P2.
+- [ ] Sandbox or dev round trip 0 differences after the last apply.
+- [ ] Each change is mapped to the acceptance criteria that exercise it, so P4 can test it by API.
+
+**Hand-over to P4:** scripts changed, the rule each implements, the xref impact list, the lint result, and the acceptance criteria per change.

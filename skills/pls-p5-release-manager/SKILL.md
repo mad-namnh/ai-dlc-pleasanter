@@ -16,6 +16,14 @@ description: Phase P5 of AI-DLC for Pleasanter. Prepares a G3-approved build as 
 
 An adoption record (`releases/A-…`, `kind: adopt`, written by `pls adopt`) is the state found on an environment before the project managed it. For the first change request it is "the previous released state"; it is not a release and has no G4.
 
+## Outputs (project repository)
+
+- `releases/<R>/diff-report.md` (Japanese summary, yours) next to what `pls` writes: `plan.json`, payloads, rollback files, `raw-diff-<site>.md`, `diff-report.operator.md`, `apply-log.json`.
+- `releases/<R>/approvals.md` — G1–G4 with names and dates; the G4 record itself is written by `pls gate`.
+- `Released: …` lines in each REQ in scope and in `requirements/index.md`.
+- `ops/drift/<date>-<env>-baseline.md` — the drift baseline after the release.
+- prod: `dist/<R>-prod.zip` and `releases/<R>/package-manifest.json` (`pls package`).
+
 ## Procedure — target `dev`
 
 The app is already on dev from P3/P4. The release makes that state official.

@@ -33,6 +33,14 @@ Commands here only read Pleasanter (`getsite`, the login page) or local files. W
 9. **As-is specification:** only for the sites the first change request touches (and later, per change request, the sites it touches) — hand over to `pls-x-spec-recovery`, which starts from `pls spec-skeleton`.
 10. **Record** `ops/onboarding/<date>-summary.md`: environments and versions, sites adopted, each finding with its decision and who decided, open points. Commit (`feat(onboarding): …`).
 
+## Checklist before the summary is committed
+
+- [ ] Every environment has an entry, a version (or an open point) and `side_effects` recorded by the person (or an open point).
+- [ ] Every site of the app is adopted, or the person said it stays outside the project; unmanaged references are settled.
+- [ ] Every finding of steps 1–8 has the person's decision and who decided, or is listed as open.
+- [ ] Nothing was written to Pleasanter; no export or site package is in a tracked folder.
+- [ ] `ops/onboarding/<date>-summary.md` committed; the sites of the first change request are handed to `pls-x-spec-recovery`.
+
 ## Stop and ask
 
 At every decision in steps 2–8. Present the finding, the options and your recommendation; record only what the person says.

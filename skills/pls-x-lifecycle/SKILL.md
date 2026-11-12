@@ -31,6 +31,8 @@ Answer in the person's language; questions meant for the customer are in Japanes
 
 Before doing anything, establish the state from the repository. Do not rely on memory of an earlier session.
 
+First run `pls skills check`. `project copy was edited` → stop and tell the person: a local edit may have removed a rule, and skills are changed only in the framework (then `pls skills sync`). `framework has a newer version` → tell the person and run `pls skills sync` only after they agree; the session then reads the synced skills. A clean check needs no mention.
+
 | Look at | Tells you |
 |---|---|
 | `requirements/index.md`, the `Status` line of each `REQ-*.md` | P1 done? G1 approved? |
@@ -71,7 +73,12 @@ Tell the user in two or three lines where the project stands and what comes next
    - **One Claude Code session per change request.** The state lives in the repository (`requirements/`, `design/`, `gates/`, `releases/`, `ops/log/`); a new session reads it with section 1. A long session re-reads its whole context on every turn (ADR-0013: 88 % of a day's tokens).
    - Ask the gates of one release together when the evidence is ready (e.g. G4 of one release with G1/G2 of the next); each is still recorded on its own with `pls gate`.
    - Mechanical filling that a tool checks afterwards (as-is tables, grouping) may run on a smaller model; design, impact analysis and framework reviews stay on the strongest model.
-9. **Log every step (ADR-0013).** At the start of each step run `pls step <phase> "<what starts>"` (phases: onboarding, P1–P6, G1–G4, other). Every `pls` command is logged by itself in `ops/log/`. Before the commit that ends a phase, run `pls usage collect` and commit `ops/log/` and `ops/usage/` with it; `pls usage report --by step` shows the cost of the change request.
+9. **End every phase, and every session, with a completion report** to the person (in their language):
+   - files changed (paths, from `git status` / `git diff --stat` of the phase's commits);
+   - each `pls` command that decided something, with its result (exit code, `0 issues`, `0 differences`, `Ran N … OK`);
+   - open items, and decisions only the person can make, each with your recommendation.
+   Report only results that were produced; a step that was not run is said to be not run (EV-07). At a gate, this report is the evidence part of the gate message (`references/gates.md`).
+10. **Log every step (ADR-0013).** At the start of each step run `pls step <phase> "<what starts>"` (phases: onboarding, P1–P6, G1–G4, other). Every `pls` command is logged by itself in `ops/log/`. Before the commit that ends a phase, run `pls usage collect` and commit `ops/log/` and `ops/usage/` with it; `pls usage report --by step` shows the cost of the change request.
 
 ## 3. Phases
 
@@ -173,6 +180,13 @@ A change request follows the same order. The differences:
 - P1 starts from the current `config/` (impact analysis).
 - No bootstrap.
 - A data-impacting change needs a migration folder before `release-plan` accepts it (ADR-0004). The data moves with `pls migrate R-…` before `pls apply` (same guards as apply; the person runs it or tells you to use `--yes`).
+
+## Checklist at the end of a session
+
+- [ ] `git status` clean, or what is left uncommitted is named in the report and why.
+- [ ] Completion report given (section 2 rule 9); every gate decision of the session recorded with `pls gate` before its status line.
+- [ ] `pls usage collect` run and `ops/log/`, `ops/usage/` committed with the phase (section 2 rule 10).
+- [ ] The next step is named, so the next session starts from section 1 without this conversation.
 
 ## 5. When something is not covered here
 
