@@ -108,9 +108,10 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 ## Commands that need you
 
-`python pls.py bootstrap B-…` (creates sites) and `python pls.py apply R-…` (applies a release) ask you to type the release id, and the agent cannot type it. You have two options:
+`python pls.py bootstrap B-…` (creates sites), `python pls.py apply R-…` (applies a release) and `python pls.py migrate R-…` ask you to type the release id, and the agent cannot type it. You have three options:
 - run the command yourself;
-- tell the agent once: *"you may use --yes for dev in this session"*.
+- tell the agent once: *"you may use --yes for dev in this session"*;
+- **for dev only, once per project:** tell the agent that it may write to dev without asking each time. It records your words with `python pls.py profile set dev-writes on --env dev --approver <you> --quote "<your words>"`, and from then on these three commands on that dev environment run without the question; each release names the record (`apply-log.json` → `confirmed`). A sandbox needs its own record; stg and prod always ask. Withdraw it with `python pls.py profile set dev-writes off --env dev --approver <you> --quote "…"` (ADR-0024).
 
 ## Troubleshooting
 

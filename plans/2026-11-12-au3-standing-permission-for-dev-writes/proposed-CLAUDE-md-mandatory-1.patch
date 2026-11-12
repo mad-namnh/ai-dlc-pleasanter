@@ -1,0 +1,14 @@
+Reason: ADR-0024 (Accepted by Nam, 2026-11-12, option B) adds a standing permission for dev writes. Mandatory 1
+says "Agents must not add `--yes` unless the user asks for it" — still true (with the permission the agent adds no
+`--yes`; `pls` confirms by itself), but the rule should name the exception so no reader takes the permission for a
+loophole. The Mandatory section of CLAUDE.md is a protected path (docs/agent-rules.md, stop point 3): Nam applies or
+rejects this patch, and may change the wording.
+Apply from the repository root:
+  git apply plans/2026-11-12-au3-standing-permission-for-dev-writes/proposed-CLAUDE-md-mandatory-1.patch
+
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -9,2 +9,3 @@
+ 1. **Write only to dev environments.** Write operations (create/update) may run only when the target is localhost, or an environment declared with `role: "dev"` **and** `allow_write: true` in `config.json`. Never set `role: "dev"` on a customer stg/production environment. Do not modify or loosen `assert_writable` in `scripts/common.py`. Agents must not add `--yes` unless the user asks for it.
++   - Standing permission for dev writes (ADR-0024): an agent records it only from the person's own words (`pls profile set dev-writes on --env <dev env> --approver <name> --quote "…"`); `pls` then confirms `apply`, `bootstrap` and `migrate` on that `role: dev` environment by itself. It never covers stg or prod or any other command, and an agent never records or extends it on its own.
+    - `pls` HTTP transport (ADR-0008): writes need environments.json `role: "dev"` or `"stg"` **and** `allow_write: true` in the operator's local `.pls/connections.json`; `role: "prod"` is never written. Do not modify or loosen `assert_writable` in `tools/pls/pls_http.py`, and never write keys into any file other than the operator's own key files under `.pls/`. The one exception is a dev test user that `pls` itself creates for role tests (ADR-0018): `pls` writes that user's password and key only into the operator's `.pls/`, never prints them, and never for `role: "stg"` or `"prod"`. Agents never read those files and never ask for keys in chat.

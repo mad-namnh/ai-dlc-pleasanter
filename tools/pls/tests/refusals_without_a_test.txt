@@ -99,7 +99,6 @@ pls_profile_records.py | _check_value | raise GT.GateError(f"Approvers {value!r}
 pls_profile_records.py | _check_value | raise GT.GateError(f"CLAUDE.md has no '{field}' row — copy it from templates/project/CLAUDE.md first")
 pls_profile_records.py | _check_value | raise GT.GateError(f"Operators {value!r} names nobody (e.g. 'dev: Nam; stg: Nam; prod: <customer operator>')")
 pls_profile_records.py | _check_value | raise GT.GateError(f"environments.json is not readable ({ex})")
-pls_profile_records.py | _check_value | raise GT.GateError(f"field is one of {', '.join(FIELDS + (ROLE,))}")
 pls_profile_records.py | _check_value | raise GT.GateError(f"role is one of {', '.join(ROLES)}")
 pls_profile_records.py | _load | raise GT.GateError(f"{rel}: not a valid record (approver, quote, at, {key}) — a person repairs or removes it")
 pls_release_digest.py | digest | raise DigestError(f"{f.name} of {release} is not a JSON object")

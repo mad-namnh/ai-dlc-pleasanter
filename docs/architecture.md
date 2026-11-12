@@ -113,6 +113,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 │  └─ <release>/
 │     ├─ plan.json                # release plan: ordered steps, snapshot refs, rollback, status
 │     ├─ bootstrap.json           # plan for sites that do not exist yet (ADR-0007)
+│     ├─ bootstrap-log.json       # one entry per bootstrap run: who ran it, how it was confirmed (ADR-0024)
 │     ├─ payload-<site>.json      # complete SiteSettings per site (I2)
 │     ├─ rollback-<site>.json     # the site as it was when the release was planned
 │     ├─ raw-diff-<site>.md       # live (before) against git (after), per site
@@ -154,7 +155,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 
 | Environment | Who writes | How | Role in config |
 |---|---|---|---|
-| local / dev (MADLAB) | Engineers and AI agents | `pls release-plan` (plan and checks), then `pls apply`, confirmed by the person who types the release id again; write guard | `role: dev`, `allow_write: true` |
+| local / dev (MADLAB) | Engineers and AI agents | `pls release-plan` (plan and checks), then `pls apply`, confirmed by the person who types the release id again — or, for `apply` / `bootstrap` / `migrate`, by the standing permission the person recorded once (`pls profile set dev-writes on --env <dev env>`, ADR-0024; revocable); write guard | `role: dev`, `allow_write: true` |
 | stg (customer or MADLAB) | Release tooling only, **after G4** for that release | `pls apply` over HTTP (operator opt-in `allow_write` in `.pls/connections.json`, ADR-0008) (data migrations: `pls migrate`, before apply); the browser runner writes dev only (ADR-0014 TB-7) | `role: stg` — no ad-hoc writes; every write is a planned release |
 | prod (customer on-prem) | Customer-side runner or operator, after G4 | Same deploy package (ADR-0003) | `role: prod` — never written by `pls` HTTP; unreachable from MADLAB |
 
@@ -329,7 +330,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls export` | P3, P6 | Read site configuration from an environment | **0.5** over HTTP (ADR-0008); browser runner `exportSite` as fallback |
 | `pls http-check` | all | Check connection, key and role of an environment | **0.5** |
 | `pls package` | P5 (ADR-0003) | Zip a G4-approved release for the customer's operator: release files, migration folders without `backup/`, the G4 record, a manifest of sha256, `CHECKLIST.md` and a standard-library `verify.py` that refuses an altered file, an added file, a wrong target or release, or content the G4 record did not approve; deterministic zip | branch |
-| `pls migrate` | P5 (ADR-0004) | Send the explicit data of each migration folder of a release with one `bulkupsert`: write guard, G4 on non-dev (digest covers the folder), mail / job checks, typed confirmation, run recorded in `plan.json` before the call; `--rollback` sends `rollback.data` prepared by a person | branch |
+| `pls migrate` | P5 (ADR-0004) | Send the explicit data of each migration folder of a release with one `bulkupsert`: write guard, G4 on non-dev (digest covers the folder), mail / job checks, typed confirmation (or the standing permission for dev, ADR-0024), run recorded in `plan.json` before the call with how it was confirmed; `--rollback` sends `rollback.data` prepared by a person | branch |
 | `pls apply` / `test` / `backup` | P4, P5 | Apply a planned release (preflight, ordered, automatic restore); run test specs (per-step key); back up all records of a site | **0.5** over HTTP; runner `applyRelease` / `runTests` / `backupRecords` as fallback for a person on dev (ADR-0014 TB-7) |
 | `pls setup` | before P1 (once per machine and environment) | Save a machine profile — URL, folder, ids by name, key file outside the repositories — that `pls init` applies to every new project; writes on that environment only when the person answers yes to setup's question (default no; ADR-0021, ADR-0014 TB-10; `docs/setup.md`) | built (2026-11-05) |
 | `pls init` / `skills check|sync` | P1 (new project) | Create a project from `templates/project` (CLAUDE.md with profile, layout, launcher `pls.py`, skills + lock with hashes); check or upgrade the project's skills against the lock and the framework (the message names the direction by version: newer, older, or changed at the same version); `step` / `gate` print a WARNING when a project copy was edited (never refuse) | **0.6** |
@@ -356,7 +357,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts; `usage report` warns about a session that did P1–P4 work after a G4 (one session per change request) | branch |
 | `pls jobs-verified` | P5 (ADR-0012, ADR-0020) | Record that an operator of the release's env (profile row `Operators`) or a G4 approver deployed and checked its scheduled scripts by hand; until then the next release lists them again | branch |
-| `pls profile set` | I4 (ADR-0020) | Set profile rows Approvers / Operators / Origin or an environment `role` as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing, L-PRF-01) | branch |
+| `pls profile set` | I4 (ADR-0020, ADR-0024) | Set profile rows Approvers / Operators / Origin, an environment `role`, or the standing permission `dev-writes on|off` for one dev environment (it confirms `apply` / `bootstrap` / `migrate` there instead of a typed release id) as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing; a `dev-writes` record counts only while its approver is an approver of the profile, L-PRF-01) | branch |
 | `pls review as-is` | onboarding (I4, I5) | Record that a G2 approver reviewed `design/as-is/<site>.md`, bound to its sha256; only then does `DES-000-as-is-<site>.md` clear L-LAD-01 | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4. A G4 approval stores the digest of each planned release (`pls_release_digest`); a release changed after G4 is refused | branch |
 

@@ -41,7 +41,7 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 ## Deploy and try
 
 - First the steps of `pls-p3-config-builder`: `pls canon`, `pls lint`, `pls coverage`, review `git diff`, commit on the ticket branch.
-- With sandboxes (ADR-0011): `pls sandbox refresh --name <you>` then `pls apply R-…` (the person or `--yes` for that sandbox), and check the round trip (0 differences, otherwise fold back). Without: the normal dev release of `pls-p3-config-builder`.
+- With sandboxes (ADR-0011): `pls sandbox refresh --name <you>` then `pls apply R-…` (the person, `--yes` for that sandbox, or the sandbox's own standing permission — `pls-x-lifecycle` section 2 rule 3), and check the round trip (0 differences, otherwise fold back). Without: the normal dev release of `pls-p3-config-builder`.
 - A sandbox plan is refused (`SHARED <site>: may write to <shared site> …`) when a server script references, or a summary aggregates into, a site the sandbox did not copy: saving a record in the copy would change shared dev data. Do not pass `--allow-shared-writes` yourself: report the place to the person, who removes it, copies that site into the sandbox, or accepts it with `pls sandbox refresh --name <you> --allow-shared-writes`.
 - A trigger that runs only on update (`BeforeUpdate`) does not run on create: if the requirement needs both, it is a design point — say so, do not add triggers silently.
 - Settings changed in the sandbox UI along the way: `pls harvest --env dev-<you> --site <s>`, review `git diff`, commit.

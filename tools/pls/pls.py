@@ -17,8 +17,10 @@ Commands:
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
-                                                set Approvers / Operators / Origin (CLAUDE.md) or role (environments.json)
-                                                as the person stated it; recorded under gates/profile/ (I4)
+                                                set Approvers / Operators / Origin (CLAUDE.md), role (environments.json)
+                                                or dev-writes on|off (standing permission for apply / bootstrap /
+                                                migrate on a dev environment, ADR-0024) as the person stated it;
+                                                recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
@@ -2742,6 +2744,24 @@ def _confirm(release: str, yes: bool, what: str, token: str = "the release id") 
     return True
 
 
+STANDING_PERMISSION_COMMANDS = ("apply", "bootstrap", "migrate")      # ADR-0024: nothing else, never stg or prod
+
+
+def _confirm_write(r: Path, cmd: str, env: str, release: str, yes: bool, what: str) -> str | None:
+    """How a write to `env` is confirmed, or None when it is not: --yes (on the person's instruction), the standing
+    permission for dev writes recorded in the person's words (ADR-0024: apply / bootstrap / migrate on role dev
+    only), or the release id typed at a terminal. The result goes into the release records."""
+    if yes:
+        return "--yes"
+    rec = PR.dev_writes(r, env) if cmd in STANDING_PERMISSION_COMMANDS else None
+    if rec:
+        print(what)
+        print(f"confirmed by the standing permission for writes to {env}: {rec['_path']} ({rec['approver']}, "
+              f"{rec.get('date')}) — revoke with pls profile set dev-writes off --env {env} (ADR-0024)")
+        return f"standing permission ({rec['_path']}, {rec['approver']})"
+    return "typed at a terminal" if _confirm(release, False, what) else None
+
+
 def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -2862,10 +2882,14 @@ def http_cmd(r: Path, a) -> int:
             if warning:
                 print(warning)
             what = ", ".join(f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
-            if not _confirm(a.release, a.yes, f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}"):
+            confirmed = _confirm_write(r, "migrate", plan["env"], a.release, a.yes,
+                                       f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}")
+            if not confirmed:
                 return 1
+            LG.record_metric(confirmed=confirmed)
             for t in todo:
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
+                entry.update(executed_by=LG.actor(r), confirmed=confirmed)    # how this run was confirmed (ADR-0024)
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
                 res = H.migrate(c, t["site_id"], t["keys"], t["data"])
                 LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
@@ -2933,8 +2957,10 @@ def http_cmd(r: Path, a) -> int:
                 raise H.TransportError(refusal)
             if warning:
                 print(warning)
-            if not _confirm(a.release, a.yes, f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
-                                             f"{plan.get('classification')}" + (f"\n{warning}" if warning else "")):
+            confirmed = _confirm_write(r, "apply", plan["env"], a.release, a.yes,
+                                       f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
+                                       f"{plan.get('classification')}" + (f"\n{warning}" if warning else ""))
+            if not confirmed:
                 return 1
             # Recorded before the first write: if the process dies mid-way, the release is not "planned" any more,
             # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
@@ -2942,7 +2968,8 @@ def http_cmd(r: Path, a) -> int:
             wj(rel / "plan.json", plan)
             # Who ran it and how it was confirmed stay in the release folder, not only in the run log. The name is
             # the run-log actor (PLS_ACTOR or git user.name): self-asserted, not an identity check (ADR-0014 TB-2).
-            ran = {"executed_by": LG.actor(r), "confirmed": "--yes" if a.yes else "typed at a terminal"}
+            ran = {"executed_by": LG.actor(r), "confirmed": confirmed}
+            LG.record_metric(confirmed=confirmed)
             try:
                 res = H.apply_release(c, plan, files, guard=lambda: write_guard_now(r, plan["env"], a.release))
             except H.TransportError as ex:           # only the preflight reads raise: nothing was written
@@ -3005,9 +3032,18 @@ def http_cmd(r: Path, a) -> int:
                     GT.require(r, "G4", a.release, f"creating sites in {plan['env']}")
                 except GT.GateError as ex:
                     raise H.TransportError(str(ex))
-            if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
-                                             f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)"):
+            confirmed = _confirm_write(r, "bootstrap", plan["env"], a.release, a.yes,
+                                       f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
+                                       f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)")
+            if not confirmed:
                 return 1
+            LG.record_metric(confirmed=confirmed)
+            # Who ran it and how it was confirmed, one entry per run, in a file of its own: bootstrap.json is covered by
+            # the G4 digest, so writing it here would refuse the re-run of a partial stg bootstrap (ADR-0024).
+            blog = bp.with_name("bootstrap-log.json")
+            runs = (rj(blog).get("runs") or []) if blog.exists() else []
+            wj(blog, {"runs": runs + [{"at": _now(), "executed_by": LG.actor(r), "confirmed": confirmed,
+                                       "sites": [s["site"] for s in plan["steps"]]}]})
             def in_flight(site: str) -> None:
                 # Written before the request: a run that dies between the server creating the site and pls binding
                 # its id (killed process, power loss) leaves the same record as an unanswered request, and the
@@ -3472,9 +3508,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
     s.add_argument("action", choices=["set"])
-    s.add_argument("field", choices=PR.FIELDS + (PR.ROLE,))
+    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV)
     s.add_argument("value")
-    s.add_argument("--env", help="role: the environment in environments.json")
+    s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
     s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s = sp.add_parser("review", help="record that the person reviewed an as-is document (I4); never record it yourself")
