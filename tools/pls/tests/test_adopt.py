@@ -113,9 +113,9 @@ class CliTest(unittest.TestCase):
         for body in ("var password = 'abcdefghijklmnop';", 'const API_KEY = "abcdEFGH12345678";',
                      '"token": "abcdefghijklmnopq"'):
             self.assertTrue(hit(body), body)
-        for body in ("url = base + '?access_token=' +\n    imrUrlEncode(accessToken);\nvar g = 0; while (url !== '')",
+        for body in ("url = base + '?access_token=' +\n    urlEncode(accessToken);\nvar g = 0; while (url !== '')",
                      "var token = 'Bearer ' + x + 'abcdefghijklmn'", "password: 'short'"):
-            self.assertFalse(hit(body), body)                                  # PLAY BOARD false alarm (下書き管理)
+            self.assertFalse(hit(body), body)                                  # false alarm seen on a brownfield trial app
 
     def test_second_environment_registers_the_id_only_and_bootstrap_skips_it(self):
         self.add_old_site()

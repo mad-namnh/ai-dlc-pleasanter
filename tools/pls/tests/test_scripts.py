@@ -34,12 +34,12 @@ class PureTest(unittest.TestCase):
                          "siteId = ${site:anken}; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [[${site:anken}]]")
 
     def test_only_numbers_written_as_site_ids_are_replaced(self):
-        # real lines of the PLAY BOARD app (site ids 103-120 collide with status codes, timings and colours)
-        kept = ("const CASE_INFLUENCER_STATUS_SELECTION = 103;\nconst JUNCTION_STATUS_CODES = [102, 103, 104, 107];\n"
-                "box-shadow: 0 2px 8px rgba(103,58,183,.35);\nsetTimeout(restoreHashtag, 103);\nconst maxAttempts = 103;\n"
-                "103,ユーザー無効\n/* site 103 を変更しない */\npbWarn('[playboard][product-103] 失敗');\n")
+        # lines shaped like those of a brownfield trial app (site ids 103-120 collide with status codes, timings, colours)
+        kept = ("const ORDER_STATUS_SELECTION = 103;\nconst LINK_STATUS_CODES = [102, 103, 104, 107];\n"
+                "box-shadow: 0 2px 8px rgba(103,58,183,.35);\nsetTimeout(restoreFilter, 103);\nconst maxAttempts = 103;\n"
+                "103,ユーザー無効\n/* site 103 を変更しない */\nappWarn('[app][product-103] 失敗');\n")
         self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
-        ids = ('_notiPickSiteId("NOTIFICATION_SITE_ID", 103);\nif ($p.siteId() === 103) {}\nitems.Get(103, "{}");\n'
+        ids = ('_pickSiteId("NOTIFICATION_SITE_ID", 103);\nif ($p.siteId() === 103) {}\nitems.Get(103, "{}");\n'
                "$p.apiGet({ id: 103, done: f });\nfetch('/api/items/103/get');\nurl = '/api/items/' + 103;\n"
                '"SiteId": 103,\n[[103]]\nClassA~103,Title\nconst X_SITE_ID = 103;\n')
         out = SX.replace_ids(ids, {"103": "x"})
@@ -51,11 +51,25 @@ class PureTest(unittest.TestCase):
     def test_possible_numbers_are_grouped_for_reading(self):
         g = SX.possible_group
         self.assertEqual(g("  // site 103 を変更しない"), "comment")
-        self.assertEqual(g("  pbWarn('[playboard][product-104] 失敗');"), "log or message text")
-        self.assertEqual(g("const CASE_INFLUENCER_STATUS_SELECTION = 103;"), "status or code value")
-        self.assertEqual(g("setTimeout(restoreHashtag, 120);"), "timing or retry")
+        self.assertEqual(g("  appWarn('[app][product-104] 失敗');"), "log or message text")
+        self.assertEqual(g("const ORDER_STATUS_SELECTION = 103;"), "status or code value")
+        self.assertEqual(g("setTimeout(restoreFilter, 120);"), "timing or retry")
         self.assertEqual(g("box-shadow: 0 2px 8px rgba(103,58,183,.35);"), "colour or layout")
         self.assertEqual(g("        return 797;"), "other")                       # a person has to read this one
+
+    def test_possible_group_log_calls_without_app_names(self):
+        # a project's own logger or notifier, or a message that starts with a bracketed tag, is message text —
+        # recognised by shape, not by one application's logger names
+        g = SX.possible_group
+        self.assertEqual(g("  notify('[orders] item 104 failed');"), "log or message text")
+        self.assertEqual(g("  ordersLogger.info(`[sync] retry 104`);"), "log or message text")
+        self.assertEqual(g("  reportError(104, err);"), "log or message text")
+        self.assertEqual(g("  var sel = $('[data-id] input'); return 104;"), "other")   # a selector is not a tag
+        self.assertEqual(g("  var list = [[104]];"), "other")
+        self.assertEqual(g("  dialog.open(104);"), "other")                  # "log" inside a word is not a logger
+        self.assertEqual(g("  catalog(104);"), "other")
+        self.assertEqual(g("  login(104); logo(104);"), "other")              # a word that starts with "log" neither
+        self.assertEqual(g("  logEvent(104);"), "log or message text")
 
     def test_look_alike_names_and_calls_are_not_contexts(self):
         s = ("this.items.splice(103, 1); cart.items.push(103); updateStatus(siteId, 103); SITE_IDLE_TIMEOUT = 103; "

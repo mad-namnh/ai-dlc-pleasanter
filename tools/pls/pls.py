@@ -100,7 +100,7 @@ SECRET_RES = {
     "bearer-token": re.compile(r"(?i)bearer\s+[A-Za-z0-9\-\._~\+/]{20,}"),
     # one quoted literal right after the name (the blob is JSON-escaped: quotes may be \"): the value has no blank
     # and no escape such as \n, and closes with the same quote — so `'…access_token=' + encode(accessToken)` spanning
-    # lines is not a secret (PLAY BOARD false alarm, 2026-11-08)
+    # lines is not a secret (false alarm on a brownfield trial app, 2026-11-08)
     "assigned-secret": re.compile(r"""(?i)(api[_-]?key|secret|password|token)\\?["']?\s*[:=]\s*\\?(["'])[^"'\s\\]{12,}\\?\2"""),
 }
 
@@ -3294,7 +3294,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
-    s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=<record id>)")
     s.add_argument("--release", help="outside dev: the release under test; its recorded G4 approval allows tests that change records")
     s.add_argument("--yes", action="store_true",
                    help="outside dev without --release: skip typing the environment name (only when the person asks for it)")

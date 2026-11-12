@@ -1,8 +1,8 @@
 """Script tooling (plan BR7): syntax check, site ids inside script bodies, cross-reference index.
 
-A site id written as a site id (`siteId === 797`, `SITE_ID", 116`, `/items/797/`, `[[797]]`) becomes ${site:x} in
+A site id written as a site id (`siteId === 1001`, `SITE_ID", 116`, `/items/1001/`, `[[1001]]`) becomes ${site:x} in
 git (D3), so a script keeps working in another environment. Every other number stays as it is, even when it equals a
-site id: status codes, timings, colours and choice codes often do (PLAY BOARD trial), and rewriting them would change
+site id: status codes, timings, colours and choice codes often do (brownfield trial apps), and rewriting them would change
 code that runs today. `pls refs` lists those numbers as POSSIBLE; a person decides, recorded in
 design/refs-literal.json — {"literal": [...], "reference": [...]}, entries {"site", "number", "context", "reason",
 "by", "date"}: `literal` keeps a number inside an id context, `reference` turns a number outside one into ${site:x}.
@@ -94,9 +94,9 @@ def reference_tokens(site: str | None) -> list[str]:
 
 def id_pattern(number: str) -> str:
     """A standalone site id: not part of a longer number, and never the fraction or integer part of a decimal
-    (`4.797`, `797.5`) — seen in SVG path data and minified libraries (site 797, BR7) — and never a number glued
+    (`4.797`, `797.5`) — seen in SVG path data and minified libraries (BR7) — and never a number glued
     to a letter, `_`, `#` or `%`: CSS and time values (`110px`, `110ms`, `110%`), colours (`#110`) and names
-    (`item110`, `v110a`) are not ids (PLAY BOARD trial: 20 such values had been replaced).
+    (`item110`, `v110a`) are not ids (a brownfield trial: 20 such values had been replaced).
     ASCII only, so an id written right after Japanese text is still found."""
     return r"(?<![0-9A-Za-z_.#])%s(?![0-9A-Za-z_%%]|\.\d)" % re.escape(number)
 
@@ -111,22 +111,22 @@ def _spans(s: str, contexts: list[str]) -> list[tuple[int, int]]:
     return out
 
 
-# Text right before a number that makes it a site id. Anything else stays a literal number: in a real app (PLAY
-# BOARD) about 9 in 10 numbers equal to a site id were status codes, timings, colours, choice codes or prose.
+# Text right before a number that makes it a site id. Anything else stays a literal number: in a real brownfield
+# app about 9 in 10 numbers equal to a site id were status codes, timings, colours, choice codes or prose.
 # A name that holds a site id: siteId, SiteId, getSiteId, SITE_ID, NOTIFICATION_SITE_ID, site_id, SITE_ID_DEFAULT —
 # not websiteId, siteIdx, SITE_IDLE_TIMEOUT (a camel-case or `_` boundary before "site", nothing but `_…` after "id").
 SITE_ID_NAME = r"(?:(?<![A-Za-z])site|Site|SITE)_?(?:Id|ID|id)(?:_\w*)?(?![A-Za-z0-9])"
 ID_CONTEXT = re.compile(r"""(?x)(?:
-      %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*["']?            # siteId === 797, siteId: 797, getSiteId(797
-    | %(name)s["']\s*[:,]\s*["']?                                  # "SiteId": 797, "siteId": "797", 'NOTIFICATION_SITE_ID', 116
-    | (?<![\w.$])items\.[A-Z]\w*\(\s*                              # server script items.Get(797, …) — PascalCase API only
-    | \$p\.api\w*\(\s*\{[^()]{0,60}?(?<![\w$])["']?id["']?\s*:\s*  # client $p.apiGet({ … id: 797, … })
-    | /items/                                                      # /api/items/797/get
-    | items/["']\s*\+\s*                                            # '/api/items/' + 797
-    | \[\[                                                         # ChoicesText link [[797]]
-    | (?:Class|Num|Date|Description|Check|Attachments)\w*~          # linked column ClassA~797
+      %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*["']?            # siteId === 1001, siteId: 1001, getSiteId(1001
+    | %(name)s["']\s*[:,]\s*["']?                                  # "SiteId": 1001, "siteId": "1001", 'NOTIFICATION_SITE_ID', 116
+    | (?<![\w.$])items\.[A-Z]\w*\(\s*                              # server script items.Get(1001, …) — PascalCase API only
+    | \$p\.api\w*\(\s*\{[^()]{0,60}?(?<![\w$])["']?id["']?\s*:\s*  # client $p.apiGet({ … id: 1001, … })
+    | /items/                                                      # /api/items/1001/get
+    | items/["']\s*\+\s*                                            # '/api/items/' + 1001
+    | \[\[                                                         # ChoicesText link [[1001]]
+    | (?:Class|Num|Date|Description|Check|Attachments)\w*~          # linked column ClassA~1001
     )\Z""" % {"name": SITE_ID_NAME})
-# Text right after the number: 797 === $p.siteId(), 797 == siteId
+# Text right after the number: 1001 === $p.siteId(), 1001 == siteId
 AFTER_CONTEXT = re.compile(r"""\A\s*(?:===?|!==?)\s*[\w$.]*?%s""" % SITE_ID_NAME)
 CONTEXT_REACH = 80        # characters looked at around the number (line breaks included: `items.Get(\n  797`)
 
@@ -319,7 +319,14 @@ def xref(settings: dict, scripts: dict) -> dict:
 # it only tells a person which lines need reading ("other") and which are almost certainly not site ids.
 POSSIBLE_GROUPS = (
     ("comment", re.compile(r"^\s*(//|/\*|\*|<!--)")),
-    ("log or message text", re.compile(r"(console\.\w+|pbWarn|pbLog|logTag|log\w*\(|warn\(|error\(|\[playboard\])", re.I)),
+    # by shape, never by one application's names: console.*, a call or method whose name contains log / warn / error
+    # / notify as a word part (ordersLogger.info, appWarn, reportError, notify — not dialog, catalog), and a string starting with a bracketed tag
+    # ('[orders] failed') — not a jQuery / querySelector attribute selector ($('[data-id] input'))
+    ("log or message text", re.compile(r"""(?x)
+          console\.\w+
+        | (?-i:[a-z_$][\w$]*(?:Log|Warn|Error|Notif))\w*\s*[.(]   # camel-case part: appWarn(, ordersLogger.
+        | (?<![\w$])(?-i:(?:log|warn|error|notify)(?:[A-Z_]\w*)?)\s*\(   # log(, warn(, notify(, logEvent( — not dialog(, login(
+        | (?<!\$\()(?<!querySelector\()(?<!querySelectorAll\()["'`]\[[A-Za-z][\w.-]*\]""", re.I)),
     ("status or code value", re.compile(r"STATUS|_CODE|CODES|Status\b|status\b|choice", re.I)),
     ("timing or retry", re.compile(r"setTimeout|setInterval|sleep|delay|interval|timeout|retry|attempt|\bms\b", re.I)),
     ("colour or layout", re.compile(r"rgba?\(|px\b|width|height|margin|padding|top|left|z-index|font", re.I)),
