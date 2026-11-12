@@ -1,4 +1,6 @@
 """Script tooling (BR7):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -175,6 +177,26 @@ class CliTest(unittest.TestCase):
 
     def script_file(self):
         return next((self.r / "config/anken/scripts").glob("*.js"))
+
+    def test_refs_summary_keeps_the_lines_to_read_and_the_counts(self):
+        body = "var s = 797;\r\nsetTimeout(f, 797);\r\n// keep 797\r\nconsole.log('x', 797);\r\n"
+        self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}]), ensure_ascii=False),
+                            encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
+
+        def run(*extra):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(pls.main(["refs", "--site", "anken", *extra]), 0)
+            return out.getvalue().splitlines()
+        full, short = run(), run("--summary")
+        self.assertEqual(len([x for x in full if x.startswith("POSSIBLE [")]), 4)
+        self.assertEqual([x.split("]")[0] for x in short if x.startswith("POSSIBLE [")], ["POSSIBLE [other"])
+        self.assertIn("var s = 797", next(x for x in short if x.startswith("POSSIBLE [")))   # the line to read stays whole
+        groups = next(x for x in short if x.startswith("POSSIBLE by group:"))
+        for g in ("other 1", "timing or retry 1", "comment 1", "log or message text 1"):
+            self.assertIn(g, groups)
+        self.assertEqual(full[-1], short[-1])                                          # same totals line
 
     def raw(self):
         with open(self.script_file(), encoding="utf-8", newline="") as fh:

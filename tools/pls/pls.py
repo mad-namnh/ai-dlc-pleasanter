@@ -1398,8 +1398,20 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     }
 
 
+def summarize_scope(site: str, msgs: list[str], top: int = 5) -> list[str]:
+    """`--summary` of the scope refusal: one line per site (count and the first names) instead of one line per
+    component; every other message is kept as it is, and the full list is one command away (without --summary)."""
+    prefix = f"SCOPE {site}: "
+    names = [m[len(prefix):].replace(" (no round-trip evidence)", "") for m in msgs if m.startswith(prefix)]
+    if not names:
+        return msgs
+    line = (f"SCOPE {site}: {len(names)} component(s) without round-trip evidence: {', '.join(names[:top])}"
+            f"{' …' if len(names) > top else ''} (all of them: run again without --summary)")
+    return [line] + [m for m in msgs if not m.startswith(prefix)]
+
+
 def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None,
-                 accept_unverified: str | None = None) -> int:
+                 accept_unverified: str | None = None, summary: bool = False) -> int:
     need_onboarding(r, "release-plan")
     e = env_conf(r, env)
     if (r / "releases" / release / "plan.json").exists():
@@ -1426,7 +1438,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                        "a sandbox deploys only its own copies (ADR-0011)")
         ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift, accept_unverified)
         shared = shared_write_refusals(e, env, site, read_tree(r / "config" / site))
-        for m in msgs + shared:
+        for m in (summarize_scope(site, msgs) if summary else msgs) + shared:
             print(m)
         failed |= not ok or bool(shared)
         results[site] = res
@@ -3318,6 +3330,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
     s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
     s.add_argument("--accept-unverified", help="decision record that accepts components without round-trip evidence (ADR-0001)")
+    s.add_argument("--summary", action="store_true", help="one SCOPE line per site (count and first names) instead of one per component")
     s = sp.add_parser("bootstrap-plan")
     s.add_argument("--env", required=True)
     s.add_argument("--release", required=True)
@@ -3706,7 +3719,7 @@ def _main(argv=None) -> int:
 
     if a.cmd == "release-plan":
         exports = dict(x.split("=", 1) for x in a.export)
-        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified)
+        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified, a.summary)
 
     if a.cmd == "mark-applied" and (load_plan(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release
