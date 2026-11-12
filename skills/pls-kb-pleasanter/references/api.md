@@ -1,5 +1,7 @@
 # Pleasanter API facts (verified on 1.5.2)
 
+Evidence: spike round 1 (`spike/round-trip/report-20261105.md`) and slices #1–#3 (`docs/slices/slice-01-report.md` … `slice-03-report.md`), MADLAB dev 1.5.2, unless a row names its own D-entry, probe or source; rows marked source-derived are not verified on a server.
+
 All endpoints are `POST` with a JSON body containing `"ApiVersion": 1.1`. Authentication: `"ApiKey"` in the body, or the browser session of a logged-in user.
 
 ## Site configuration
