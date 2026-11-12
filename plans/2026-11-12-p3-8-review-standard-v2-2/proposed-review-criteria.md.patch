@@ -1,0 +1,45 @@
+Reason: design review 2026-11-09, roadmap P3-8 and final report section 2.5. Version 2.2 of the review standard
+(1) states the count of criteria (65; the review plan and request said 66);
+(2) makes a criterion FAIL when any of its parts is violated (PARTIAL only when no part is violated) —
+    the rule behind the WS-7 disputes D-1 (F4) and D-2 (G2);
+(3) requires one report row and one status per criterion (B1, G2, G5 and I2 carried sub-rows with sub-statuses).
+docs/review-criteria.md is a protected path (docs/agent-rules.md, stop point 3): Nam applies or rejects this patch.
+Apply from the repository root:
+  git apply plans/2026-11-12-p3-8-review-standard-v2-2/proposed-review-criteria.md.patch
+
+--- a/docs/review-criteria.md
++++ b/docs/review-criteria.md
+@@ -1,6 +1,6 @@
+-# Design review standard — ai-dlc-pleasanter (v2.1)
++# Design review standard — ai-dlc-pleasanter (v2.2)
+
+-v2.1, 2026-11-09. Based on v2.0 (rewrite of v1 by an external reviewer) with four changes: stage of application, verification method, accepted trust boundaries, de-duplication (agent behaviour moved to evals).
++v2.2, 2026-11-12: the count of criteria is stated (65), a violated part of a criterion makes it FAIL, and a report gives one row per criterion (design review 2026-11-09, final report section 2.5). v2.1, 2026-11-09. Based on v2.0 (rewrite of v1 by an external reviewer) with four changes: stage of application, verification method, accepted trust boundaries, de-duplication (agent behaviour moved to evals).
+
+ ## 1. Purpose and scope
+
+@@ -10,13 +10,13 @@
+
+ ## 2. Status, severity, stage, method
+
+-**Status** — exactly one per criterion:
++**Status** — exactly one per criterion, in one report row. The standard has **65 criteria**: A 6, B 11, C 11, D 6, E 4, F 4, G 6, H 6, I 6, J 5 (the appendix EV cases are not criteria).
+
+ | Status | Meaning |
+ |---|---|
+ | PASS | Verified by implementation **and** test evidence (for guards: a negative test exists) |
+-| FAIL | Evidence shows the criterion is violated |
+-| PARTIAL | Some parts verified, others missing — say which |
++| FAIL | Evidence shows the criterion is violated — **in any of its parts**: one violated part makes the whole criterion FAIL |
++| PARTIAL | Some parts verified, the others unverified or without evidence, and **no part violated** — say which parts |
+ | ACCEPTED BOUNDARY | Not enforced by the framework by design, and an ADR names the trust boundary, the risk and who owns it. No ADR → FAIL with the finding "missing trust-boundary ADR" |
+ | NOT VERIFIABLE | The method needed is not available to the reviewer (e.g. method L) or the evidence is missing — say exactly what |
+ | NOT APPLICABLE | Does not apply, with the reason |
+@@ -184,6 +184,6 @@
+ ```
+ | ID | Criterion | Severity | Status | Stage | Finding | Evidence (file:line, test, command output) | Reproduction | Proposed fix | Verification |
+ ```
+-Rules: one finding per actionable issue; exact paths and lines; real test names and output; facts separate from hypotheses; fixes address root causes; method L items get a written scenario instead of a run.
++Rules: **one row per criterion** with one status — parts of a criterion (a live part, a sub-check) are described in its Finding and Evidence, never as rows or statuses of their own; one finding per actionable issue; exact paths and lines; real test names and output; facts separate from hypotheses; fixes address root causes; method L items get a written scenario instead of a run.
+
+ ## 6. Final report (batch 4)
