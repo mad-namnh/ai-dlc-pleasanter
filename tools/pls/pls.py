@@ -2290,6 +2290,40 @@ def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
     return lock
 
 
+def _version_key(v) -> tuple | None:
+    """'0.22' -> (0, 22); None for anything else, so an unknown version is never called older or newer."""
+    return tuple(int(x) for x in v.split(".")) if isinstance(v, str) and re.fullmatch(r"\d+(\.\d+)*", v) else None
+
+
+def _version_direction(project_v, framework_v) -> str:
+    """Why a project copy differs from the framework's skill, from the versions (a hash alone cannot tell the direction)."""
+    p, f = _version_key(project_v), _version_key(framework_v)
+    if p is not None and f is not None and f > p:
+        return f"framework has a newer version ({project_v} in the project, {framework_v} in the framework) - `pls skills sync` to upgrade"
+    if p is not None and f is not None and f < p:
+        return (f"framework has an older version ({project_v} in the project, {framework_v} in the framework) - the framework "
+                f"checkout is behind: update it before any sync, or the sync would downgrade the project")
+    return (f"framework copy differs at the same version ({framework_v or '?'}) - the framework changed the skill without a "
+            f"new version; `pls skills sync` takes it, and the framework should give it a version")
+
+
+def edited_skill_warning(r: Path) -> str | None:
+    """WARNING for `step` / `gate` when a project copy of a skill was edited. It warns and never refuses (Nam's
+    decision, 2026-11-12): a project must not be stopped at a gate by a skill copy. Logged on `gate` (`skills_edited`);
+    a `step` writes its own marker event first, so the warning is not in it."""
+    if not (r / ".claude" / "framework.lock").exists():
+        return None
+    try:
+        edited = sorted(p.split(":")[0] for p in skills_check(r, FRAMEWORK) if "project copy was edited" in p)
+    except Exception:                                 # noqa: BLE001 — a check that cannot run never blocks a step
+        return None
+    if not edited:
+        return None
+    LG.record_metric(skills_edited=edited)
+    return (f"WARNING: project copies of {', '.join(edited)} were edited (differ from .claude/framework.lock) - the rules "
+            f"you follow may not be the framework's. Tell the person; skills are changed in the framework, then `pls skills sync`.")
+
+
 def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     lock = rj(proj / ".claude" / "framework.lock")
     fw_skills, problems = _framework_skills(fw), []
@@ -2302,7 +2336,7 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
         elif _tree_sha(d) != entry["sha256"]:
             problems.append(f"{name}: project copy was edited (differs from the lock) - change skills in the framework, then sync")
         elif name in fw_skills and _tree_sha(fw_skills[name]) != entry["sha256"]:
-            problems.append(f"{name}: framework has a newer version ({_skill_versions(fw).get(name, '?')}) - `pls skills sync` to upgrade")
+            problems.append(f"{name}: " + _version_direction(entry.get("version"), _skill_versions(fw).get(name)))
     for name in sorted(set(fw_skills) - set(lock.get("skills") or {})):
         problems.append(f"{name}: in the framework but not installed - `pls skills sync`")
     return problems
@@ -3620,7 +3654,12 @@ def _main(argv=None) -> int:
             LG.record_metric(sessions=len(files))
             print(f"{len(files)} session(s) → ops/usage/ ({len(steps)} step marker(s) in the run log)")
             return 0
-        rows = US.report(US.load(r), a.by)
+        loaded = US.load(r)
+        rows = US.report(loaded, a.by)
+        for sid, phases in sorted(US.sessions_with_several_change_requests(loaded).items()):
+            print(f"WARNING: session {sid} did {'/'.join(p for p in phases if p in US.WORK_PHASES)} work after a G4 "
+                  f"({' → '.join(phases)}) — one Claude Code session per change request (pls-x-lifecycle §2, "
+                  f"ADR-0013): start a new session for the next change request.", file=sys.stderr)
         if a.json:
             print(json.dumps(rows, ensure_ascii=False, indent=1))
             return 0
@@ -3635,6 +3674,8 @@ def _main(argv=None) -> int:
             need_onboarding(r, f"step {a.phase}")
         f = LG.step(r, a.phase, a.title)
         print(f"step {a.phase}: {a.title} → {f.relative_to(r).as_posix()}")
+        if (w := edited_skill_warning(r)):
+            print(w, file=sys.stderr)
         return 0
 
     if a.cmd == "gate":
@@ -3645,6 +3686,8 @@ def _main(argv=None) -> int:
         except GT.GateError as ex:
             raise Fail(str(ex))
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
+        if (w := edited_skill_warning(r)):
+            print(w, file=sys.stderr)
         print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
         for rel_id, b in (rj(out).get("bound") or {}).items():
             print(f"  {rel_id}: " + (f"bound to its content for {b['env']} (sha256 {b['sha256'][:12]}…) — any later change "

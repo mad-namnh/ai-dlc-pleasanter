@@ -1,4 +1,6 @@
 """Unit tests for pls (stdlib only):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -743,9 +745,48 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(lock["skills"]["pls-a"]["version"], "0.1")
         self.assertEqual(pls.skills_check(proj, fw), [])
         (fw / "skills/pls-a/SKILL.md").write_text("v2", encoding="utf-8")
-        self.assertIn("newer", pls.skills_check(proj, fw)[0])
+        self.assertIn("differs at the same version (0.1)", pls.skills_check(proj, fw)[0])   # changed, no new version
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.10 | x |\n", encoding="utf-8")
+        self.assertIn("framework has a newer version (0.1 in the project, 0.10 in the framework)", pls.skills_check(proj, fw)[0])
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.0 | x |\n", encoding="utf-8")
+        self.assertIn("framework has an older version (0.1 in the project, 0.0 in the framework)", pls.skills_check(proj, fw)[0])
+        self.assertIn("would downgrade", pls.skills_check(proj, fw)[0])
         (proj / ".claude/skills/pls-a/SKILL.md").write_text("local edit", encoding="utf-8")
         self.assertIn("edited", pls.skills_check(proj, fw)[0])
+
+    def test_step_and_gate_warn_but_run_when_a_project_skill_was_edited(self):
+        fw = self.r / "fw"
+        (fw / "skills/pls-a").mkdir(parents=True)
+        (fw / "skills/pls-a/SKILL.md").write_text("v1", encoding="utf-8")
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.1 | x |\n", encoding="utf-8")
+        (self.r / ".claude").mkdir(exist_ok=True)
+        (self.r / ".claude/framework.lock").write_text("{}", encoding="utf-8")
+        pls.sync_skills(self.r, fw)
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "clean copy"]), 0)
+        self.assertNotIn("WARNING", err.getvalue())
+        (self.r / ".claude/skills/pls-a/SKILL.md").write_text("local edit", encoding="utf-8")
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "edited copy"]), 0)            # warn only (Nam, 2026-11-12)
+        self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+        self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
+        self.assertTrue((self.r / "gates").exists())                                  # the gate was recorded
+
+    def test_a_skills_check_that_cannot_run_never_blocks_step_or_gate(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):                                         # no framework.lock: nothing to check
+            self.assertEqual(pls.main(["step", "P6", "no lock"]), 0)
+        (self.r / ".claude").mkdir(exist_ok=True)
+        (self.r / ".claude/framework.lock").write_text("{}", encoding="utf-8")
+        with mock.patch.object(pls, "skills_check", side_effect=OSError("disk")), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "check fails"]), 0)
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R3", "--quote", "G3 approved"]), 0)
+        self.assertNotIn("WARNING", err.getvalue())
 
     def test_coverage_checks_the_element_not_only_the_file(self):
         (self.r / "config/a").mkdir(parents=True)
