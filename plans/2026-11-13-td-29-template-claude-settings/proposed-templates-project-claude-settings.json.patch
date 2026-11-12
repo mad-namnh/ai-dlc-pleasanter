@@ -1,0 +1,57 @@
+Reason (TD-29, design review architect-review-d3 S9; Nam 2026-11-12: "TD-29 patch only (Recommended)"):
+the project template has no .claude/settings.json. A project made by `pls init` gets this file (init copies every
+file of templates/project/), so the agent may run `python pls.py …` without a prompt each time, and cannot read the
+operator's `.pls/` (keys, passwords, connections), release payloads / rollbacks / live copies or test results, nor
+edit gate records and the files pls writes in releases/ (template CLAUDE.md hard rule 7), nor push.
+Path syntax follows the framework's own .claude/settings.json ("/x" = from the project root, "//x" = absolute).
+Not verified here: the exact matching of these rules by Claude Code (check once in a new project: a Read of
+.pls/connections.json and of a payload is refused; `python pls.py lint` runs without a prompt).
+The patch also adds the file to docs/architecture.md §3.2 (the layout test requires it; suite 501 OK with the patch on 1f8ead4).
+Existing projects are not changed (copy the file by hand). bootstrap-log.json exists only after AU3 (committed 2d818e4).
+Apply: git apply plans/2026-11-13-td-29-template-claude-settings/proposed-templates-project-claude-settings.json.patch
+
+diff --git a/templates/project/.claude/settings.json b/templates/project/.claude/settings.json
+new file mode 100644
+index 0000000..e630973
+--- /dev/null
++++ b/templates/project/.claude/settings.json
+@@ -0,0 +1,25 @@
++{
++  "permissions": {
++    "allow": [
++      "Bash(python pls.py *)",
++      "Bash(py pls.py *)"
++    ],
++    "deny": [
++      "Read(//**/.pls/**)",
++      "Edit(//**/.pls/**)",
++      "Read(/releases/*/payload*.json)",
++      "Read(/releases/*/rollback*.json)",
++      "Read(/releases/*/live-*.json)",
++      "Read(/tests/results/**)",
++      "Edit(/gates/**)",
++      "Edit(/releases/*/plan.json)",
++      "Edit(/releases/*/bootstrap.json)",
++      "Edit(/releases/*/bootstrap-log.json)",
++      "Edit(/releases/*/apply-log.json)",
++      "Edit(/releases/*/payload*.json)",
++      "Edit(/releases/*/rollback*.json)",
++      "Bash(git push)",
++      "Bash(git push *)"
++    ]
++  }
++}
+diff --git a/docs/architecture.md b/docs/architecture.md
+index aaa48c0..7b6b8d9 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -54,7 +54,8 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
+ ├─ .gitattributes                 # config/, releases/, migrations/ are stored byte for byte
+ ├─ .claude/
+ │  ├─ skills/                     # skills installed from the framework (pls skills sync)
+-│  └─ framework.lock              # framework path and commit, version and hash of every installed skill (ADR-0022)
++│  ├─ framework.lock              # framework path and commit, version and hash of every installed skill (ADR-0022)
++│  └─ settings.json               # from the template: pls runs without a prompt; no reading .pls/, payloads, rollbacks, test results; no edits of gates/ or pls's release files; no push
+ ├─ requirements/
+ │  ├─ sources/                    # what the customer gave, verbatim
+ │  ├─ REQ-<nnn>-<slug>.md         # EARS statements, acceptance criteria, source
