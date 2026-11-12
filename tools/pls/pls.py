@@ -1219,6 +1219,23 @@ def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str
     return bad
 
 
+def write_guard_now(r: Path, env: str, release: str) -> None:
+    """The write guard of `apply`, read again from the files (checked before every site's write and every restore):
+    role and allow_write (`assert_writable`) and, outside dev, the G4 record of the release. Anything that stops the
+    check — an unreadable or changed environments.json, a missing record — is a TransportError: writing stops."""
+    import pls_http as H
+    try:
+        e = env_conf(r, env)
+    except (Fail, ValueError, OSError) as ex:
+        raise H.TransportError(f"environments.json cannot be checked ({ex})")
+    H.assert_writable(e, H.load_connection(r, env), env)
+    if e.get("role") != "dev":
+        try:
+            GT.require(r, "G4", release, f"applying to {env}")
+        except (GT.GateError, Fail, ValueError, OSError) as ex:
+            raise H.TransportError(str(ex))
+
+
 def not_planned_message(release: str, plan: dict) -> str:
     """Refusal for a release that is no longer 'planned', with what the person does next: a release that started
     writing is read back (`pls mark-applied`), never applied again; any other one is replaced by a new plan."""
@@ -1244,6 +1261,18 @@ def apply_outcome_message(release: str, plan: dict, res: dict) -> str:
     """What happened and what the person does next, for every apply result except success."""
     st, site = res["status"], res.get("failed_site")
     exports = " ".join(f"--export {s}=<file>" for s in plan["sites"])
+    if res.get("guard_stop"):
+        written = res.get("touched") or []
+        where = f"after the failed write of {site}" if res.get("guard_at") == "after" else f"before {site}"
+        head = f"{release}: STOPPED {where} — the write guard no longer holds ({res['guard_stop']}); nothing more was written"
+        if not written:
+            return head + ". The release is still planned: fix the guard and run apply again."
+        if st == "rolled-back":
+            return (head + f" and no restore was sent, yet {', '.join(written)} read back equal to the rollback files: "
+                    f"the environment holds the previous state. Make a new release plan (pls release-plan with a new id).")
+        return (head + f" and {', '.join(written)} was NOT restored. Restore it from releases/{release}/rollback-<site>.json "
+                f"(a person, in Pleasanter), then export every site and run pls mark-applied {release} {exports} to record "
+                f"the state.")
     if st == "refused":
         return f"{release}: refused — nothing was written"
     if st == "rolled-back":
@@ -2471,9 +2500,17 @@ def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
         uid = int(q(f"Your user id (login '{login}' not found automatically)", str(old.get("user_id") or "") or None))
     print(f"ok: you = User,{uid} (principal 'admin')")
     principals = {"admin": f"User,{uid}"}
+    # The local opt-in for writes is the person's answer, never a default (ADR-0021 option B): pls writes only to
+    # environments with role dev (stg after G4) and allow_write true; production is never written.
+    # the earlier answer is offered only for the same URL: a new server starts at "n"
+    before = "y" if old.get("allow_write") is True and old.get("allow_write_answered") and url == old.get("url") else "n"
+    allow = q(f"Allow pls to write to {url} from projects made with this profile? Writes go only to role dev "
+              f"(stg after G4), never prod (y/n)", before).lower() in ("y", "yes")
+    print(f"ok: writes {'allowed' if allow else 'NOT allowed'} (allow_write {str(allow).lower()}); "
+          f"change it with pls setup, or in a project's .pls/connections.json")
     prof = {"url": url, "parent_id": parent, "login": login, "user_id": uid, "principals": principals,
-            "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": True,
-            "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
+            "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": allow,
+            "allow_write_answered": True, "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
     wj(pf, prof)
     print(f"profile '{name}' saved in {pf} (no key inside; the key file is next to it, outside every repository)")
     return prof
@@ -2486,8 +2523,13 @@ def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
     e["parent_id"] = prof["parent_id"]
     e["principals"] = dict(prof["principals"])
     wj(target / "environments.json", ev)
+    # A profile saved before setup asked the question holds allow_write true that nobody chose: it counts as false.
+    allow = prof.get("allow_write") is True and prof.get("allow_write_answered") is True
     wj(target / ".pls" / "connections.json", {env: {"url": prof["url"], "keys": prof["keys"], "default_key": prof["default_key"],
-                                                    "allow_write": prof.get("allow_write", True)}})
+                                                    "allow_write": allow}})
+    if not allow:
+        print(f"note: writes to {env} are not allowed (allow_write false in .pls/connections.json): answer y in "
+              f"pls setup, or set it in .pls/connections.json yourself (dev/stg only, never prod)")
 
 
 def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict | None = None,
@@ -2902,7 +2944,7 @@ def http_cmd(r: Path, a) -> int:
             # the run-log actor (PLS_ACTOR or git user.name): self-asserted, not an identity check (ADR-0014 TB-2).
             ran = {"executed_by": LG.actor(r), "confirmed": "--yes" if a.yes else "typed at a terminal"}
             try:
-                res = H.apply_release(c, plan, files)
+                res = H.apply_release(c, plan, files, guard=lambda: write_guard_now(r, plan["env"], a.release))
             except H.TransportError as ex:           # only the preflight reads raise: nothing was written
                 res = {"status": "refused", "log": [f"preflight: {ex}"]}
             except Exception as ex:                  # unknown point of failure: keep "applying" and leave evidence

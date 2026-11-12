@@ -27,17 +27,18 @@ Nothing secret goes into git or into the chat.
    python ai-dlc-pleasanter/tools/pls/pls.py setup
    ```
 
-   It asks four things:
+   It asks five things:
    - the Pleasanter URL;
    - the folder: paste its URL from the browser;
    - your API key: typed hidden;
-   - your login id.
+   - your login id;
+   - whether `pls` may **write** to this Pleasanter from projects made with the profile (`y`/`n`, default `n`). This is your local opt-in, `allow_write` (ADR-0021): writes then go only to an environment with `role: dev` (stg after G4), never to prod. Answer `y` for a dev server you use for demos.
 
    It then checks the folder with your key, finds your user id, and saves a **profile**:
    - `~/.pls/profiles/dev.json` holds the URL, the folder and your user id;
    - the key is stored separately in `~/.pls/profiles/dev.admin.key`, outside every repository.
 
-   Run it again whenever something changes; it offers the stored answers as defaults.
+   Run it again whenever something changes; it offers the stored answers as defaults. A profile saved before setup asked about writes counts as `n` until you answer.
 
 ## Every demo or new app
 
@@ -56,7 +57,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - `environments.json` and `.pls/connections.json`, filled in;
 - the first git commit.
 
-`http-check` must show HTTP 200 and `writes: allowed`. Then open Claude Code in the folder and give it the spec. For the demo, follow [`demo/README.md`](../demo/README.md).
+`http-check` must show HTTP 200 and `writes: allowed`. It shows `writes: refused` while `allow_write` is false: answer `y` in `pls setup` for the next projects, or set `"allow_write": true` for this project in `.pls/connections.json` yourself (dev/stg only; never an agent). Then open Claude Code in the folder and give it the spec. For the demo, follow [`demo/README.md`](../demo/README.md).
 
 **Permissions are designed, not set up.** The roles and their groups come out of the design (P2). After G2, on dev, run `python pls.py principals --env dev --create` in your terminal: it lists the groups of the design that do not exist yet, asks you to type `dev`, creates them with you as the only member and binds them (ADR-0017; your dev key must be a tenant administrator). Elsewhere the agent tells you which groups to create in Pleasanter, then binds them with `python pls.py principals --env <env>`.
 
@@ -78,6 +79,32 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 `jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts (ADR-0012). The project declares them in `config/_tenant/scheduled-scripts/` (`<name>.js` + `_index.json`, a list of `{"name", "schedule", "enabled"}`). While the project declares any and `jobs` is `unknown`, `pls test` refuses tests that change records and `pls apply` refuses a release that changes a scheduled script; `live` gives a warning. Every release plan lists changed scheduled scripts with a manual deploy step (files resolved for the environment in `releases/<R>/scheduled-scripts/`); after copying them into tenant management, the person records the check with `pls jobs-verified <R> --by <name> --quote "…"` (an operator of that environment from the profile row `Operators`, or a G4 approver). A sandbox uses the riskier of its own and dev's values and never deploys scheduled scripts. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
 
 **Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, `python pls.py sandbox refresh --name <you>`, `python pls.py apply <R-…>`.
+
+## Environment variables
+
+| Variable | What it changes |
+|---|---|
+| `PLS_HOME` | where the project launcher `pls.py` finds the framework (instead of `path` in `.claude/framework.lock`) |
+| `PLS_CONNECTIONS` | another connection file instead of `.pls/connections.json`; the same role and `allow_write` rules apply to it (ADR-0021) |
+| `PLS_PROFILE_DIR` | where `pls setup` keeps machine profiles (default `~/.pls/profiles`) |
+| `PLS_ACTOR` | the name written into the run log as the actor (default: `git config user.name`); self-asserted, not an identity check |
+| `PLS_DEBUG` | `1` prints the Python trace of an unexpected error (exit 3) |
+| key references `env:NAME` | an API key read from the environment variable `NAME` (`.pls/connections.json` → `keys`) |
+
+## When a release does not end applied
+
+`pls apply` writes the state into `releases/<R>/plan.json` (`status`) and `apply-log.json`. Only `planned` can be applied; never run `apply` again for the others.
+
+| Status | What happened | What you do |
+|---|---|---|
+| `refused` (back to `planned`) | nothing was written | fix what the message says, then run `apply` again |
+| `rolled-back` | a site failed; every site already written was restored and read back equal to its rollback file | fix the cause; make a new release plan with a new id |
+| `uncertain` | a write got no answer: the site may or may not hold the new configuration; nothing was restored | export every site of the release (`pls export`), then `pls mark-applied <R> --export <site>=<file> …` records what is there |
+| `recovery-required` | a restore failed or did not read back equal, or the write guard (role, `allow_write`, G4 outside dev, a readable `environments.json`) stopped holding after some sites were written — then nothing more was written and nothing restored | a person restores the sites the message names from `releases/<R>/rollback-<site>.json` in Pleasanter, then exports every site and runs `pls mark-applied` (the message prints the exact command) |
+| `applying` | the process stopped during the writes (crash, closed terminal) | as for `uncertain` |
+| `applied-unverified` | written, read-back not finished | export every site and run `pls mark-applied` |
+
+`role`, `allow_write` and (outside dev) the G4 record are read again before every site of a release and before restoring: switching `allow_write` to false while a release runs stops it before the next write. A site changed by someone else mid-release ends `rolled-back` when the restores read back equal. `bootstrap` and `migrate` check the guard once per command (TD-39).
 
 ## Commands that need you
 

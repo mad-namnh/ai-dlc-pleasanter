@@ -235,10 +235,28 @@ def migrate(client: Client, site_id: int, keys: list, data: list) -> dict:
     return {"status": status, "message": f"HTTP {st}: {msg}"}
 
 
-# ---------------------------------------------------------------- release (same semantics as runner applyRelease)
+# ---------------------------------------------------------------- release (runner applyRelease: same steps, no per-site guard)
 
-def apply_release(client: Client, plan: dict, files: dict) -> dict:
+def apply_release(client: Client, plan: dict, files: dict, guard=None) -> dict:
+    """Preflight, then each site in order: check the write guard again (`guard`, a callable that raises TransportError
+    when writing is no longer allowed), read the site again, write, restore every touched site on failure. The guard
+    is also checked before a restore: once it no longer holds, nothing more is written — no site, no restore."""
     log: list[str] = []
+
+    def guard_stop(site: str, why: str, written: list, at: str = "before") -> dict | None:
+        # Role, allow_write and the G4 record are local files that can change while a long release runs.
+        if guard is None:
+            return None
+        try:
+            guard()
+            return None
+        except TransportError as ex:
+            return {"status": "recovery-required" if written else "refused", "failed_site": site, "touched": written,
+                    "failed_restores": list(written), "guard_stop": str(ex), "guard_at": at,
+                    "log": log + [f"{site}: {why} — the write guard no longer holds ({ex})"
+                                  + (f"; {', '.join(written)} already written and NOT restored (writes are no longer "
+                                     "allowed): a person restores them or allows writing again, then exports every "
+                                     "site and runs pls mark-applied" if written else "; nothing was written")]}
     for step in plan["steps"] + plan["rollback"]:
         if step["payload_file"] not in files:
             return {"status": "refused", "log": [f"missing {step['payload_file']}"]}
@@ -250,6 +268,9 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         log.append(f"preflight {step['site']} ok")
     touched: list[str] = []
     for step in plan["steps"]:
+        stop = guard_stop(step["site"], "not written", touched)
+        if stop:
+            return stop
         # updatesite has no conditional write, so the site is read again right before its own write: the preflight
         # above is as old as the writes of the sites before this one. A change by someone else found here is not
         # overwritten; the sites already written are restored. (A change in the moment between this read and the
@@ -260,6 +281,10 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         except TransportError as ex:
             changed = f"could not be read again before its write ({ex})"
         if changed:
+            if touched:
+                stop = guard_stop(step["site"], f"{changed}; no restore sent", touched)
+                if stop:
+                    return stop
             lines, failed = rollback(client, plan, files, touched)
             return {"status": "recovery-required" if failed else "rolled-back" if touched else "refused",
                     "failed_site": step["site"], "touched": touched, "failed_restores": failed,
@@ -278,6 +303,9 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
             st, msg = 0, str(ex)
         log.append(f"apply {step['site']} ({step['site_id']}) → HTTP {st}")
         if st != 200:
+            stop = guard_stop(step["site"], f"write answered HTTP {st}, no restore sent", touched, at="after")
+            if stop:
+                return stop
             lines, failed = rollback(client, plan, files, touched)
             # "rolled-back" only when every restore answered 200; the caller still reads the sites back
             return {"status": "recovery-required" if failed else "rolled-back", "failed_site": step["site"],
