@@ -1219,6 +1219,27 @@ def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str
     return bad
 
 
+def not_planned_message(release: str, plan: dict) -> str:
+    """Refusal for a release that is no longer 'planned', with what the person does next: a release that started
+    writing is read back (`pls mark-applied`), never applied again; any other one is replaced by a new plan."""
+    st = plan.get("status")
+    sites = plan.get("sites") if isinstance(plan.get("sites"), list) else []
+    exports = " ".join(f"--export {s}=<file>" for s in sites) or "--export <site>=<file> …"
+    if st in OPEN_STATES:
+        return (f"{release} has status {st!r}, not 'planned' — it already wrote to the environment; do not apply it "
+                f"again. Export every site of the release (pls export), then pls mark-applied {release} {exports} "
+                f"records what each site holds.")
+    return (f"{release} has status {st!r}, not 'planned' — a release plan is used once. For another change make a "
+            f"new release plan (pls release-plan with a new id).")
+
+
+def stale_site_message(release: str, site: str, site_id, env: str) -> str:
+    """Refusal for a plan whose site id is not one this environment may write (ADR-0011), with the next action."""
+    return (f"{release}: {site} → site {site_id} is not a site this release may write in {env} (stale plan, or a "
+            f"shared site). Check envs.{env}.sites in environments.json, then make a new release plan "
+            f"(pls release-plan with a new id).")
+
+
 def apply_outcome_message(release: str, plan: dict, res: dict) -> str:
     """What happened and what the person does next, for every apply result except success."""
     st, site = res["status"], res.get("failed_site")
@@ -2784,7 +2805,7 @@ def http_cmd(r: Path, a) -> int:
                 except GT.GateError as ex:
                     raise H.TransportError(str(ex))
             if plan.get("status") != "planned":
-                raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+                raise H.TransportError(not_planned_message(a.release, plan))
             if MI.pending(plan):                         # ADR-0004 order: backup → conversion → configuration
                 raise H.TransportError(f"{a.release}: migrations {MI.pending(plan)} have not run — pls migrate {a.release} first "
                                        "(ADR-0004: data is converted before the configuration changes)")
@@ -2792,8 +2813,8 @@ def http_cmd(r: Path, a) -> int:
                 conf = e["sites"].get(s_) or {}
                 if conf.get("id") != plan["per_site"][s_].get("site_id") or conf.get("shared_from") or \
                         (e.get("sandbox_of") and not conf.get("sandbox")):
-                    raise H.TransportError(f"{a.release}: {s_} → site {plan['per_site'][s_].get('site_id')} is not a site this "
-                                           f"release may write in {plan['env']} (stale plan, or a shared site)")
+                    raise H.TransportError(stale_site_message(a.release, s_, plan["per_site"][s_].get("site_id"),
+                                                              plan["env"]))
             bad_step = plan_steps_problem(plan)          # the writes use steps/rollback, not per_site
             if bad_step:
                 raise H.TransportError(f"{a.release}: {bad_step} — make a new release plan")
@@ -3497,7 +3518,7 @@ def _main(argv=None) -> int:
         if not plan.get("sites"):
             raise Fail("only multi-site release plans (release-plan) are packaged")
         if plan.get("status") != "planned":
-            raise Fail(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+            raise Fail(not_planned_message(a.release, plan))
         bad_step = plan_steps_problem(plan)
         if bad_step:
             raise Fail(f"{a.release}: {bad_step} — make a new release plan")
@@ -3896,9 +3917,26 @@ def _main(argv=None) -> int:
     return 2
 
 
-if __name__ == "__main__":
+def cli(argv=None) -> int:
+    """Entry point of the command line: a refusal (`Fail`) is one line, exit 2. Any other error was not expected by
+    pls: the person sees one line (exit 3), the trace only when PLS_DEBUG=1 is set; the run log has already recorded
+    the message (pls_log.run)."""
     try:
-        sys.exit(main())
+        return main(argv)
     except Fail as ex:
         print(f"pls: {ex}", file=sys.stderr)
-        sys.exit(2)
+        return 2
+    except Exception as ex:                                         # noqa: BLE001 — the last line of defence
+        import os
+        import traceback
+        if os.environ.get("PLS_DEBUG") == "1":
+            traceback.print_exc()
+        first = (str(ex).splitlines() or [""])[0][:300]
+        print(f"pls: unexpected error ({type(ex).__name__}{': ' + first if first else ''}) — pls stopped here; nothing "
+              f"after this point ran. If the message does not point to this machine (a file, the disk, the network), it "
+              f"is a defect in pls: run the command again with PLS_DEBUG=1 and report the trace.", file=sys.stderr)
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

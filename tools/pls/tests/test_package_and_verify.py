@@ -55,6 +55,17 @@ class PackageTest(unittest.TestCase):
             pls.main(["package", R])
         self.assertFalse((self.r / "dist").exists())
 
+    def test_a_release_that_is_no_longer_planned_is_not_packaged(self):
+        self.stg()
+        self.g4()
+        p = self.r / "releases" / R / "plan.json"
+        plan = json.loads(p.read_text(encoding="utf-8"))
+        for status, next_action in (("applied", "pls release-plan with a new id"), ("uncertain", "pls mark-applied")):
+            p.write_text(json.dumps(dict(plan, status=status)), encoding="utf-8")
+            with self.assertRaisesRegex(pls.Fail, f"has status '{status}', not 'planned'.*{next_action}"):
+                pls.main(["package", R])
+        self.assertFalse((self.r / "dist").exists())
+
     def test_the_package_verifies_and_is_deterministic(self):
         self.stg()
         self.g4()

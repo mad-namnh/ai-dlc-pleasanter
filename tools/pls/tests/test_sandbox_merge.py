@@ -1,4 +1,6 @@
 """Sandboxes, harvest and semantic merge (ADR-0011, BR6):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -201,8 +203,12 @@ class SandboxTest(unittest.TestCase):
         plan["per_site"] = {"loans": {"site_id": TH.LO, "side_effects": [], "payload_file": "payload-loans.json"}}
         (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
         n = len(self.fake.calls)
-        self.assertEqual(pls.main(["apply", "R-STALE", "--yes"]), 2)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["apply", "R-STALE", "--yes"]), 2)
         self.assertFalse(any(p.endswith("/updatesite") for p, _ in self.fake.calls[n:]))
+        self.assertIn("not a site this release may write in dev-x", err.getvalue())
+        self.assertIn("pls release-plan with a new id", err.getvalue())              # the next action (C5)
 
     plan = TH.HttpTest.plan
 

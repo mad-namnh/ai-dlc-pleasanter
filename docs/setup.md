@@ -104,6 +104,9 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |
 | `REFUSED (ADR-0010)` from `test` or `apply` | The site sends mail and `side_effects.mail` is not safe. Check SMTP with the server operator and set `mail` in `environments.json` (see above). |
 | `L-MAIL-01` from `lint` | A notification or reminder holds a literal mail address. Put it in `values` and use `${env:NAME}`, or use a principal. |
+| `pls: unexpected error (…)` (exit 3) | `pls` stopped on something it did not expect; nothing after that point ran. If the message names a file, the disk or the network, fix that and run again. Otherwise run the same command with `PLS_DEBUG=1` set and report the trace. A refusal is exit 2 and says what to do next. |
+| `… has status '…', not 'planned'` | A release plan is used once. If it already wrote (`applying`, `applied-unverified`, `uncertain`, `recovery-required`): export the sites and run `pls mark-applied` as the message says. Otherwise make a new release plan with a new id. |
+| `… is not a site this release may write …` | The plan names a site id that is not this environment's own (stale plan, or a shared site). Check `envs.<env>.sites`, then make a new release plan. |
 | `pls skills check` differs | Change skills only in the framework, then run `python pls.py skills sync`. |
 
 **Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key.

@@ -13,7 +13,6 @@ pls.py | _main | raise Fail("sandbox create needs --sites and --parent (the deve
 pls.py | _main | raise Fail(f"config/{a.site} not found (adopt the site first)")
 pls.py | _main | raise Fail(f"profile '{a.profile}' not found - run pls setup --profile {a.profile}")
 pls.py | _main | raise Fail(f"{a.release} has no plan.json — make a release plan first (release-plan)")
-pls.py | _main | raise Fail(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
 pls.py | _main | raise Fail(f"{a.release}: {bad_step} — make a new release plan")
 pls.py | _main | raise Fail(f"{out} exists — it may hold reviewed text; use --out for a new file or --force to replace it")
 pls.py | _record_reference | raise Fail(f"--ref {a.ref!r}: {why}")
