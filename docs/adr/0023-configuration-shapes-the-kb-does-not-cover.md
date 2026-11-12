@@ -1,6 +1,6 @@
 # ADR-0023: Configuration shapes the knowledge base does not cover
 
-- **Status:** Proposed (2026-11-11) — Nam accepts, changes or rejects it
+- **Status:** Accepted (2026-11-12, Nam) — option A
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** I5, I9 (`docs/architecture.md` §2); ADR-0001 (scope evidence), ADR-0006 (principals in git), ADR-0007 (new sites), ADR-0009 (version, `kb-verify`); KB `references/probes/`; `docs/plan.md` Step 4d AU1 (this ADR is its first part: configuration shapes with the existing `kb-verify`; probes with server scripts or a second user's key remain AU1); origin: project `pls-demo-contracts` P3, 2026-11-11
@@ -44,11 +44,11 @@ The project's release plan keeps refusing the key until step 6 (ADR-0001 unchang
 
 ## Decision
 
-Proposed: **Option A**. The scope refusal is the reason the framework is safe to use; option B would turn a framework gap into a project decision again.
+**Option A**, accepted by Nam on 2026-11-12 (AskUserQuestion, his answer: "Option A (Recommended)"). The scope refusal is the reason the framework is safe to use; option B would turn a framework gap into a project decision again.
 
 ## Consequences
 
 - Easier: the next project that needs a near-completion view, an aggregation or a group recipient finds it in the KB; P2 can design with it; P3 builds it without a person in the UI.
 - Harder: P3 of the first project stops until the framework has the probe and the evidence (here: `D33`, scope keys `NearCompletionTimeBeforeDays/AfterDays`).
 - Built with this ADR (2026-11-11): date offsets `$name±N` for date variables (`pls_http._subst`); only `kb-verify` provides date variables (`$today`, `$yesterday`, …) — `pls test` and the browser runner have none, so a P4 spec passes such dates with `--var`; principals inside mail addresses of notifications and reminders (`pls_address_principals.py`; a raw `[Group<id>]` is lint L-PERM-01 and refused by `pack`; an `${env:x}` value holding such an id is L-PERM-01 too); probe `D33`; skills P2, P3 and lifecycle name this procedure.
-- Follow-up: after `kb-verify` passes, `VERIFIED_KEYS` gains `NearCompletionTimeBeforeDays`, `NearCompletionTimeAfterDays` (separate commit with the report as evidence).
+- Follow-up done: `kb-verify` passed D33 on MADLAB dev 1.5.2 (2026-11-12) and `VERIFIED_KEYS` holds `NearCompletionTimeBeforeDays`, `NearCompletionTimeAfterDays` (`tools/pls/pls_scope.py`, evidence in its docstring and KB D33). Probes with server scripts or a second user's key: AU1, a separate ADR.
