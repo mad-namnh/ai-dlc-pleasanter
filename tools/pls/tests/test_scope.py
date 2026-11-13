@@ -22,6 +22,11 @@ class PureTest(unittest.TestCase):
             "DashboardParts[7] type 5 (kanban) (no round-trip evidence)",
             "DashboardParts[8] type 0 (quick access) (no round-trip evidence)"])
 
+    def test_near_completion_days_have_round_trip_evidence(self):
+        """KB probe D33 passed on dev 1.5.2.0 (2026-11-12): the site's range days are stored and used."""
+        self.assertEqual(SC.unverified({"NearCompletionTimeBeforeDays": 0, "NearCompletionTimeAfterDays": 90,
+                                        "Views": [{"Id": 1, "NearCompletionTime": True}]}), [])
+
     def test_dashboard_part_edge_cases(self):
         parts = [{"Id": 1, "Type": 1}, {"Id": 2}, {"Id": 3, "Type": "3"}, {"Id": 4, "Type": True, "View": {}},
                  {"Id": 5, "Type": 4, "View": {}}]

@@ -188,6 +188,39 @@ class UsageTest(unittest.TestCase):
         self.assertEqual(by_phase["P3"]["output"], 16)
         self.assertEqual(by_phase["P3"]["total"], 16 + 2 * (10 + 100 + 5))
 
+    def test_a_session_with_work_after_a_g4_is_named(self):
+        def row(sid, phase, first):
+            return {"session": sid, "phase": phase, "first": first, "requests": 1}
+        rows = [row("one", "P3", "2026-11-08T01:00Z"), row("one", "G4", "2026-11-08T02:00Z"),
+                row("one", "G1", "2026-11-08T02:10Z"), row("one", "G2", "2026-11-08T02:20Z"),   # gates asked together: fine
+                row("two", "P5", "2026-11-08T01:00Z"), row("two", "G4", "2026-11-08T02:00Z"),
+                row("two", "P3", "2026-11-08T03:00Z"), row("two", "P3", "2026-11-08T03:10Z"),
+                row("two", "P4", "2026-11-08T04:00Z"),
+                row("three", "P4", "2026-11-08T00:05Z"), row("three", "G4", "2026-11-08T00:10Z")]  # P4 before the G4
+        self.assertEqual(US.sessions_with_several_change_requests(rows), {"two": ["P5", "G4", "P3", "P4"]})
+        untimed = [row("four", "G4", "2026-11-08T02:00Z"), {"session": "four", "phase": "P1", "requests": 1}]
+        self.assertEqual(US.sessions_with_several_change_requests(untimed), {})          # order unknown: not reported
+
+    def test_usage_report_warns_about_a_session_with_two_change_requests(self):
+        import contextlib
+        import io as _io
+        import os as _os
+        (self.p / "environments.json").write_text('{"envs": {}}', encoding="utf-8")
+        (self.p / "ops/usage").mkdir(parents=True)
+        (self.p / "ops/usage/s9.json").write_text(json.dumps({"v": 1, "session": "s9", "rows": [
+            {"phase": "G4", "title": "a", "first": "2026-11-08T01:00Z", "requests": 1},
+            {"phase": "P1", "title": "b", "first": "2026-11-08T02:00Z", "requests": 1}]}), encoding="utf-8")
+        cwd, err, out = _os.getcwd(), _io.StringIO(), _io.StringIO()
+        _os.chdir(self.p)
+        try:
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+                self.assertEqual(pls.main(["usage", "report", "--by", "step"]), 0)
+        finally:
+            _os.chdir(cwd)
+        self.assertIn("WARNING: session s9 did P1 work after a G4 (G4 → P1)", err.getvalue())
+        self.assertIn("one Claude Code session per change request", err.getvalue())
+        self.assertNotIn("WARNING", out.getvalue())                                   # the table stays clean
+
     def test_collect_is_idempotent(self):
         US.collect(self.p, self.steps, self.t)
         US.collect(self.p, self.steps, self.t)

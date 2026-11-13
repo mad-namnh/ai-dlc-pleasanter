@@ -1,0 +1,15 @@
+Reason: design review 2026-11-09 A4 item 4 (roadmap P2-6). Mandatory rule 1 of CLAUDE.md states the spike-era write rule (localhost, config.json, scripts/common.py) as the general rule, next to the pls rule. This patch keeps the headline and every restriction: the spike wording is scoped to spike/round-trip/, and a new line keeps "role dev + operator opt-in" for every other write path (browser runner, ad-hoc scripts); the stg allowance stays only in the existing pls bullet. CLAUDE.md Mandatory is a protected path: Nam applies and commits it, or rejects it.
+
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -6,7 +6,9 @@
+ 
+ ## Mandatory
+ 
+-1. **Write only to dev environments.** Write operations (create/update) may run only when the target is localhost, or an environment declared with `role: "dev"` **and** `allow_write: true` in `config.json`. Never set `role: "dev"` on a customer stg/production environment. Do not modify or loosen `assert_writable` in `scripts/common.py`. Agents must not add `--yes` unless the user asks for it.
++1. **Write only to dev environments.** Never set `role: "dev"` on a customer stg/production environment. Agents must not add `--yes` unless the user asks for it.
++   - Any write path not named below (the browser runner, an ad-hoc script): only to an environment declared `role: "dev"`, and only with the operator's opt-in (`allow_write: true`).
++   - Spike scripts (`spike/round-trip/`, ADR-0014 TB-13): write operations (create/update) may run only when the target is localhost, or an environment declared with `role: "dev"` **and** `allow_write: true` in the spike's `config.json`. Do not modify or loosen `assert_writable` in `spike/round-trip/scripts/common.py`.
+    - `pls` HTTP transport (ADR-0008): writes need environments.json `role: "dev"` or `"stg"` **and** `allow_write: true` in the operator's local `.pls/connections.json`; `role: "prod"` is never written. Do not modify or loosen `assert_writable` in `tools/pls/pls_http.py`, and never write keys into any file other than the operator's own key files under `.pls/`. The one exception is a dev test user that `pls` itself creates for role tests (ADR-0018): `pls` writes that user's password and key only into the operator's `.pls/`, never prints them, and never for `role: "stg"` or `"prod"`. Agents never read those files and never ask for keys in chat.
+ 2. **Never hold production API keys.** Exports from customer environments are run by the customer's operator or an authorized person. Agents work only on exported files.
+ 3. **Never commit customer data.** Everything under `spike/round-trip/data/` is gitignored. Do not copy customer configuration, site names, person names or internal URLs into any other file in the repo. Spike reports must be sanitized.

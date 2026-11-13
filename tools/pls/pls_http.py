@@ -12,8 +12,9 @@ Connection settings live on the operator's machine, never in git:
             "allow_write": true}
   }
 Key references: "env:NAME" (environment variable) or "file:PATH" (file containing only the key,
-relative to the connections file). Literal keys are refused, so a key never sits in a JSON file that
-could be copied around by mistake.
+relative to the connections file, or absolute). A key file must lie inside the project's .pls/ or the
+machine-profile folder (ADR-0021 option B), also when $PLS_CONNECTIONS names a connection file elsewhere. Literal keys are refused, so a key never sits in a
+JSON file that could be copied around by mistake.
 
 Write guard (CLAUDE.md rule 1, ADR-0003): writes need environments.json role "dev" or "stg" AND
 allow_write true in the local connection. role "prod" is never written to by this tool.
@@ -26,6 +27,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+from datetime import date as _date, timedelta as _timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,6 +45,7 @@ class UncertainOutcome(TransportError):
 # ---------------------------------------------------------------- connections
 
 def connections_file(root: Path) -> Path:
+    """`.pls/connections.json`, or the file named by PLS_CONNECTIONS (ADR-0021, ADR-0014 TB-9)."""
     p = os.environ.get("PLS_CONNECTIONS")
     return Path(p) if p else root / ".pls" / "connections.json"
 
@@ -83,10 +86,26 @@ def load_connection(root: Path, env: str) -> dict:
         raise TransportError(f"{f}: for '{env}', url must be text and keys an object of name → env:NAME or file:PATH")
     c = dict(c)
     c["_dir"] = str(f.parent)
+    c["_pls_home"] = str(root / ".pls")             # the only project folder key files may live in (ADR-0021)
     return c
 
 
+def profile_dir() -> Path:
+    """Folder of the machine profiles written by `pls setup` and their key files (ADR-0021)."""
+    return Path(os.environ.get("PLS_PROFILE_DIR") or Path.home() / ".pls" / "profiles")
+
+
+def _inside(p: Path, home: Path) -> bool:
+    try:
+        p.relative_to(home)
+        return True
+    except ValueError:
+        return False
+
+
 def resolve_key(conn: dict, name: str | None) -> str:
+    """Key value of `env:NAME` or `file:PATH` (relative to the connection file, or absolute) — read only from the
+    project's .pls/ or the machine-profile folder (ADR-0021)."""
     name = name or conn.get("default_key") or "admin"
     ref = (conn.get("keys") or {}).get(name)
     if not ref:
@@ -97,10 +116,22 @@ def resolve_key(conn: dict, name: str | None) -> str:
             raise TransportError(f"key '{name}': environment variable {ref[4:]} is not set")
         return v.strip()
     if ref.startswith("file:"):
-        p = Path(conn["_dir"]) / ref[5:]
-        if not p.exists():
+        # ADR-0021 option B, ADR-0014 TB-11: a key file lives in the project's .pls/ or the machine-profile folder only
+        # — not in the folder of a connection file named by PLS_CONNECTIONS, which may be anywhere
+        try:
+            p = (Path(conn["_dir"]) / ref[5:]).resolve()
+            homes = [Path(conn.get("_pls_home") or conn["_dir"]).resolve(), profile_dir().resolve()]
+        except (OSError, ValueError) as ex:
+            raise TransportError(f"key '{name}': {ref} is not a usable path ({type(ex).__name__})")
+        if not any(_inside(p, h) for h in homes):
+            raise TransportError(f"key '{name}': {ref} points outside the project's .pls/ ({homes[0]}) and the "
+                                 f"machine-profile folder ({homes[1]}) — move the key file into one of them")
+        if not p.is_file():
             raise TransportError(f"key '{name}': file {p} not found")
-        return p.read_text(encoding="utf-8-sig").strip()
+        try:
+            return p.read_text(encoding="utf-8-sig").strip()
+        except (OSError, ValueError) as ex:
+            raise TransportError(f"key '{name}': file {p} cannot be read ({type(ex).__name__})")
     raise TransportError(f"key '{name}': use 'env:NAME' or 'file:PATH', not a literal key")
 
 
@@ -190,6 +221,12 @@ class Client:
         msg = (js or {}).get("Message", "") if isinstance(js, dict) else text[:200]
         return st, (uid if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0 else None), str(msg)[:200]
 
+    def delete_user(self, user_id: int) -> tuple[int, str]:
+        """POST /api/users/{id}/delete (tenant administrator; 1.5.2: HTTP 200, the user is gone from the LoginId
+        lookup and from its groups, its key answers 401 — KB api.md "Users and groups")."""
+        st, js, text = self.call(f"/api/users/{user_id}/delete", {})
+        return st, str((js or {}).get("Message", "") if isinstance(js, dict) else text[:200])[:200]
+
     def update_group(self, group_id: int, name: str, body: str, members: list[str]) -> tuple[int, str]:
         """POST /api/groups/{id}/update (tenant administrator; 1.5.2: `GroupMembers` replaces the whole member list,
         fields left out are kept — KB api.md "Users and groups"). Callers send the full list they read."""
@@ -232,10 +269,28 @@ def migrate(client: Client, site_id: int, keys: list, data: list) -> dict:
     return {"status": status, "message": f"HTTP {st}: {msg}"}
 
 
-# ---------------------------------------------------------------- release (same semantics as runner applyRelease)
+# ---------------------------------------------------------------- release (runner applyRelease: same steps, no per-site guard)
 
-def apply_release(client: Client, plan: dict, files: dict) -> dict:
+def apply_release(client: Client, plan: dict, files: dict, guard=None) -> dict:
+    """Preflight, then each site in order: check the write guard again (`guard`, a callable that raises TransportError
+    when writing is no longer allowed), read the site again, write, restore every touched site on failure. The guard
+    is also checked before a restore: once it no longer holds, nothing more is written — no site, no restore."""
     log: list[str] = []
+
+    def guard_stop(site: str, why: str, written: list, at: str = "before") -> dict | None:
+        # Role, allow_write and the G4 record are local files that can change while a long release runs.
+        if guard is None:
+            return None
+        try:
+            guard()
+            return None
+        except TransportError as ex:
+            return {"status": "recovery-required" if written else "refused", "failed_site": site, "touched": written,
+                    "failed_restores": list(written), "guard_stop": str(ex), "guard_at": at,
+                    "log": log + [f"{site}: {why} — the write guard no longer holds ({ex})"
+                                  + (f"; {', '.join(written)} already written and NOT restored (writes are no longer "
+                                     "allowed): a person restores them or allows writing again, then exports every "
+                                     "site and runs pls mark-applied" if written else "; nothing was written")]}
     for step in plan["steps"] + plan["rollback"]:
         if step["payload_file"] not in files:
             return {"status": "refused", "log": [f"missing {step['payload_file']}"]}
@@ -247,6 +302,9 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         log.append(f"preflight {step['site']} ok")
     touched: list[str] = []
     for step in plan["steps"]:
+        stop = guard_stop(step["site"], "not written", touched)
+        if stop:
+            return stop
         # updatesite has no conditional write, so the site is read again right before its own write: the preflight
         # above is as old as the writes of the sites before this one. A change by someone else found here is not
         # overwritten; the sites already written are restored. (A change in the moment between this read and the
@@ -257,6 +315,10 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
         except TransportError as ex:
             changed = f"could not be read again before its write ({ex})"
         if changed:
+            if touched:
+                stop = guard_stop(step["site"], f"{changed}; no restore sent", touched)
+                if stop:
+                    return stop
             lines, failed = rollback(client, plan, files, touched)
             return {"status": "recovery-required" if failed else "rolled-back" if touched else "refused",
                     "failed_site": step["site"], "touched": touched, "failed_restores": failed,
@@ -275,6 +337,9 @@ def apply_release(client: Client, plan: dict, files: dict) -> dict:
             st, msg = 0, str(ex)
         log.append(f"apply {step['site']} ({step['site_id']}) → HTTP {st}")
         if st != 200:
+            stop = guard_stop(step["site"], f"write answered HTTP {st}, no restore sent", touched, at="after")
+            if stop:
+                return stop
             lines, failed = rollback(client, plan, files, touched)
             # "rolled-back" only when every restore answered 200; the caller still reads the sites back
             return {"status": "recovery-required" if failed else "rolled-back", "failed_site": step["site"],
@@ -299,9 +364,11 @@ def rollback(client: Client, plan: dict, files: dict, sites: list | None = None)
     return out, failed
 
 
-def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None = None) -> dict:
-    """Create the planned sites in order. `before(site)` runs just before each createsite is sent, so the caller can
-    record which site is in flight: if the process dies there, the record still names the site that may exist."""
+def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None = None,
+              guard: Callable[[], None] | None = None) -> dict:
+    """Create the planned sites in order. `guard()` runs before each createsite and stops the run when it raises
+    (the write guard read again); `before(site)` runs just before the request is sent, so the caller can record which
+    site is in flight: if the process dies there, the record still names the site that may exist."""
     created, log = {}, []
     st, js, _ = client.call(f"/api/items/{plan['parent_id']}/getsite")
     if st != 200 or not js or js["Response"]["Data"].get("ReferenceType") != "Sites":
@@ -309,6 +376,14 @@ def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None =
     for s in plan["steps"]:
         if s["op"] != "createsite" or s["parent_id"] != plan["parent_id"]:
             return {"status": "refused", "created": created, "log": log + [f"bad step {s.get('site')}"]}
+        if guard:
+            try:
+                guard()
+            except TransportError as ex:
+                return {"status": "stopped", "created": created,
+                        "log": log + [f"stopped before {s['site']}: the write guard refuses now — {ex} — the sites "
+                                      "created so far are bound next; run bootstrap again once the guard allows it "
+                                      "(it creates only the sites without an id)"]}
         if before:
             before(s["site"])
         try:
@@ -329,13 +404,24 @@ def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None =
 
 # ---------------------------------------------------------------- tests (same spec format as runner runTests)
 
-_VAR = re.compile(r"^\$(\w+)$")
+_VAR = re.compile(r"^\$(\w+)(?:([+-])(\d+))?$")
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _subst(v: Any, vars_: dict) -> Any:
+    """`$name` → its value. `$name+N` / `$name-N` → the date N days from that variable, only when its value is a
+    date (YYYY-MM-DD) — for probes and tests of relative date ranges (e.g. a view from today to today+90)."""
     if isinstance(v, str):
         m = _VAR.match(v)
-        return str(vars_[m.group(1)]) if m and m.group(1) in vars_ else v
+        if not m or m.group(1) not in vars_:
+            return v
+        val = str(vars_[m.group(1)])
+        if not m.group(2):
+            return val
+        if not _ISO_DATE.match(val):
+            return v
+        days = int(m.group(3)) * (1 if m.group(2) == "+" else -1)
+        return (_date.fromisoformat(val) + _timedelta(days=days)).isoformat()
     if isinstance(v, list):
         return [_subst(x, vars_) for x in v]
     if isinstance(v, dict):

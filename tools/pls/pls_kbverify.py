@@ -8,13 +8,15 @@ Each KB entry that skills rely on has probes in skills/pls-kb-pleasanter/referen
      "expect_stored": {"Columns[ColumnName=Status].DefaultInput": null}, # stored settings (null = absent, D8)
      "control": "<other probe>",                                         # this result counts only if that one passes
      "observe": true,                                                    # records what happens (no expected outcome yet)
-     "server_dates": true,                                               # $today/$yesterday… from the server's clock
+     "server_dates": true,                                               # $today/$yesterday… from the server's clock; $today+90, $today-1
      "tests": [ … specs in the `pls test` format, confined to the probe site … ],
      "teardown": {"SiteSettings": {…}}}                                 # saved after the run: leave the site harmless
 
 Safety: a probe can only create records on its own site and act on records it created (no `site`, `run_on`,
-`as_key`, `vars`; ops create/get/list/exec). Probe sites never send mail (no notifications at any depth, no server
-scripts). kb-verify reuses a probe site only when the site is provably its own (parent folder, title, type).
+`vars`; ops create/get/list/exec). Probe sites have no notifications or reminders at any depth. A server script at
+the top level of the probe's settings and `as_key` for a declared test-user role are allowed only under the guards
+of pls_kbverify_guarded (ADR-0025). kb-verify reuses a probe site only when the site is provably its own (parent
+folder, title, type).
 """
 from __future__ import annotations
 
@@ -24,9 +26,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pls_kbverify_guarded as KG
+
 SELECTOR = re.compile(r"^(\w+)\[(\w+)=([^\]]*)\]$")
 OPS = ("create", "get", "list", "exec")
-FORBIDDEN_KEYS = ("site", "run_on", "as_key", "vars")
+FORBIDDEN_KEYS = ("site", "run_on", "vars")      # as_key: KG.check (declared roles only)
 TITLE = "zz_kbprobe_{}"
 
 
@@ -46,9 +50,12 @@ def _mail_parts(o: Any, path: str = "") -> list[str]:
 
 def check_probe(p: dict) -> None:
     """Raise ValueError when a probe could send mail or touch anything but its own site and records."""
-    mail = _mail_parts(p["site"].get("SiteSettings") or {}) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
+    own = {k: v for k, v in (p["site"].get("SiteSettings") or {}).items() if k != "ServerScripts"}   # KG.check
+    mail = _mail_parts(own) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
     if mail:
-        raise ValueError(f"probe sites must not send mail or run server scripts: {mail}")
+        raise ValueError(f"probe sites must not send mail, and server scripts are allowed only at the top level of "
+                         f"the probe's settings (ADR-0025): {mail}")
+    KG.check(p)
     for spec in (p.get("tests") or []) + ([{"id": "cleanup", "steps": p["cleanup"]}] if p.get("cleanup") else []):
         bad = [k for k in FORBIDDEN_KEYS if k in spec]
         saved: set[str] = set(p.get("_shared_saves") or [])

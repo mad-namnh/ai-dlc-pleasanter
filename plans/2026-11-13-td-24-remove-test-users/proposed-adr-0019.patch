@@ -1,0 +1,14 @@
+# Reason (TD-24 review round 1, L3): `pls test-users --remove` deletes users and, with them, their group
+# membership. ADR-0019 does not say so yet; the text below is in its Decision (or the rules its Decision adopts),
+# a stop point (docs/agent-rules.md 1.1), so it is proposed, not applied. Apply: git apply plans/2026-11-13-td-24-remove-test-users/proposed-adr-0019.patch
+--- a/docs/adr/0019-test-users-in-role-groups.md
++++ b/docs/adr/0019-test-users-in-role-groups.md
+@@ -40,7 +40,7 @@
+ 
+ ## Options
+ 
+-Common rules: dev only, not a sandbox, `assert_writable`, typed confirmation listing every change, never stg or prod; the only member `pls` ever adds is a `zz_test_` user it created for that role (ADR-0018), never as group administrator; `pls` never deletes a group, never removes a member, never changes a member's administrator flag, never renames a group, and never changes `Body` or child groups of an existing group; run-log metric of its own for the changes (`group_members_added`); write-path inventory (`test_write_guards.py`).
++Common rules: dev only, not a sandbox, `assert_writable`, typed confirmation listing every change, never stg or prod; the only member `pls` ever adds is a `zz_test_` user it created for that role (ADR-0018), never as group administrator; `pls` never deletes a group, never removes a member (one exception: `pls test-users --remove` deletes a test user this machine proves it created, and Pleasanter drops a deleted user from its groups — TD-24), never changes a member's administrator flag, never renames a group, and never changes `Body` or child groups of an existing group; run-log metric of its own for the changes (`group_members_added`); write-path inventory (`test_write_guards.py`).
+ 
+ ### Option A — Test users join only when `pls` creates the group
+ Rule 3 becomes: members are the operator **and** the role's test user. Rule 2 stays: an existing group is never updated; `pls` prints the exact test user to add in the UI for each existing group, and role tests for that role stay `deferred` until the person has done it (`pls` checks membership if the API shows it).

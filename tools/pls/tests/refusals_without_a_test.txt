@@ -13,7 +13,6 @@ pls.py | _main | raise Fail("sandbox create needs --sites and --parent (the deve
 pls.py | _main | raise Fail(f"config/{a.site} not found (adopt the site first)")
 pls.py | _main | raise Fail(f"profile '{a.profile}' not found - run pls setup --profile {a.profile}")
 pls.py | _main | raise Fail(f"{a.release} has no plan.json — make a release plan first (release-plan)")
-pls.py | _main | raise Fail(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
 pls.py | _main | raise Fail(f"{a.release}: {bad_step} — make a new release plan")
 pls.py | _main | raise Fail(f"{out} exists — it may hold reviewed text; use --out for a new file or --force to replace it")
 pls.py | _record_reference | raise Fail(f"--ref {a.ref!r}: {why}")
@@ -78,7 +77,6 @@ pls_gate.py | record | raise GateError(f"gate must be one of {', '.join(GATES)}"
 pls_http.py | backup_records | raise TransportError(f"get {site_id} offset {offset}: HTTP {st}")
 pls_http.py | load_connection | raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL " "(keys go in environment
 pls_http.py | load_connection | raise TransportError(f"{f}: no url for environment '{env}'")
-pls_http.py | resolve_key | raise TransportError(f"key '{name}': file {p} not found")
 pls_http.py | resolve_key | raise TransportError(f"no key '{name}' in the connection (keys: {sorted((conn.get('keys') or {}))})")
 pls_http.py | run_tests | raise TransportError(f"create failed: HTTP {code} {text[:200]}")
 pls_http.py | run_tests | raise TransportError(f"get {rid}: HTTP {code}")
@@ -100,7 +98,6 @@ pls_profile_records.py | _check_value | raise GT.GateError(f"Approvers {value!r}
 pls_profile_records.py | _check_value | raise GT.GateError(f"CLAUDE.md has no '{field}' row — copy it from templates/project/CLAUDE.md first")
 pls_profile_records.py | _check_value | raise GT.GateError(f"Operators {value!r} names nobody (e.g. 'dev: Nam; stg: Nam; prod: <customer operator>')")
 pls_profile_records.py | _check_value | raise GT.GateError(f"environments.json is not readable ({ex})")
-pls_profile_records.py | _check_value | raise GT.GateError(f"field is one of {', '.join(FIELDS + (ROLE,))}")
 pls_profile_records.py | _check_value | raise GT.GateError(f"role is one of {', '.join(ROLES)}")
 pls_profile_records.py | _load | raise GT.GateError(f"{rel}: not a valid record (approver, quote, at, {key}) — a person repairs or removes it")
 pls_release_digest.py | digest | raise DigestError(f"{f.name} of {release} is not a JSON object")

@@ -1,4 +1,6 @@
 """Unit tests for pls (stdlib only):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -743,9 +745,48 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(lock["skills"]["pls-a"]["version"], "0.1")
         self.assertEqual(pls.skills_check(proj, fw), [])
         (fw / "skills/pls-a/SKILL.md").write_text("v2", encoding="utf-8")
-        self.assertIn("newer", pls.skills_check(proj, fw)[0])
+        self.assertIn("differs at the same version (0.1)", pls.skills_check(proj, fw)[0])   # changed, no new version
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.10 | x |\n", encoding="utf-8")
+        self.assertIn("framework has a newer version (0.1 in the project, 0.10 in the framework)", pls.skills_check(proj, fw)[0])
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.0 | x |\n", encoding="utf-8")
+        self.assertIn("framework has an older version (0.1 in the project, 0.0 in the framework)", pls.skills_check(proj, fw)[0])
+        self.assertIn("would downgrade", pls.skills_check(proj, fw)[0])
         (proj / ".claude/skills/pls-a/SKILL.md").write_text("local edit", encoding="utf-8")
         self.assertIn("edited", pls.skills_check(proj, fw)[0])
+
+    def test_step_and_gate_warn_but_run_when_a_project_skill_was_edited(self):
+        fw = self.r / "fw"
+        (fw / "skills/pls-a").mkdir(parents=True)
+        (fw / "skills/pls-a/SKILL.md").write_text("v1", encoding="utf-8")
+        (fw / "skills/README.md").write_text("| `pls-a` | P1 | 0.1 | x |\n", encoding="utf-8")
+        (self.r / ".claude").mkdir(exist_ok=True)
+        (self.r / ".claude/framework.lock").write_text("{}", encoding="utf-8")
+        pls.sync_skills(self.r, fw)
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "clean copy"]), 0)
+        self.assertNotIn("WARNING", err.getvalue())
+        (self.r / ".claude/skills/pls-a/SKILL.md").write_text("local edit", encoding="utf-8")
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "edited copy"]), 0)            # warn only (Nam, 2026-11-12)
+        self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
+        err = io.StringIO()
+        with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+        self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
+        self.assertTrue((self.r / "gates").exists())                                  # the gate was recorded
+
+    def test_a_skills_check_that_cannot_run_never_blocks_step_or_gate(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):                                         # no framework.lock: nothing to check
+            self.assertEqual(pls.main(["step", "P6", "no lock"]), 0)
+        (self.r / ".claude").mkdir(exist_ok=True)
+        (self.r / ".claude/framework.lock").write_text("{}", encoding="utf-8")
+        with mock.patch.object(pls, "skills_check", side_effect=OSError("disk")), contextlib.redirect_stderr(err):
+            self.assertEqual(pls.main(["step", "P6", "check fails"]), 0)
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R3", "--quote", "G3 approved"]), 0)
+        self.assertNotIn("WARNING", err.getvalue())
 
     def test_coverage_checks_the_element_not_only_the_file(self):
         (self.r / "config/a").mkdir(parents=True)
@@ -779,6 +820,49 @@ class PlsTest(unittest.TestCase):
         self.assertIn("L-PRF-01", rules)                     # the profile check still ran (Approvers has no record)
         rc, _ = self.printed(["lint"])
         self.assertEqual(rc, 1)                              # issues reported, no traceback
+
+    def test_mail_address_principal_refs(self):
+        """[Group<id>] / [User<id>] in reminder and notification addresses are ids per environment (Addresses.cs):
+        git holds [${principal:x}], pack writes the target's id; an unmapped id stays raw (lint L-PERM-01)."""
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"manager": "Group,379", "admin": "User,1"}
+        envs["envs"]["stg"]["principals"] = {"manager": "Group,12", "admin": "User,1"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        ss["Reminders"] = [{"Id": 2, "Column": "CompletionTime", "Subject": "s", "To": "[Group379],[ClassD]"}]
+        ss["Processes"] = [{"Id": 1, "Name": "cancel", "View": {}, "Notifications": [{"Id": 1, "Type": 1, "Address": "[User1];[Dept4]"}]}]
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        self.assertEqual(site["Reminders"][0]["To"], "[${principal:manager}],[ClassD]")
+        self.assertEqual(site["Processes"][0]["Notifications"][0]["Address"], "[${principal:admin}];[Dept4]")
+        perm = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("[Dept4]" in m for m in perm), perm)                 # unmapped → reported
+        self.assertFalse(any("[Group379]" in m or "[User1]" in m for m in perm), perm)
+        with self.assertRaisesRegex(pls.Fail, r"environment-specific id \[Dept4\]"):   # pack refuses a raw id too
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        site["Processes"][0]["Notifications"][0]["Address"] = "[${principal:admin}]"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["Reminders"][0]["To"], "[Group12],[ClassD]")        # resolved per environment
+        self.assertEqual(pl["Processes"][0]["Notifications"][0]["Address"], "[User1]")
+        envs["envs"]["stg"]["principals"]["manager"] = "Role,12"                 # not an address principal
+        with self.assertRaisesRegex(pls.Fail, "not a Group, User or Dept"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+        envs["envs"]["stg"]["principals"]["manager"] = "Group,12"
+        for k in ("dev", "stg"):                                               # an address id carried as an env value
+            envs["envs"][k].setdefault("values", {})["mgr_to"] = "[Group379]" if k == "dev" else "[Group12]"
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        site["Reminders"][0]["To"] = "${env:mgr_to}"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        perm = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("${env:mgr_to}" in m and "[Group379]" in m for m in perm), perm)
+        site["Reminders"][0]["To"] = "[${principal:nobody}]"
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        with self.assertRaisesRegex(pls.Fail, "unresolved reference"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
 
     def test_lint_skips_meta_only_sites_and_flags_unresolved_references(self):           # S5
         self.unpack_dev()

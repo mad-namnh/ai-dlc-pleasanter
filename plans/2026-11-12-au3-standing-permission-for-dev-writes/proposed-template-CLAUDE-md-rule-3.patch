@@ -1,0 +1,13 @@
+Reason: ADR-0024 (Accepted by Nam, 2026-11-12, option B). Hard rule 3 of the project template says apply /
+bootstrap / migrate need the person each time; with a recorded standing permission they do not on that dev
+environment. templates/project/CLAUDE.md is a protected path (docs/agent-rules.md, stop point 3): Nam applies or
+rejects this patch. New projects only; existing projects keep their own CLAUDE.md.
+Apply from the repository root:
+  git apply plans/2026-11-12-au3-standing-permission-for-dev-writes/proposed-template-CLAUDE-md-rule-3.patch
+
+--- a/templates/project/CLAUDE.md
++++ b/templates/project/CLAUDE.md
+@@ -34,2 +34,3 @@
+ 3. **`pls apply` / `pls bootstrap` / `pls migrate`, and `pls test` outside dev, need the person:** they run the command in their terminal, or they tell you to add `--yes` for that target. Never add `--yes` on your own, and never pipe text into a confirmation (pls refuses it). Smoke tests after a stg release run with `--release <R>` under that release's G4.
++   - **Except on dev, once the person allows it (ADR-0024):** when they say in their own words that you may write to a dev environment without asking each time, record it with `pls profile set dev-writes on --env <dev env> --approver <name> --quote "<their words>"`; `pls` then confirms apply / bootstrap / migrate there by itself. A sandbox needs its own record; stg and prod always ask; never record it in your own words.
+ 4. **No keys, secrets or business data in git or chat.**

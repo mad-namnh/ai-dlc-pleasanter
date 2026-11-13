@@ -1,0 +1,116 @@
+{
+  "entry": "D33",
+  "title": "Issues view NearCompletionTime lists records whose 完了 is from today-BeforeDays to today+AfterDays; AfterDays 90 (above General.json Max 30) is stored and used",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "NearCompletionTimeBeforeDays": 0,
+      "NearCompletionTimeAfterDays": 90,
+      "Views": [
+        {
+          "Id": 1,
+          "Name": "near completion",
+          "NearCompletionTime": true
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "NearCompletionTimeBeforeDays": 0,
+    "NearCompletionTimeAfterDays": 90,
+    "Views[Id=1].NearCompletionTime": true
+  },
+  "tests": [
+    {
+      "id": "D33",
+      "steps": [
+        {
+          "op": "create",
+          "save": "before",
+          "data": {
+            "Title": "kbprobe D33 yesterday",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$yesterday"
+          }
+        },
+        {
+          "op": "create",
+          "save": "d0",
+          "data": {
+            "Title": "kbprobe D33 today",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today"
+          }
+        },
+        {
+          "op": "create",
+          "save": "d30",
+          "data": {
+            "Title": "kbprobe D33 today+30",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today+30"
+          }
+        },
+        {
+          "op": "create",
+          "save": "d31",
+          "data": {
+            "Title": "kbprobe D33 today+31",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today+31"
+          }
+        },
+        {
+          "op": "create",
+          "save": "d90",
+          "data": {
+            "Title": "kbprobe D33 today+90",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today+90"
+          }
+        },
+        {
+          "op": "create",
+          "save": "d91",
+          "data": {
+            "Title": "kbprobe D33 today+91",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$today+91"
+          }
+        },
+        {
+          "op": "list",
+          "view": {
+            "NearCompletionTime": true
+          },
+          "contains": [
+            "$d0",
+            "$d30",
+            "$d31",
+            "$d90"
+          ],
+          "excludes": [
+            "$before",
+            "$d91"
+          ]
+        }
+      ]
+    }
+  ],
+  "server_dates": true
+}

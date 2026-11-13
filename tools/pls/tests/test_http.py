@@ -2,6 +2,7 @@
 python -m unittest discover -s tools/pls/tests -v"""
 import json
 import os
+from unittest import mock
 import sys
 import tempfile
 import threading
@@ -68,6 +69,14 @@ class Fake:
                 s["SiteSettings"] = {k: v for k, v in s["SiteSettings"].items() if k != self.drop_on_save}
             s["UpdatedTime"] = f"t{len(self.calls)}"
             return 200, {"Message": "updated"}
+        if act == "deletesite":                       # Pleasanter_1.5.2.0 ItemsController {id}/DeleteSite (source-derived)
+            if who != "admin" or getattr(self, "refuse_deletesite", False):
+                return 403, {"Message": "forbidden"}
+            if iid not in self.sites:
+                return 404, {"Message": "not found"}
+            if not getattr(self, "keep_deleted_site", False):   # a server that answers 200 and keeps the site
+                del self.sites[iid]
+            return 200, {"Id": iid, "StatusCode": 200, "Message": "deleted"}
         if act == "bulkupsert":                       # D13: matched by Keys → update, others created; D18: duplicates → 400
             if who != "admin":
                 return 403, {"Message": "forbidden"}
@@ -440,14 +449,16 @@ class HttpTest(unittest.TestCase):
     def test_setup_once_then_init_then_principals_after_design(self):                     # D4 + permission design in P2
         os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")
         try:
-            answers = iter([self.url, f"{self.url}/items/{FOLDER}/index", "nam"])
+            answers = iter([self.url, f"{self.url}/items/{FOLDER}/index", "nam", "y"])
             prof = pls.setup_profile("dev", ask=lambda *_: next(answers), ask_secret=lambda *_: "K-ADMIN")
             self.assertEqual(prof["parent_id"], FOLDER)
+            self.assertIs(prof["allow_write"], True)                                    # the person answered y
             self.assertEqual(prof["principals"], {"admin": "User,7"})
             self.assertNotIn("K-ADMIN", (self.r / "_profiles/dev.json").read_text(encoding="utf-8"))   # key never in the profile
             proj = self.r / "app"
             self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam", "--no-git"]), 0)
             os.chdir(proj)
+            self.assertIs(json.loads((proj / ".pls/connections.json").read_text(encoding="utf-8"))["dev"]["allow_write"], True)
             self.assertEqual(pls.main(["http-check", "--env", "dev"]), 0)
             self.assertEqual(pls.lint(proj), [])
             # P2 permission design writes design/roles.json; after G2 the groups are bound by name
@@ -459,6 +470,188 @@ class HttpTest(unittest.TestCase):
             ev = json.loads((proj / "environments.json").read_text(encoding="utf-8"))
             self.assertEqual(ev["envs"]["dev"]["principals"],
                              {"admin": "User,7", "somu": "Group,374", "staff": "Group,375"})   # exact name, not 総務2
+        finally:
+            os.environ.pop("PLS_PROFILE_DIR", None)
+
+    def test_writes_are_allowed_only_by_the_persons_answer(self):
+        os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")
+        try:
+            for answer in ("", "n", "no", "maybe"):                                    # Enter or anything but yes → false
+                answers = iter([self.url, str(FOLDER), "nam", answer])
+                prof = pls.setup_profile("dev", ask=lambda *_: next(answers), ask_secret=lambda *_: "K-ADMIN")
+                self.assertIs(prof["allow_write"], False, answer)
+            proj = self.r / "app-no"
+            self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam", "--no-git"]), 0)
+            self.assertIs(json.loads((proj / ".pls/connections.json").read_text(encoding="utf-8"))["dev"]["allow_write"], False)
+            # a profile saved before setup asked holds allow_write true that nobody chose: a new project gets false
+            pf = self.r / "_profiles/dev.json"
+            old = json.loads(pf.read_text(encoding="utf-8"))
+            old.pop("allow_write_answered")
+            old["allow_write"] = True
+            pf.write_text(json.dumps(old), encoding="utf-8")
+            proj = self.r / "app-old"
+            self.assertEqual(pls.main(["init", str(proj), "--approver", "Nam", "--no-git"]), 0)
+            self.assertIs(json.loads((proj / ".pls/connections.json").read_text(encoding="utf-8"))["dev"]["allow_write"], False)
+        finally:
+            os.environ.pop("PLS_PROFILE_DIR", None)
+
+    def test_the_write_guard_is_checked_again_before_every_site(self):
+        plan, d = self.plan("R-GUARD")
+        files = {f.name: json.loads(f.read_text(encoding="utf-8")) for f in d.glob("*.json") if f.name != "plan.json"}
+        calls = []
+
+        def guard():                                     # writing allowed for the first site only
+            calls.append(1)
+            if len(calls) > 1:
+                raise H.TransportError("allow_write is False")
+        c = H.Client(self.url, "K-ADMIN")
+        res = H.apply_release(c, plan, files, guard=guard)
+        writes = [p for p, _ in self.fake.calls if p.endswith("/updatesite")]
+        self.assertEqual(len(writes), 1)                                                # the second site is not written
+        self.assertEqual(writes[0], f"/api/items/{EQ}/updatesite")                     # nor restored: no second write
+        self.assertEqual(res["status"], "recovery-required")
+        self.assertEqual(res["touched"], ["equipment"])
+        self.assertIn("the write guard no longer holds (allow_write is False)", " ".join(res["log"]))
+        self.assertIn("NOT restored", " ".join(res["log"]))
+        n = len(self.fake.calls)
+        res = H.apply_release(c, plan, files, guard=lambda: (_ for _ in ()).throw(H.TransportError("role is 'prod'")))
+        self.assertEqual(res["status"], "refused")                                       # nothing touched yet
+        self.assertFalse(any(p.endswith("/updatesite") for p, _ in self.fake.calls[n:]))
+
+    def test_apply_reloads_the_guard_for_every_site(self):
+        plan, d = self.plan("R-LIVE")
+        for site in plan["sites"]:                                   # mark-applied runs after a successful apply
+            plan["per_site"][site]["payload_file"] = f"payload-{site}.json"
+        (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        import pls_http
+        seen = []
+        orig = pls_http.load_connection
+
+        def counting(root, env):
+            seen.append(env)
+            return orig(root, env)
+        with mock.patch.object(pls_http, "load_connection", side_effect=counting):
+            pls.main(["apply", "R-LIVE", "--yes"])
+        self.assertGreaterEqual(len(seen), 1 + 2)                                       # once for the command, once per site
+
+    def apply_while(self, change, fail_on=None, after_site=EQ):
+        """`pls apply` of a two-site release; `change()` runs right after the write to `after_site` returns."""
+        plan, d = self.plan("R-MID")
+        for site in plan["sites"]:
+            plan["per_site"][site]["payload_file"] = f"payload-{site}.json"
+        (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        self.fake.fail_update_on = fail_on
+        real = H.Client.apply
+
+        def wrapped(client, site_id, payload):
+            out = real(client, site_id, payload)
+            if site_id == after_site:
+                change()
+            return out
+        n = len(self.fake.calls)
+        import contextlib
+        import io as _io
+        self.out = _io.StringIO()
+        with mock.patch.object(H.Client, "apply", wrapped), contextlib.redirect_stdout(self.out):
+            code = pls.main(["apply", "R-MID", "--yes"])
+        writes = [p for p, _ in self.fake.calls[n:] if p.endswith("/updatesite")]
+        return (code, writes, json.loads((d / "plan.json").read_text(encoding="utf-8")),
+                json.loads((d / "apply-log.json").read_text(encoding="utf-8")))
+
+    def edit_json(self, path, fn):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        fn(doc)
+        path.write_text(json.dumps(doc), encoding="utf-8")
+
+    def test_allow_write_switched_off_mid_release_stops_and_is_recorded(self):
+        conn = self.r / ".pls/connections.json"
+        code, writes, plan, log = self.apply_while(lambda: self.edit_json(conn, lambda c: c["dev"].update(allow_write=False)))
+        self.assertEqual(code, 1)
+        self.assertEqual(writes, [f"/api/items/{EQ}/updatesite"])                      # loans not written, nothing restored
+        self.assertEqual((plan["status"], log["status"]), ("recovery-required", "recovery-required"))
+        self.assertIn("allow_write", log["guard_stop"])
+        self.assertIn("R-MID: STOPPED before loans", self.out.getvalue())
+        self.assertIn("equipment was NOT restored", self.out.getvalue())
+
+    def test_a_guard_stop_before_any_write_leaves_the_release_planned_and_says_so(self):
+        conn = self.r / ".pls/connections.json"
+        plan, d = self.plan("R-PRE")
+        real = H.Client.export_site
+        seen = []
+
+        def reading(client, site_id):                    # allow_write switched off right after the preflight reads
+            seen.append(site_id)
+            if len(seen) == 2:
+                self.edit_json(conn, lambda c: c["dev"].update(allow_write=False))
+            return real(client, site_id)
+        import contextlib
+        import io as _io
+        out = _io.StringIO()
+        with mock.patch.object(H.Client, "export_site", reading), contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["apply", "R-PRE", "--yes"]), 1)
+        self.assertEqual(json.loads((d / "plan.json").read_text(encoding="utf-8"))["status"], "planned")
+        self.assertIn("R-PRE: STOPPED before equipment", out.getvalue())
+        self.assertIn("still planned", out.getvalue())
+
+    def test_no_restore_sent_and_an_equal_read_back_is_said_as_it_is(self):
+        conn = self.r / ".pls/connections.json"
+        # the first write fails (the site is unchanged) and allow_write is switched off during it
+        code, writes, plan, log = self.apply_while(
+            lambda: self.edit_json(conn, lambda c: c["dev"].update(allow_write=False)), fail_on=EQ, after_site=EQ)
+        self.assertEqual(writes, [f"/api/items/{EQ}/updatesite"])                      # no restore sent
+        self.assertIn("STOPPED after the failed write of equipment", self.out.getvalue())
+        self.assertNotIn("every touched site was restored", self.out.getvalue())
+        # when the read-back finds the sites equal to their rollback files, the message says so — not "restored"
+        res = {"status": "rolled-back", "failed_site": "equipment", "touched": ["equipment"], "guard_stop": "x",
+               "guard_at": "after"}
+        msg = pls.apply_outcome_message("R-MID", plan, res)
+        self.assertIn("no restore was sent, yet equipment read back equal", msg)
+        self.assertNotIn("was restored", msg)
+
+    def test_no_restore_is_sent_once_the_guard_no_longer_holds(self):
+        conn = self.r / ".pls/connections.json"
+        # loans' write fails (HTTP 500) and allow_write is switched off during it: the restore of equipment is not sent
+        code, writes, plan, log = self.apply_while(
+            lambda: self.edit_json(conn, lambda c: c["dev"].update(allow_write=False)), fail_on=LO, after_site=LO)
+        self.assertEqual(writes, [f"/api/items/{EQ}/updatesite", f"/api/items/{LO}/updatesite"])
+        self.assertEqual(plan["status"], "recovery-required")
+        self.assertIn("no restore sent", " ".join(log["log"]))
+
+    def test_an_unreadable_environments_file_mid_release_stops_with_a_recorded_state(self):
+        envs = self.r / "environments.json"
+        code, writes, plan, log = self.apply_while(lambda: envs.write_text("{ half-saved", encoding="utf-8"))
+        self.assertEqual(writes, [f"/api/items/{EQ}/updatesite"])
+        self.assertEqual(plan["status"], "recovery-required")                          # not stuck in "applying"
+        self.assertIn("environments.json cannot be checked", log["guard_stop"])
+
+    def test_a_role_changed_to_stg_mid_release_needs_the_g4_record(self):
+        envs = self.r / "environments.json"
+        code, writes, plan, log = self.apply_while(lambda: self.edit_json(envs, lambda e: e["envs"]["dev"].update(role="stg")))
+        self.assertEqual(writes, [f"/api/items/{EQ}/updatesite"])
+        self.assertEqual(plan["status"], "recovery-required")
+        self.assertIn("G4", log["guard_stop"])
+
+    def test_setup_offers_an_earlier_yes_only_for_the_same_url(self):
+        os.environ["PLS_PROFILE_DIR"] = str(self.r / "_profiles")
+        try:
+            prompts = []
+
+            def ask(answers):
+                it = iter(answers)
+
+                def f(prompt):
+                    prompts.append(prompt)
+                    return next(it)
+                return f
+            pls.setup_profile("dev", ask=ask([self.url, str(FOLDER), "nam", "y"]), ask_secret=lambda *_: "K-ADMIN")
+            prompts.clear()
+            pls.setup_profile("dev", ask=ask(["", "", "", ""]), ask_secret=lambda *_: "")       # same URL: Enter keeps y
+            self.assertTrue(prompts[-1].endswith("[y]: "))
+            other = self.url.replace("127.0.0.1", "localhost")
+            prompts.clear()
+            prof = pls.setup_profile("dev", ask=ask([other, str(FOLDER), "", ""]), ask_secret=lambda *_: "")
+            self.assertTrue(prompts[-1].endswith("[n]: "))                               # another server starts at n
+            self.assertIs(prof["allow_write"], False)
         finally:
             os.environ.pop("PLS_PROFILE_DIR", None)
 

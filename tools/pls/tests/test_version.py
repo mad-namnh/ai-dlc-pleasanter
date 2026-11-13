@@ -11,6 +11,23 @@ import pls_version as PV  # noqa: E402
 import test_http as TH  # noqa: E402
 
 LOGIN = '<link href="/assets/css/style.min.css?v=201520" rel="stylesheet" />'
+KB_INDEX = Path(__file__).resolve().parents[3] / "skills" / "pls-kb-pleasanter" / "references" / "probes" / "index.json"
+
+
+def named_entries(line: str) -> set[str]:
+    """The entry ids a `knowledge base: … (D33, D34) …` line names."""
+    import re
+    m = re.search(r"\(((?:D\w+)(?:, D\w+)*)\)", line)
+    return set(m.group(1).split(", ")) if m else set()
+
+
+def pending_on(app: str) -> list[str]:
+    """Entries of the real KB not verified on `app` — e.g. a source-derived entry whose probe has not run (ADR-0023).
+    Read from index.json directly, not through PV.kb_unverified (the function under test): an entry is verified on
+    `app` when one of its `verified_on` labels is `app` or a prefix of it at a dot ("1.5.2" covers "1.5.2.0")."""
+    entries = json.loads(KB_INDEX.read_text(encoding="utf-8-sig"))["entries"]
+    return [k for k, e in entries.items()
+            if not any(app == v or app.startswith(v + ".") for v in (e or {}).get("verified_on") or [])]
 
 
 class PureTest(unittest.TestCase):
@@ -124,7 +141,13 @@ class CliTest(unittest.TestCase):
         envs["envs"]["dev"]["pleasanter"] = {"app": "1.5.2.0", "build": "201520", "schema": 1.017}
         envs["envs"]["prod"]["pleasanter"] = {"app": "1.5.1.0", "build": "201510", "schema": 1.017}
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
-        self.assertEqual(pls.version_check(self.r, "dev")["differences"], [])
+        pending = pending_on("1.5.2.0")
+        diffs = pls.version_check(self.r, "dev")["differences"]
+        self.assertEqual([d for d in diffs if not d.startswith("knowledge base:")], [])
+        kb = [d for d in diffs if d.startswith("knowledge base:")]
+        self.assertEqual(len(kb), 1 if pending else 0)                    # only entries not verified on 1.5.2
+        for d in kb:
+            self.assertEqual(named_entries(d), set(pending))
         envs["envs"]["dev"]["pleasanter"]["app"] = "unknown"
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
         self.assertIn("not known for dev", pls.version_check(self.r, "dev")["differences"][0])
@@ -154,7 +177,13 @@ class CliTest(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.run_version("--app", "1.5.2.0")
-        self.assertNotIn("knowledge base:", out.getvalue())
+        pending = pending_on("1.5.2.0")
+        if pending:                                                         # a probe not run yet is named, nothing else
+            line = [x for x in out.getvalue().splitlines() if "knowledge base:" in x]
+            self.assertEqual(len(line), 1)
+            self.assertEqual(named_entries(line[0]), set(pending))
+        else:
+            self.assertNotIn("knowledge base:", out.getvalue())
 
 
 if __name__ == "__main__":

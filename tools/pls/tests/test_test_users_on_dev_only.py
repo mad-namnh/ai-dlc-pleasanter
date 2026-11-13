@@ -76,6 +76,20 @@ class Fake:
             name = ((body.get("View") or {}).get("ColumnFilterHash") or {}).get("GroupName", "")
             rows = [json.loads(json.dumps(g)) for g in self.groups.values() if name in g["GroupName"]]
             return 200, {"StatusCode": 200, "Response": {"Data": rows, "TotalCount": len(rows)}}
+        m = re.fullmatch(r"/api/users/(\d+)/delete", path)    # KB api.md: gone from lookups, groups; its key dies
+        if m:
+            uid = int(m.group(1))
+            if who != 7 or getattr(self, "refuse_user_delete", False):
+                return 403, {"Id": 0, "StatusCode": 403, "Message": "forbidden"}
+            if uid not in self.users:
+                return 404, {"Id": 0, "StatusCode": 404, "Message": "not found"}
+            if not getattr(self, "keep_deleted_user", False):
+                del self.users[uid]
+                for g in self.groups.values():
+                    g["GroupMembers"] = [x for x in g["GroupMembers"] if not x.startswith(f"User,{uid},")]
+                for k in [k for k, v in self.keys.items() if v == uid]:
+                    del self.keys[k]
+            return 200, {"Id": uid, "StatusCode": 200, "Message": "deleted"}
         m = re.fullmatch(r"/api/groups/(\d+)/update", path)
         if m:
             g = self.groups[int(m.group(1))]
@@ -279,6 +293,18 @@ class TestUsers(unittest.TestCase):
             self.run_pls("--env", "dev", "--yes")
         self.assertNotIn("LITERALKEY", str(cm.exception))
         self.assertEqual((self.writes(), self.conns()["dev"]["keys"]["somu"]), ([], "a1b2c3d4LITERALKEYTYPEDBYMISTAKE"))
+
+    def test_an_existing_user_not_proven_ours_is_never_joined_to_the_group(self):
+        self.fake.users[500] = {"UserId": 500, "LoginId": "zz_test_pls_demo_x_somu", "password": "someone-elses"}
+        (self.r / ".pls/test-users").mkdir()
+        (self.r / ".pls/test-users/dev-somu.password").write_text("stale-from-an-earlier-user", encoding="utf-8")
+        for version in ("1.6.0", "1.5.2"):                       # key left to the person / screen login refused
+            self.set_env("dev", pleasanter={"app": version})
+            rc, out = self.run_pls("--env", "dev", "--yes")
+            self.assertEqual(rc, 1, out)
+            self.assertIn("was not joined to group", out)
+            self.assertNotIn("User,500,False", self.fake.groups[374]["GroupMembers"])
+            self.assertFalse(any(p.endswith("/update") for _, p in self.fake.calls), version)
 
     def test_existing_user_without_its_password_here_is_refused(self):
         self.fake.users[500] = {"UserId": 500, "LoginId": "zz_test_pls_demo_x_somu", "password": "elsewhere"}

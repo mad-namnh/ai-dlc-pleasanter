@@ -173,7 +173,7 @@ def apply_refusal(env: str, eff: dict, changed: dict[str, list[str] | None]) -> 
     changed = {s: v for s, v in changed.items() if v}
     if not changed:
         return None, None
-    detail = "; ".join(f"{s}: {', '.join(v)}" for s, v in sorted(changed.items()) if v)
+    detail = "; ".join(f"{s}: {v if isinstance(v, str) else ', '.join(v)}" for s, v in sorted(changed.items()) if v)
     if eff["mail"] == "unknown":
         return (f"REFUSED (ADR-0010): the release changes mail-sending elements ({detail}) and envs.{env}.side_effects.mail is "
                 "'unknown'. A person checks the environment's SMTP and records mail as sink, disabled or live."), None

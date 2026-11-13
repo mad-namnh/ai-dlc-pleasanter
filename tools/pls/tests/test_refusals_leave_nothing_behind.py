@@ -181,7 +181,7 @@ class NothingIsSentWhenTheWriteIsRefused(unittest.TestCase):
     setUp, tearDown, plan = TH.HttpTest.setUp, TH.HttpTest.tearDown, TH.HttpTest.plan
 
     def writes(self, since=0):
-        return [p for p, _ in self.fake.calls[since:] if re.search(r"/(updatesite|createsite|bulkupsert|create|update|delete)$", p)]
+        return [p for p, _ in self.fake.calls[since:] if re.search(r"/(updatesite|createsite|deletesite|bulkupsert|create|update|delete)$", p)]
 
     def test_a_payload_without_title_type_or_settings_is_never_sent(self):   # I2: transport key-presence check
         client = H.Client(self.url, "K-ADMIN")

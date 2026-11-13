@@ -33,6 +33,14 @@ description: Phase P6 for inquiries and incidents (問い合わせ／障害) on 
 
 8. **Write** `ops/triage/<date>-<env>-<record id>-<topic>.md`: a short Japanese answer for the reporter (what happened, what happens next — no internal jargon), then the English analysis with the evidence (command outputs summarised, file:line of scripts). While evidence is missing, write it as an interim file with the open points marked and commit it; send the reporter only an acknowledgement until the cause is known.
 
+## Checklist before the answer goes out
+
+- [ ] Steps 2–5 ran, or the triage file says which could not run and why.
+- [ ] The cause is one row of the table in step 7, with its evidence, or the file is marked interim with the open points.
+- [ ] The route is named (P1 change request, drift decision, migration, KB entry, environment owner) and nothing was changed in any environment.
+- [ ] The triage file holds record ids only — no record contents, personal data or secrets — and is committed.
+- [ ] The Japanese answer for the reporter says what happened and what happens next, without internal jargon.
+
 ## Never
 
 - change configuration, scripts or data in any environment to "try" a fix;

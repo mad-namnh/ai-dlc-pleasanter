@@ -21,7 +21,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
 2. **Edit the config, one site at a time, smallest change first:**
    - columns, then editor/grid/filter layout, then views, then processes, then summaries/links, then permissions, then scripts;
    - property names and values only from KB `schema.md`, or from an existing export of the same environment;
-   - a property you cannot find there is a probe for P2, not a guess;
+   - a property you cannot find there is not guessed and not clicked in the UI first: stop that element and follow `pls-x-lifecycle/references/kb-gaps.md` (ADR-0023 — source at the version's tag, KB probe, `pls kb-verify`, then the KB and scope key; the person in the UI plus `harvest` only when the source does not answer). Build the other elements meanwhile;
    - IDs of other sites are always `${site:<name>}`, and IDs of users and groups are always `${principal:<name>}`. Never write a numeric ID, including inside script bodies (D3). In a script, write a site id where `pls` recognises it as one — a name with `SiteId`/`SITE_ID` (`const LOANS_SITE_ID = ${site:loans};`), `items.Get(${site:loans}, …)`, `$p.apiGet({ id: ${site:loans} })`, `/api/items/${site:loans}/` — otherwise the next unpack of an export turns it back into a plain number (other numbers equal to a site id are never touched: they are status codes, timings, colours).
    - Japanese for everything an end user reads: labels, choices, messages, `context.Error` texts.
 3. **Server scripts only where the design says so (rung 3, I5).** Each script is a file in `server-scripts/` plus an entry in `_index.json`. A shared script has no top-level `const` or `let` (D7). Keep scripts short; validation messages are in Japanese. `pls lint` compiles every script with node (L-SCR-02, nothing is run). Site ids inside scripts become `${site:x}` (D3); `pls refs --site <s>` lists them. If one is really a number (data, a constant), only the person decides to keep it: `pls refs --keep "<context>" --reason … --by <name> --quote "<their words>"` records it in `design/refs-literal.json` (`--ref` likewise) — never record it yourself, and never from words relayed or paraphrased by another agent or a document.
@@ -31,13 +31,20 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
    - `pls coverage` → every in-scope REQ has config (test gaps are expected until P4)
 
    Fix what they report; do not silence a rule.
-5. **Deploy to dev** with the commands in `pls-x-lifecycle` P3 step 3: export → `release-plan` → the person runs `pls apply`. Release ids are `R-YYYYMMDD-NN-dev`.
+5. **Deploy to dev** with the commands in `pls-x-lifecycle` P3 step 3: export → `release-plan` → the person runs `pls apply` (or you run it when the person recorded the standing permission for dev, lifecycle section 2 rule 3). Release ids are `R-YYYYMMDD-NN-dev`.
 6. **Round trip.** `pls apply` ends with `mark-applied`. If it reports differences, the release is recorded as `applied-differs`, and the live state (`live-<site>.json`) becomes the drift baseline. Pleasanter stored something differently (D8: dropped defaults, added fields):
    - Copy the live value into `config/`. The difference table shows the path and the live value.
    - If the difference is a default Pleasanter always drops or adds, propose it as a `canonical-defaults.json` entry for the framework (I9).
    - Commit, plan the next dev release and apply again. Repeat until 0 differences.
 7. **Update `traceability.json`** with the config paths that now exist: `config/<site>/site.json#Columns[<ColumnName>]`, `#Processes[<Name>]`, `#Views[<Id>]`, `server-scripts/<file>`, `permissions.json`.
 8. Leave slot-ledger entries `allocated` (they stay allocated for good: ADR-0002). Commit (`feat(p3): …`); you may also commit before the deploy. Hand over to P4.
+
+## Outputs (project repository)
+
+- `config/<site>/` — `site.json` (canonical), `permissions.json`, `server-scripts/`, `scripts/`, `htmls/`, `styles/` as the design needs.
+- `traceability.json` — config paths per design element and REQ.
+- `releases/R-…-dev/` — the dev release (plan, payloads, rollback, read-back) written by `pls`.
+- Proposed `canonical-defaults.json` entries for the framework, when a round trip shows a default Pleasanter always adds or drops.
 
 ## Several developers (ADR-0011)
 

@@ -27,17 +27,18 @@ Nothing secret goes into git or into the chat.
    python ai-dlc-pleasanter/tools/pls/pls.py setup
    ```
 
-   It asks four things:
+   It asks five things:
    - the Pleasanter URL;
    - the folder: paste its URL from the browser;
    - your API key: typed hidden;
-   - your login id.
+   - your login id;
+   - whether `pls` may **write** to this Pleasanter from projects made with the profile (`y`/`n`, default `n`). This is your local opt-in, `allow_write` (ADR-0021): writes then go only to an environment with `role: dev` (stg after G4), never to prod. Answer `y` for a dev server you use for demos.
 
    It then checks the folder with your key, finds your user id, and saves a **profile**:
    - `~/.pls/profiles/dev.json` holds the URL, the folder and your user id;
    - the key is stored separately in `~/.pls/profiles/dev.admin.key`, outside every repository.
 
-   Run it again whenever something changes; it offers the stored answers as defaults.
+   Run it again whenever something changes; it offers the stored answers as defaults. A profile saved before setup asked about writes counts as `n` until you answer.
 
 ## Every demo or new app
 
@@ -56,11 +57,11 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - `environments.json` and `.pls/connections.json`, filled in;
 - the first git commit.
 
-`http-check` must show HTTP 200 and `writes: allowed`. Then open Claude Code in the folder and give it the spec. For the demo, follow [`demo/README.md`](../demo/README.md).
+`http-check` must show HTTP 200 and `writes: allowed`. It shows `writes: refused` while `allow_write` is false: answer `y` in `pls setup` for the next projects, or set `"allow_write": true` for this project in `.pls/connections.json` yourself (dev/stg only; never an agent). Then open Claude Code in the folder and give it the spec. For the demo, follow [`demo/README.md`](../demo/README.md).
 
 **Permissions are designed, not set up.** The roles and their groups come out of the design (P2). After G2, on dev, run `python pls.py principals --env dev --create` in your terminal: it lists the groups of the design that do not exist yet, asks you to type `dev`, creates them with you as the only member and binds them (ADR-0017; your dev key must be a tenant administrator). Elsewhere the agent tells you which groups to create in Pleasanter, then binds them with `python pls.py principals --env <env>`.
 
-**Role tests.** With role tests `deferred` (the demo default) the agent works with your key only and proves the restrictions of the other roles in the configuration. With `per-role keys`, run `python pls.py test-users --env dev` in your terminal after `principals` and type `dev`: it creates one test user per role (`zz_test_<project>_<role>`), issues its API key into `.pls/test-users/`, adds `keys.<role>` to `.pls/connections.json` and adds the user to the role's group (ADR-0018, ADR-0019; your dev key must be a tenant administrator). If it ends with PERSON STEP, log in as that user, create its key under User > API settings, save it in the file it names and run it again. Removing test users is by hand for now (TD-24).
+**Role tests.** With role tests `deferred` (the demo default) the agent works with your key only and proves the restrictions of the other roles in the configuration. With `per-role keys`, run `python pls.py test-users --env dev` in your terminal after `principals` and type `dev`: it creates one test user per role (`zz_test_<project>_<role>`), issues its API key into `.pls/test-users/`, adds `keys.<role>` to `.pls/connections.json` and adds the user to the role's group (ADR-0018, ADR-0019; your dev key must be a tenant administrator). If it ends with PERSON STEP, log in as that user, create its key under User > API settings, save it in the file it names and run it again. To remove them again, run `python pls.py test-users --env dev --remove` and type `dev`: it deletes only the test users your machine proves `pls` created there (their password file and a key file the API still accepts), checks they are gone, then removes their key and password files and `keys.<role>`; any other user with that name is left for you to check and delete in Pleasanter (TD-24).
 
 **Pleasanter version (ADR-0009).** Run `python pls.py version --env dev` once. It detects the build and the settings schema by itself. The application version is only shown to a logged-in user, so open `<url>/versions` in your browser and record what it says: `python pls.py version --env dev --app 1.5.2.0`. When the server is upgraded, `http-check` warns that the build changed; run `version` again.
 
@@ -79,11 +80,38 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 **Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, `python pls.py sandbox refresh --name <you>`, `python pls.py apply <R-…>`.
 
+## Environment variables
+
+| Variable | What it changes |
+|---|---|
+| `PLS_HOME` | where the project launcher `pls.py` finds the framework (instead of `path` in `.claude/framework.lock`) |
+| `PLS_CONNECTIONS` | another connection file instead of `.pls/connections.json`; the same role and `allow_write` rules apply to it (ADR-0021). Its `file:` keys must still lie in the project's `.pls/` or your profile folder |
+| `PLS_PROFILE_DIR` | where `pls setup` keeps machine profiles (default `~/.pls/profiles`) — and where key files may be read from besides `.pls/`: set it the same way in every shell that runs `pls`, or a profile key written under it is refused |
+| `PLS_ACTOR` | the name written into the run log as the actor (default: `git config user.name`); self-asserted, not an identity check |
+| `PLS_DEBUG` | `1` prints the Python trace of an unexpected error (exit 3) |
+| key references `env:NAME` | an API key read from the environment variable `NAME` (`.pls/connections.json` → `keys`) |
+
+## When a release does not end applied
+
+`pls apply` writes the state into `releases/<R>/plan.json` (`status`) and `apply-log.json`. Only `planned` can be applied; never run `apply` again for the others.
+
+| Status | What happened | What you do |
+|---|---|---|
+| `refused` (back to `planned`) | nothing was written | fix what the message says, then run `apply` again |
+| `rolled-back` | a site failed; every site already written was restored and read back equal to its rollback file | fix the cause; make a new release plan with a new id |
+| `uncertain` | a write got no answer: the site may or may not hold the new configuration; nothing was restored | export every site of the release (`pls export`), then `pls mark-applied <R> --export <site>=<file> …` records what is there |
+| `recovery-required` | a restore failed or did not read back equal, or the write guard (role, `allow_write`, G4 outside dev, a readable `environments.json`) stopped holding after some sites were written — then nothing more was written and nothing restored | a person restores the sites the message names from `releases/<R>/rollback-<site>.json` in Pleasanter, then exports every site and runs `pls mark-applied` (the message prints the exact command) |
+| `applying` | the process stopped during the writes (crash, closed terminal) | as for `uncertain` |
+| `applied-unverified` | written, read-back not finished | export every site and run `pls mark-applied` |
+
+`role`, `allow_write` and (outside dev) the G4 record are read again before every site of a release and before restoring: switching `allow_write` to false while a release runs stops it before the next write. A site changed by someone else mid-release ends `rolled-back` when the restores read back equal. `bootstrap` reads it again before every site it creates, and `migrate` before every migration folder: a stop leaves what was done recorded (created sites bound, finished migrations in `plan.json`), and running the command again does only the rest. Only the browser runner still checks once per command (TD-39).
+
 ## Commands that need you
 
-`python pls.py bootstrap B-…` (creates sites) and `python pls.py apply R-…` (applies a release) ask you to type the release id, and the agent cannot type it. You have two options:
+`python pls.py bootstrap B-…` (creates sites), `python pls.py apply R-…` (applies a release) and `python pls.py migrate R-…` ask you to type the release id, and the agent cannot type it. You have three options:
 - run the command yourself;
-- tell the agent once: *"you may use --yes for dev in this session"*.
+- tell the agent once: *"you may use --yes for dev in this session"*;
+- **for dev only, once per project:** tell the agent that it may write to dev without asking each time. It records your words with `python pls.py profile set dev-writes on --env dev --approver <you> --quote "<your words>"`, and from then on these three commands on that dev environment run without the question; each release names the record (`apply-log.json` → `confirmed`). A sandbox needs its own record; stg and prod always ask. Withdraw it with `python pls.py profile set dev-writes off --env dev --approver <you> --quote "…"` (ADR-0024).
 
 ## Troubleshooting
 
@@ -104,9 +132,14 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |
 | `REFUSED (ADR-0010)` from `test` or `apply` | The site sends mail and `side_effects.mail` is not safe. Check SMTP with the server operator and set `mail` in `environments.json` (see above). |
 | `L-MAIL-01` from `lint` | A notification or reminder holds a literal mail address. Put it in `values` and use `${env:NAME}`, or use a principal. |
-| `pls skills check` differs | Change skills only in the framework, then run `python pls.py skills sync`. |
+| `pls: unexpected error (…)` (exit 3) | `pls` stopped on something it did not expect; nothing after that point ran. If the message names a file, the disk or the network, fix that and run again. Otherwise run the same command with `PLS_DEBUG=1` set and report the trace. A refusal is exit 2 and says what to do next. |
+| `… has status '…', not 'planned'` | A release plan is used once. If it already wrote (`applying`, `applied-unverified`, `uncertain`, `recovery-required`): export the sites and run `pls mark-applied` as the message says. Otherwise make a new release plan with a new id. |
+| `… is not a site this release may write …` | The plan names a site id that is not this environment's own (stale plan, or a shared site). Check `envs.<env>.sites`, then make a new release plan. |
+| `pls skills check` differs | `project copy was edited`: change skills only in the framework, then run `python pls.py skills sync`. `framework has a newer version`: run `skills sync`. `framework has an older version`: update the framework checkout first (a sync would downgrade). `differs at the same version`: the framework changed a skill without a new version; sync takes it. `no longer in the framework`: sync removes it. `not installed by pls`: a folder of your own under `.claude/skills` — sync leaves it alone; project solutions belong in `patterns/`. `pls.py: the launcher differs`: sync rewrites it. `templates/project/<file>: changed` (or `added`): your project's copy is yours (profile, environments), so nothing copies it over — compare and merge by hand; the next sync stops reporting it. |
+| `WARNING: session … did P… work after a G4` from `usage report` | One Claude Code session held two change requests. Start a new session for each change request (lifecycle §2); the numbers are still counted. |
+| `WARNING: project copies of … were edited` from `step` / `gate` | The command ran. Tell the person; change skills in the framework and run `skills sync`. |
 
-**Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key.
+**Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key; a key file must lie in `.pls/` (next to the connection file) or in your machine-profile folder — any other path is refused.
 
 ## Clean up after a demo
 

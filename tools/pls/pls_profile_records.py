@@ -1,10 +1,13 @@
-"""Profile records: guard inputs a person states outside the four gates (invariant I4, ADR-0014 TB-1/TB-2).
+"""Profile records: guard inputs a person states outside the four gates (invariant I4, ADR-0020, ADR-0014 TB-1/TB-2).
 
 The guard inputs `pls gate`, `pls jobs-verified` and the onboarding check read — profile rows Approvers, Operators,
 Origin — and the `role` of an environment are set only through `pls profile set`, which records the person's words
 under `gates/profile/` like a gate decision and then writes the file. Once a field has a record, the recorded value
 is the one pls uses: a hand edit of the CLAUDE.md row changes nothing and lint L-PRF-01 reports it. A project made
 before these records keeps its rows until the person records them (L-PRF-01 asks for it).
+
+`dev-writes` (per environment, ADR-0024) is the person's standing permission for `apply` / `bootstrap` / `migrate` on
+an environment whose role is dev; the record itself is the state (no file mirrors it), revoked by an `off` record.
 
 Record files (`_load`, `_write`) are shared with the as-is review records (pls_as_is_review_records).
 """
@@ -19,6 +22,9 @@ from pathlib import Path
 FIELDS = ("Approvers", "Operators", "Origin")       # profile rows (CLAUDE.md)
 ROLE = "role"                                       # envs.<env>.role (environments.json)
 ROLES = ("dev", "stg", "prod")
+DEV_WRITES = "dev-writes"                           # standing permission for writes to one dev environment (ADR-0024)
+DEV_WRITES_VALUES = ("on", "off")
+PER_ENV = (ROLE, DEV_WRITES)                        # fields recorded per environment
 PROFILE_DIR = "gates/profile"
 
 
@@ -72,7 +78,7 @@ def _load(root: Path, sub: str, key: str = "value") -> list[dict]:
             all(isinstance(g.get(k), str) and g[k].strip() for k in ("approver", "quote", key))
         if not ok:
             raise GT.GateError(f"{rel}: not a valid record (approver, quote, at, {key}) — a person repairs or removes it")
-        out.append(dict(g, _t=t))
+        out.append(dict(g, _t=t, _path=rel))
     return out
 
 
@@ -93,8 +99,9 @@ def _write(root: Path, sub: str, stem: str, rec: dict, key: str = "value") -> Pa
 # ---------------------------------------------------------------- profile fields and environment roles
 
 def latest(root: Path, field: str, env: str | None = None) -> dict | None:
-    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and (field != ROLE or g.get("env") == env)]
-    return max(hits, key=lambda g: g["_t"]) if hits else None
+    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and (field not in PER_ENV or g.get("env") == env)]
+    # two records at the same instant: the one that allows less wins (a withdrawn permission is never outranked)
+    return max(hits, key=lambda g: (g["_t"], g.get("value") != "on")) if hits else None
 
 
 def effective_profile_text(root: Path) -> str:
@@ -120,6 +127,18 @@ def _check_value(root: Path, field: str, value: str, env: str | None) -> None:
         raise GT.GateError(f"Operators {value!r} names nobody (e.g. 'dev: Nam; stg: Nam; prod: <customer operator>')")
     if field == "Origin" and value not in ("new", "existing"):
         raise GT.GateError("Origin is `new` or `existing`")
+    if field == DEV_WRITES:
+        if value not in DEV_WRITES_VALUES:
+            raise GT.GateError("dev-writes is `on` or `off`")
+        envs = _envs(root)
+        if not env or env not in envs:
+            raise GT.GateError(f"--env must name an environment of environments.json ({', '.join(sorted(envs)) or 'none'})")
+        roles = {(envs.get(env) or {}).get("role"), _role(root, env, envs)}     # the file and the role record
+        if value == "on" and roles != {"dev"}:
+            raise GT.GateError(f"dev-writes applies only to an environment whose role is dev in environments.json and "
+                               f"in its role record ({env}: {sorted(map(str, roles))}) — stg and prod always ask the "
+                               f"person (ADR-0024)")
+        return
     if field == ROLE:
         if value not in ROLES:
             raise GT.GateError(f"role is one of {', '.join(ROLES)}")
@@ -131,7 +150,7 @@ def _check_value(root: Path, field: str, value: str, env: str | None) -> None:
         if not env or env not in envs:
             raise GT.GateError(f"--env must name an environment of environments.json ({', '.join(sorted(envs)) or 'none'})")
     elif field not in FIELDS:
-        raise GT.GateError(f"field is one of {', '.join(FIELDS + (ROLE,))}")
+        raise GT.GateError(f"field is one of {', '.join(FIELDS + PER_ENV)}")
     if field in FIELDS and not _row(field).search(_profile_text(root)):
         raise GT.GateError(f"CLAUDE.md has no '{field}' row — copy it from templates/project/CLAUDE.md first")
 
@@ -154,9 +173,11 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
         raise GT.GateError(f"{approver!r} is not an approver ({', '.join(sorted(pool))})" +
                            ("" if names else " — the first Approvers value must name the person who states it"))
     rec = {"kind": "profile", "field": field, "value": value, "approver": who, "quote": quote.strip(), "recorded_by": recorded_by}
-    if field == ROLE:
+    if field in PER_ENV:
         rec["env"] = env
     out = _write(root, PROFILE_DIR, f"{field}{'-' + env if env else ''}", rec)
+    if field == DEV_WRITES:
+        return out                                  # the record is the state: no file mirrors it
     if field == ROLE:
         p = root / "environments.json"
         doc = json.loads(p.read_text(encoding="utf-8-sig"))
@@ -167,6 +188,40 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
         shown = f"`{value}`" if field == "Origin" else value
         p.write_text(_row(field).sub(lambda _m: f"| {field} | {shown} |", _profile_text(root), count=1), encoding="utf-8", newline="\n")
     return out
+
+
+def _envs(root: Path) -> dict:
+    p = root / "environments.json"
+    try:
+        return (json.loads(p.read_text(encoding="utf-8-sig")).get("envs") or {}) if p.exists() else {}
+    except (OSError, UnicodeDecodeError, ValueError, AttributeError) as ex:
+        raise _gt().GateError(f"environments.json is not readable ({ex})")
+
+
+def _role(root: Path, env: str, envs: dict) -> str | None:
+    """The role pls trusts: environments.json, overruled by the role record when they differ (L-PRF-01)."""
+    rec = latest(root, ROLE, env)
+    return rec["value"] if rec else ((envs.get(env) or {}).get("role"))
+
+
+def dev_writes(root: Path, env: str) -> dict | None:
+    """The standing permission for writes to `env` (ADR-0024): its latest record when it is `on` and the environment
+    is dev in environments.json and in its role record. None means: ask the person. Anything that cannot be read is
+    None too (fail closed: the typed confirmation is asked)."""
+    GT = _gt()
+    try:
+        rec = latest(root, DEV_WRITES, env)
+        envs = _envs(root)
+        names = GT.approvers(effective_profile_text(root))
+    except GT.GateError:
+        return None
+    if not rec or rec.get("value") != "on" or (envs.get(env) or {}).get("role") != "dev" or _role(root, env, envs) != "dev":
+        return None
+    # stated by a person who is an approver now: a record by a former approver does not count. A hand-written record
+    # that names a current approver is not told apart from one written by pls (same trust as gate records, TB-3).
+    if not any(n.casefold() == str(rec.get("approver", "")).casefold() for n in names):
+        return None
+    return rec
 
 
 def lint(root: Path) -> list[dict]:
@@ -190,6 +245,13 @@ def lint(root: Path) -> list[dict]:
             issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md {field} has no record — " + how.format(f=field, v=row, env="")})
     p = root / "environments.json"
     envs = (json.loads(p.read_text(encoding="utf-8-sig")).get("envs") or {}) if p.exists() else {}
+    names = {n.casefold() for n in GT.approvers(effective_profile_text(root))}
+    for env in sorted({g.get("env") for g in _load(root, PROFILE_DIR) if g.get("field") == DEV_WRITES}):
+        rec = latest(root, DEV_WRITES, env)
+        if rec and rec.get("value") == "on" and str(rec.get("approver", "")).casefold() not in names:
+            issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"{rec['_path']}: dev-writes on for {env} stated by "
+                           f"{rec.get('approver')!r}, who is not an approver of the profile — pls ignores it and asks the "
+                           f"person; record it again with an approver's words, or withdraw it (dev-writes off)"})
     for env, ec in envs.items():
         role, rec = (ec or {}).get("role"), latest(root, ROLE, env)
         if rec and role != rec["value"]:

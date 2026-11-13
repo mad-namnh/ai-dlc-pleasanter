@@ -175,6 +175,30 @@ def load(project: Path) -> list[dict]:
     return rows
 
 
+WORK_PHASES = ("P1", "P2", "P3", "P4")
+
+
+def sessions_with_several_change_requests(rows: list[dict]) -> dict[str, list[str]]:
+    """Sessions that did build work (P1–P4) after a G4 step: a second change request in the same Claude Code
+    session, against "one session per change request" (pls-x-lifecycle §2, ADR-0013). Asking G1/G2 of the next
+    change together with G4 is allowed and not reported. Session -> its phases in time order (rows from load())."""
+    by_session: dict[str, list[tuple[str, str]]] = {}
+    for r in rows:
+        if r.get("session") and r.get("phase") and r.get("first"):   # without a time the order is unknown
+            by_session.setdefault(r["session"], []).append((r.get("first") or "", r["phase"]))
+    out = {}
+    for sid, marks in by_session.items():
+        phases = [p for _, p in sorted(marks)]
+        seen_g4 = False
+        for p in phases:
+            if p == "G4":
+                seen_g4 = True
+            elif seen_g4 and p in WORK_PHASES:
+                out[sid] = [p for i, p in enumerate(phases) if i == 0 or p != phases[i - 1]]
+                break
+    return out
+
+
 def report(rows: list[dict], by: str = "phase") -> list[dict]:
     """Totals grouped by 'phase', 'step', 'agent' or 'model' (rows from load())."""
     keyf = {"phase": lambda r: r.get("phase") or "-", "step": lambda r: f"{r.get('phase') or '-'} {r.get('title')}",

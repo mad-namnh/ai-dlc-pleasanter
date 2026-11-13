@@ -29,7 +29,7 @@
       "path": "Views[]",
       "set_default": {"ApiColumnKeyDisplayType": 0, "ApiColumnValueDisplayType": 0, "CalendarSiteId": 0, "ApiDataType": 0},
       "verified_on": "1.5.2",
-      "evidence": "every exported view in sites 42410/42411/44565 carries these fields"
+      "evidence": "every exported view of the slice #1-#3 demo sites (MADLAB dev) carries these fields"
     }
   ]
 }

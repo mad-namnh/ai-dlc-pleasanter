@@ -31,6 +31,8 @@ Answer in the person's language; questions meant for the customer are in Japanes
 
 Before doing anything, establish the state from the repository. Do not rely on memory of an earlier session.
 
+First run `pls skills check`. `project copy was edited` → stop and tell the person: a local edit may have removed a rule, and skills are changed only in the framework (then `pls skills sync`). `framework has a newer version` → tell the person and run `pls skills sync` only after they agree; the session then reads the synced skills. `templates/project/<file>: changed` → tell the person; they merge it into the project's copy by hand (never copied over). `not installed by pls` → tell the person; leave the folder alone. A clean check needs no mention.
+
 | Look at | Tells you |
 |---|---|
 | `requirements/index.md`, the `Status` line of each `REQ-*.md` | P1 done? G1 approved? |
@@ -55,23 +57,29 @@ Tell the user in two or three lines where the project stands and what comes next
    - "Looks good, continue" from the person counts as approval. Silence does not.
    - The same holds for the manual deploy of scheduled scripts (ADR-0012): record `pls jobs-verified R-… --by <name> --quote "<their words>"` only after an operator of that environment (profile row `Operators`) or a G4 approver has said they copied and compared the scripts — never before, never with your own words. If `pls` refuses the name, ask the person; never edit the `Operators` or `Approvers` row to get past it.
 2. **Writes go only to `role: dev` environments, or to `stg` after G4.** `pls` enforces this through `allow_write` in `.pls/connections.json`; never edit that file to get past a refusal. The same holds for `side_effects` in `environments.json` (ADR-0010): only the person records whether an environment sends real mail; on a `REFUSED (ADR-0010)`, ask them.
-3. **`pls apply` and `pls bootstrap` ask the person to type the release id.**
+3. **`pls apply`, `pls bootstrap` and `pls migrate` ask the person to type the release id.**
    - You cannot type it. Show the exact command and ask the person to run it.
    - Alternatively, they tell you to run it with `--yes`. Use `--yes` only after that explicit instruction, and only for the target they named.
+   - **Standing permission for dev (ADR-0024).** When the person says, in their own words, that you may write to a dev environment without asking each time, record it: `pls profile set dev-writes on --env <dev env> --approver <name> --quote "<their words>"` (never your own words, never relayed words). From then on `pls` confirms those three commands on that environment by itself and names the record; you add no `--yes`. A sandbox needs its own record. stg and prod always ask. When they withdraw it: `pls profile set dev-writes off --env <dev env> …`.
 4. **Never read API keys, ask for them, or print them.** If a key is missing, `pls http-check` says which environment variable to set; pass that on to the person.
 5. **No connection, no improvising.** If a `pls` command cannot reach the environment, stop. Tell the person what to check (`pls http-check`), and do not replace a fresh export with an old one: that skips the drift check.
-6. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. Anything not in it is probed on dev (P2 rule) or raised as an open point.
+6. **Do not guess Pleasanter behaviour.** Use `pls-kb-pleasanter`. A shape or behaviour not in it follows `references/kb-gaps.md` (ADR-0023): source at the version's tag, KB probe, `pls kb-verify` by the person, KB and scope key — in the framework, once for every project — or it is raised as an open point.
 7. **Commit at the end of every phase and after every gate decision.** Use local commits with a prefix such as `feat(p1):`, `docs(g1):` or `release(p5):`. Never push unless asked.
 8. **Keep tokens low.**
    - Read `pls` output, not the files it writes. Never open `releases/*/payload-*.json`, `rollback-*.json`, `.pls/exports/*` or `tests/results/*.json` whole. Use `pls diff`, `pls lint`, `pls coverage`, or a short `python -c` / `grep` for one field.
    - Read `config/<site>/site.json` by section (the part you change), not end to end, once it is large.
    - Use HTTP `pls` commands. Never drive the browser runner yourself: it is a fallback for a person on dev only (ADR-0014 TB-7). If no network path exists, tell the person and stop.
    - Do not repeat earlier output back to the person. Summarise.
-   - Prefer the summary forms: `pls lint --summary`, `pls refs --site <s> --summary`; the full list only for the lines you act on.
+   - Prefer the summary forms: `pls lint --summary`, `pls refs --site <s> --summary`, `pls release-plan … --summary` (one scope line per site); the full list only for the lines you act on.
    - **One Claude Code session per change request.** The state lives in the repository (`requirements/`, `design/`, `gates/`, `releases/`, `ops/log/`); a new session reads it with section 1. A long session re-reads its whole context on every turn (ADR-0013: 88 % of a day's tokens).
    - Ask the gates of one release together when the evidence is ready (e.g. G4 of one release with G1/G2 of the next); each is still recorded on its own with `pls gate`.
    - Mechanical filling that a tool checks afterwards (as-is tables, grouping) may run on a smaller model; design, impact analysis and framework reviews stay on the strongest model.
-9. **Log every step (ADR-0013).** At the start of each step run `pls step <phase> "<what starts>"` (phases: onboarding, P1–P6, G1–G4, other). Every `pls` command is logged by itself in `ops/log/`. Before the commit that ends a phase, run `pls usage collect` and commit `ops/log/` and `ops/usage/` with it; `pls usage report --by step` shows the cost of the change request.
+9. **End every phase, and every session, with a completion report** to the person (in their language):
+   - files changed (paths, from `git status` / `git diff --stat` of the phase's commits);
+   - each `pls` command that decided something, with its result (exit code, `0 issues`, `0 differences`, `Ran N … OK`);
+   - open items, and decisions only the person can make, each with your recommendation.
+   Report only results that were produced; a step that was not run is said to be not run (EV-07). At a gate, this report is the evidence part of the gate message (`references/gates.md`).
+10. **Log every step (ADR-0013).** At the start of each step run `pls step <phase> "<what starts>"` (phases: onboarding, P1–P6, G1–G4, other). Every `pls` command is logged by itself in `ops/log/`. Before the commit that ends a phase, run `pls usage collect` and commit `ops/log/` and `ops/usage/` with it; `pls usage report --by step` shows the cost of the change request.
 
 ## 3. Phases
 
@@ -84,7 +92,7 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 
 ### P2 Design → G2
 - Skill: `pls-p2-solution-designer`. For a new app, also its `references/new-sites.md` (ADR-0007).
-- Behaviour the design depends on comes from the KB (new sites: `references/skeletons.md`). A gap is designed around (the safe branch), or carried as an open point that P3's dev round trip confirms. If a probe is unavoidable, it is an open point at G2 for the person; `pls` has no command that writes probe sites, and you do not call the API directly.
+- Behaviour the design depends on comes from the KB (new sites: `references/skeletons.md`). A gap goes through `references/kb-gaps.md` (ADR-0023): the shape from the Pleasanter source at the version's tag, then a framework KB probe that the person runs with `pls kb-verify --env <dev>`. Until it passes, the design keeps the safe branch and names the probe as an open point at G2. You never call the API directly, and a project dev release is not the evidence.
 - A new app also gets these outputs:
   - `environments.json`: each site name in `managed_sites`, and `envs.<env>.sites.<site>` = `{"title": "<env>_<title>"}` (no id yet);
   - `config/<site>/meta.json` with `ReferenceType`;
@@ -95,10 +103,10 @@ Run each phase with its skill. The bullets list what this skill adds: the order,
 ### P3 Build (no gate)
 Skill: `pls-p3-config-builder`.
 
-0. **Principals (after G2).** On dev, ask the person to run `python pls.py principals --env dev --create` in their terminal: it lists the groups of `design/roles.json` that do not exist yet and creates them, with the operator as member, after the person types the environment name (never add `--yes` yourself; ADR-0017). Elsewhere, tell the person which groups to create in Pleasanter. Then run `pls principals --env <e>`, which binds their ids by name and is read only; a name that matches several groups is refused (the person removes the extra ones). Exit 1 lists the groups still missing. `pls lint` must then show no L-REF-02. Test users and keys exist only with role tests `per-role keys`: then, on dev, ask the person to run `python pls.py test-users --env dev` in their terminal after `pls principals` (it creates one test user per Group role, issues its key into `.pls/` and adds it to the role's group, after the person types the environment name; never add `--yes` yourself; ADR-0018, ADR-0019). Never read the files under `.pls/test-users/`. Tell the person before they run it: an exit 1 with a `PERSON STEP` line means a key `pls` could not issue (the version is not verified for it); they log out of Pleasanter, log in as the test user named there (its password is in the file the line names), create the key under User > API settings, save it in the file the line names, and run `test-users` again. Test users exist on dev only: on stg and prod `pls` creates no groups and no test users (the customer creates the groups; `pls principals --env <e>` only binds them).
+0. **Principals (after G2).** On dev, ask the person to run `python pls.py principals --env dev --create` in their terminal: it lists the groups of `design/roles.json` that do not exist yet and creates them, with the operator as member, after the person types the environment name (never add `--yes` yourself; ADR-0017). Elsewhere, tell the person which groups to create in Pleasanter. Then run `pls principals --env <e>`, which binds their ids by name and is read only; a name that matches several groups is refused (the person removes the extra ones). Exit 1 lists the groups still missing. `pls lint` must then show no L-REF-02. Test users and keys exist only with role tests `per-role keys`: then, on dev, ask the person to run `python pls.py test-users --env dev` in their terminal after `pls principals` (it creates one test user per Group role, issues its key into `.pls/` and adds it to the role's group, after the person types the environment name; never add `--yes` yourself; ADR-0018, ADR-0019). Never read the files under `.pls/test-users/`. Tell the person before they run it: an exit 1 with a `PERSON STEP` line means a key `pls` could not issue (the version is not verified for it); they log out of Pleasanter, log in as the test user named there (its password is in the file the line names), create the key under User > API settings, save it in the file the line names, and run `test-users` again. When the test users are no longer needed, ask the person to run `python pls.py test-users --env dev --remove` in their terminal (it deletes only the test users their machine proves `pls` created there, then their files and `keys.<role>`, after they type the environment name; never add `--yes` yourself); a `PERSON STEP` line names a user they check and delete in Pleasanter. Test users exist on dev only: on stg and prod `pls` creates no groups and no test users (the customer creates the groups; `pls principals --env <e>` only binds them).
 1. **New sites only, once per environment:**
    1. `pls bootstrap-plan --env dev --release B-YYYYMMDD-dev`
-   2. The person runs (or allows `--yes` for) `pls bootstrap B-YYYYMMDD-dev`. This creates the skeletons and writes their ids into `environments.json`.
+   2. The person runs (or allows `--yes` for) `pls bootstrap B-YYYYMMDD-dev` — or you run it when the standing permission for dev is recorded (section 2 rule 3). This creates the skeletons and writes their ids into `environments.json`.
    3. `pls export --env dev --site <s>` for each site.
    4. `pls unpack --env dev --site <s> <export>`.
 
@@ -110,14 +118,14 @@ Skill: `pls-p3-config-builder`.
 3. **Deploy to dev** as a dev release:
    1. `pls export --env dev --site <s>` for each site.
    2. `pls release-plan --env dev --release R-YYYYMMDD-NN-dev --export <s>=<export> …`
-   3. The person runs `pls apply R-YYYYMMDD-NN-dev`, or allows `--yes`. This applies, exports again and runs `mark-applied`.
+   3. The person runs `pls apply R-YYYYMMDD-NN-dev`, or allows `--yes`, or you run it under the recorded standing permission for dev (section 2 rule 3). This applies, exports again and runs `mark-applied`.
 4. **If `mark-applied` reports differences** (status `applied-differs`, files `live-<site>.json`): Pleasanter canonicalised something (D8). The live state becomes the drift baseline, so the follow-up release is not refused.
    - Fold the live value back into `config/`. If it is a default, `pls canon` may already know it; otherwise edit `config/`.
    - Commit, and plan the next dev release (…-NN+1-dev) until the round trip shows 0 differences.
 5. **If the plan is refused, read the reason:**
    - **drift:** someone changed dev → explain it, ask the person, and record the decision before `--accept-drift`;
    - **slot finding:** go back to the design;
-   - **scope** (`SCOPE … no round-trip evidence`, ADR-0001): the site uses a component never proven to round-trip. Tell the person; it is probed on a copy in dev, or the person writes a decision record for `--accept-unverified`. Never write that record yourself;
+   - **scope** (`SCOPE … no round-trip evidence`, ADR-0001): the site uses a component never proven to round-trip. Tell the person, and follow `references/kb-gaps.md` (ADR-0023): the framework gets a probe, the person runs `pls kb-verify`, and the key is added to the scope with that evidence; then `pls skills sync` and plan again. Build and deploy the other elements meanwhile, without the unverified key. Do not ask for `--accept-unverified`, and never write that record yourself;
    - **data-impacting without a migration:**
      - First check that the sites created by bootstrap have their record `releases/B-*/bootstrap.json`. Without it `pls` does not know they are new, and treats e.g. a new summary as data-impacting. Recover the record; do not reopen G2 for this.
      - Otherwise P2 missed it → back to G2.
@@ -172,7 +180,14 @@ To see how environments differ, compare local files only: `pls env-compare --sit
 A change request follows the same order. The differences:
 - P1 starts from the current `config/` (impact analysis).
 - No bootstrap.
-- A data-impacting change needs a migration folder before `release-plan` accepts it (ADR-0004). The data moves with `pls migrate R-…` before `pls apply` (same guards as apply; the person runs it or tells you to use `--yes`).
+- A data-impacting change needs a migration folder before `release-plan` accepts it (ADR-0004). The data moves with `pls migrate R-…` before `pls apply` (same guards as apply; the person runs it or tells you to use `--yes`; on dev also under the standing permission, section 2 rule 3).
+
+## Checklist at the end of a session
+
+- [ ] `git status` clean, or what is left uncommitted is named in the report and why.
+- [ ] Completion report given (section 2 rule 9); every gate decision of the session recorded with `pls gate` before its status line.
+- [ ] `pls usage collect` run and `ops/log/`, `ops/usage/` committed with the phase (section 2 rule 10).
+- [ ] The next step is named, so the next session starts from section 1 without this conversation.
 
 ## 5. When something is not covered here
 

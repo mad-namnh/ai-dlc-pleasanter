@@ -1,5 +1,7 @@
 # SiteSettings schema facts (verified on 1.5.2)
 
+Evidence: spike round 1 (`spike/round-trip/report-20261105.md`) and slices #1–#3 (`docs/slices/slice-01-report.md` … `slice-03-report.md`), MADLAB dev 1.5.2, unless a row names its own D-entry, probe or source; rows marked source-derived are not verified on a server.
+
 JSON property names are the UI field ids **without the `Process`/`Column` prefix** (`ProcessDisplayName` → `DisplayName`). Unknown properties are silently dropped on save; default-valued properties are omitted (D8).
 
 ## Columns (`SiteSettings.Columns[]`)
@@ -59,6 +61,18 @@ Editor layout: `EditorColumnHash.General` (ordered list). Grid: `GridColumns`. F
 |---|---|
 | Link (child → parent) | child `Columns[ClassX].ChoicesText = "[[parentSiteId]]"` + `Links: [{ColumnName: "ClassX", SiteId: parentSiteId}]`; record value = parent record Id as string |
 | Summary (on the child) | `{Id, SiteId: parent, DestinationReferenceType, DestinationColumn, LinkColumn, Type: Count/Total, SourceColumn?, SourceCondition?: childViewId, SetZeroWhenOutOfCondition?}` (D16, D23) |
-| Issues view | `Overdue: true` (D24); built-in `StartTime` / `CompletionTime`; editor key `IssueId` (Results: `ResultId`) |
+| Issues view | `Overdue: true` (D24); `NearCompletionTime: true` (D33); built-in `StartTime` / `CompletionTime`; editor key `IssueId` (Results: `ResultId`) |
 | Process data change | `{Type: "InputDate", ColumnName, BaseDateTime: "CurrentDate"}` — `CurrentDate` is the default and is dropped on save (D8) |
 | Issues defaults dropped on save (D8) | `Columns[CompletionTime].ValidateRequired: true` and `Columns[Status].DefaultInput: "100"` are defaults — do not keep them in git (equipment demo R-E01) |
+| Issues view `NearCompletionTime` (D33, verified 1.5.2 by probe `D33-near-completion-range`, 2026-11-12) | View `{…, NearCompletionTime: true}`, stored as given; also accepted as API `View`. Lists records whose `CompletionTime` is from `today − NearCompletionTimeBeforeDays` to `today + NearCompletionTimeAfterDays` inclusive. Source-derived only, not exercised: no Status condition (completed records stay); the negative filter (`not between`) |
+| Site `NearCompletionTimeBeforeDays`, `NearCompletionTimeAfterDays` (D33, verified 1.5.2) | top-level `SiteSettings` numbers; `0` and `90` sent through `updatesite` were stored as `0.0` and `90.0`, and 90 was used by the view filter — the `General.json` Max (30 as shipped) did not limit it. Source-derived only, not exercised: empty = `General.json` value (7 / 7 as shipped), stored only when different (D8 pattern). **Open:** a customer installation may change `General.json` |
+
+## Source-derived, not verified on a server
+
+Everything in this section was read in the Pleasanter source (GitHub Implem/Implem.Pleasanter, tag `Pleasanter_1.5.2.0`, read 2026-11-11) and has **not** been observed on a server, except where a row names round-trip evidence. Treat the rest as an assumption until an entry in `probes/index.json` lists the target version.
+
+| Setting | Shape (source: Pleasanter_1.5.2.0, not verified on a server unless the row says **Verified**) |
+|---|---|
+| `Aggregations[]` (grid aggregation) | **Verified:** the top-level key round-trips (slices #1–#3, 1.5.2; `tools/pls/pls_scope.py` `VERIFIED_KEYS`), with `GroupBy: "Status"`, `Type: 0`. **Source-derived, not verified:** the full field list `{Id (long), GroupBy (string, column name), Type, Target (string, column name)}`, `Type` 1 Total and 2 Average; computed results (`Data`) are not serialized. No probe yet: a `Type: 1` probe is possible with `expect_stored` only (its result is not visible through the API) and is not written (open item) |
+| `Reminders[]` | **Verified:** the top-level key round-trips (slices #1–#3, 1.5.2; `VERIFIED_KEYS`), seen in a canonical export on MADLAB dev with `Type: 10`, `ReminderType: 1`, `Condition`, `Range`, `To: "[Owner]"`. **Source-derived, not verified:** the full field list `{Id, ReminderType, Subject, Body, Line, From, To, Token, Column, StartDateTime, Type (repeat type), Range, SendCompletedInPast, NotSendIfNotApplicable, NotSendHyperLink, ExcludeOverdue, Condition (view Id), Disabled}` and `ReminderType` 2 Slack, 3 ChatWork, 4 Line, 5 LineGroup, 6 Teams, 7 RocketChat, 8 InCircle, 9 LineWorks (1 Mail is the value seen). No probe: reminders cannot be probed by `kb-verify` (probe sites refuse mail elements) |
+| Reminder `To` tokens | **Verified:** a column token (`[Owner]`) round-trips (above). **Source-derived, not verified:** other `[<ColumnName>]` tokens (e.g. `[ClassD]`, `[Manager]`) expanded per record; `[Group<id>]` → the group's members, `[User<id>]`, `[Dept<id>]` (`Libraries/Mails/Addresses.cs`). The ids are environment-specific: `pls` stores them as `[${principal:x}]` in git and writes the environment's id back on pack (`tools/pls/pls_address_principals.py`; same idea as D15) |

@@ -9,7 +9,11 @@ For each role of design/roles.json with principal "Group" that `pls principals` 
   3. `keys.<role>` is added to `.pls/connections.json` when the role has no key yet (never replaced);
   4. the user joins the role's group: read, add, write, check (ADR-0019 B) — the read list with every flag,
      `GroupName` and `Body` as read, `UpdatedTime`/`Ver` re-read just before the write.
-Nothing of a password, key or cookie is printed or logged. Removal and rotation are not built (tech debt TD-24).
+An existing user with the test LoginId is written to (joined to the group) only after this machine proves it is the
+one pls created here: its key file, or a key issued now by logging in with its stored password, is accepted by the
+API. A password file alone does not prove it (the user may have been deleted and made again by someone else).
+Nothing of a password, key or cookie is printed or logged. Removal: `--remove` (pls_test_users_removal); rotation is
+not built (tech debt TD-24).
 """
 from __future__ import annotations
 
@@ -236,7 +240,8 @@ def write_test_users(entries: list[dict], client, client_for, screens, may_issue
     left = []
     for e in entries:
         role, login = e["role"], e["login"]
-        if e["uid"] is None:
+        created_now = e["uid"] is None
+        if created_now:
             password = secrets.token_urlsafe(18) + "aA1!"
             write_secret(e["pw_file"], password)                 # first: an unanswered create keeps the password
             st, uid, text = client.create_user(login, f"pls test user: role {role}", password)
@@ -262,7 +267,12 @@ def write_test_users(entries: list[dict], client, client_for, screens, may_issue
             add_key_ref(role, e["ref"])
             e["add_ref"] = False
             print(f"{role}: connections file keys.{role} = {e['ref']}")
-        if e["join_planned"]:
+        if e["join_planned"] and not (created_now or e["key_ok"]):
+            left.append(f"{role}: user {login} (User,{uid}) was not joined to group '{e['group_name']}' — without a "
+                        "working key this machine cannot prove it is the user pls created here; issue its key as the "
+                        "line above says and run pls test-users again. If you cannot log in as it with the password "
+                        "in the file, it is someone else's user with the same LoginId: check it in Pleasanter")
+        elif e["join_planned"]:
             add_test_user_to_group(client, e, uid, log)
         elif not is_member(e["group"], uid):
             left.append(f"{role}: User,{uid} is no longer a member of group '{e['group_name']}' (changed since the "

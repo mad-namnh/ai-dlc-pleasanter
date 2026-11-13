@@ -17,8 +17,10 @@ Commands:
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
-                                                set Approvers / Operators / Origin (CLAUDE.md) or role (environments.json)
-                                                as the person stated it; recorded under gates/profile/ (I4)
+                                                set Approvers / Operators / Origin (CLAUDE.md), role (environments.json)
+                                                or dev-writes on|off (standing permission for apply / bootstrap /
+                                                migrate on a dev environment, ADR-0024) as the person stated it;
+                                                recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
@@ -73,17 +75,20 @@ import pls_compare as CMP                                   # noqa: E402 — one
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
 import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
+import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
 import pls_test_users as TU                                 # noqa: E402 — test users for role tests (ADR-0018/0019)
+import pls_test_users_removal as TR                         # noqa: E402 — removing them again (TD-24)
 import pls_package as PK                                    # noqa: E402 — release package for the customer (ADR-0003)
 import pls_release_digest as RD                             # noqa: E402 — content a G4 approval covers
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
+import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -99,7 +104,7 @@ SECRET_RES = {
     "bearer-token": re.compile(r"(?i)bearer\s+[A-Za-z0-9\-\._~\+/]{20,}"),
     # one quoted literal right after the name (the blob is JSON-escaped: quotes may be \"): the value has no blank
     # and no escape such as \n, and closes with the same quote — so `'…access_token=' + encode(accessToken)` spanning
-    # lines is not a secret (PLAY BOARD false alarm, 2026-11-08)
+    # lines is not a secret (false alarm on a brownfield trial app, 2026-11-08)
     "assigned-secret": re.compile(r"""(?i)(api[_-]?key|secret|password|token)\\?["']?\s*[:=]\s*\\?(["'])[^"'\s\\]{12,}\\?\2"""),
 }
 
@@ -388,6 +393,7 @@ def logical(export: Any, e: dict) -> dict:
                            reference=SX.references_for(ids.get(str(d.get("SiteId"))), ids)),
     }
     acl_to_refs(model["settings"], e)
+    AP.to_refs(model["settings"], e.get("principals") or {})
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
     if "Title" in d:      # per environment (environments.json title): compared on read-back, never written to git
@@ -503,6 +509,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
+    AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
     m = from_refs(m0, e)
     ss = m["settings"]
     for kind, items in m["scripts"].items():
@@ -760,6 +767,13 @@ def lint(r: Path) -> list[dict]:
                 if name_ not in known:
                     issues.append({"rule": "L-REF-02", "site": site, "msg": f"${{{kind_}:{name_}}} is not defined for env '{env_name}' "
                                    f"({'principals in environments.json - run pls principals after creating the group' if kind_ == 'principal' else 'sites/managed_sites in environments.json' if kind_ == 'site' else 'values in environments.json'})"})
+        for name_ in sorted({n for k, n in REF_RE.findall(blob) if k == "env"}):   # address ids belong in principals
+            for env_name, ec in e_all["envs"].items():
+                tok = AP.TOKEN.search(str((ec.get("values") or {}).get(name_, "")))
+                if tok:
+                    issues.append({"rule": "L-PERM-01", "site": site, "msg": f"${{env:{name_}}} holds the mail address id {tok.group(0)} "
+                                   f"for env '{env_name}': write [${{principal:<name>}}] in the address and map the principal in "
+                                   "environments.json principals instead (ADR-0023)"})
         for name_ in sorted(embedded_env_refs(m)):                 # L-REF-04: an embedded value must map back at unpack
             weak = sorted(env_name for env_name, ec in e_all["envs"].items()
                           if name_ in (ec.get("values") or {}) and not env_value_embeddable(ec["values"][name_]))
@@ -797,6 +811,9 @@ def lint(r: Path) -> list[dict]:
                 for x in proc.get(key) or []:
                     if not str(x).startswith("${principal:"):
                         issues.append({"rule": "L-PERM-01", "site": site, "msg": f"process '{proc.get('Name')}' {key} uses an environment-specific id {x}; map it in environments.json principals"})
+        for path, tok in AP.raw_tokens(m["settings"]):
+            issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{path}: mail address {tok} uses an environment-specific id; "
+                           "map the principal in environments.json principals (git holds [${principal:<name>}])"})
         perms = m.get("permissions")
         if perms is not None:
             if not str(perms.get("inherit", "")).startswith("${site:"):
@@ -1206,10 +1223,61 @@ def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str
     return bad
 
 
+def write_guard_now(r: Path, env: str, release: str, what: str = "applying") -> None:
+    """The write guard, read again from the files before every site's write and every restore of `apply`, every
+    `createsite` of `bootstrap` and every migration of `migrate`:
+    role and allow_write (`assert_writable`) and, outside dev, the G4 record of the release. Anything that stops the
+    check — an unreadable or changed environments.json, a missing record — is a TransportError: writing stops."""
+    import pls_http as H
+    try:
+        e = env_conf(r, env)
+    except (Fail, ValueError, OSError) as ex:
+        raise H.TransportError(f"environments.json cannot be checked ({ex})")
+    H.assert_writable(e, H.load_connection(r, env), env)
+    if e.get("role") != "dev":
+        try:
+            GT.require(r, "G4", release, f"{what} in {env}")
+        except (GT.GateError, Fail, ValueError, OSError) as ex:
+            raise H.TransportError(str(ex))
+
+
+def not_planned_message(release: str, plan: dict) -> str:
+    """Refusal for a release that is no longer 'planned', with what the person does next: a release that started
+    writing is read back (`pls mark-applied`), never applied again; any other one is replaced by a new plan."""
+    st = plan.get("status")
+    sites = plan.get("sites") if isinstance(plan.get("sites"), list) else []
+    exports = " ".join(f"--export {s}=<file>" for s in sites) or "--export <site>=<file> …"
+    if st in OPEN_STATES:
+        return (f"{release} has status {st!r}, not 'planned' — it already wrote to the environment; do not apply it "
+                f"again. Export every site of the release (pls export), then pls mark-applied {release} {exports} "
+                f"records what each site holds.")
+    return (f"{release} has status {st!r}, not 'planned' — a release plan is used once. For another change make a "
+            f"new release plan (pls release-plan with a new id).")
+
+
+def stale_site_message(release: str, site: str, site_id, env: str) -> str:
+    """Refusal for a plan whose site id is not one this environment may write (ADR-0011), with the next action."""
+    return (f"{release}: {site} → site {site_id} is not a site this release may write in {env} (stale plan, or a "
+            f"shared site). Check envs.{env}.sites in environments.json, then make a new release plan "
+            f"(pls release-plan with a new id).")
+
+
 def apply_outcome_message(release: str, plan: dict, res: dict) -> str:
     """What happened and what the person does next, for every apply result except success."""
     st, site = res["status"], res.get("failed_site")
     exports = " ".join(f"--export {s}=<file>" for s in plan["sites"])
+    if res.get("guard_stop"):
+        written = res.get("touched") or []
+        where = f"after the failed write of {site}" if res.get("guard_at") == "after" else f"before {site}"
+        head = f"{release}: STOPPED {where} — the write guard no longer holds ({res['guard_stop']}); nothing more was written"
+        if not written:
+            return head + ". The release is still planned: fix the guard and run apply again."
+        if st == "rolled-back":
+            return (head + f" and no restore was sent, yet {', '.join(written)} read back equal to the rollback files: "
+                    f"the environment holds the previous state. Make a new release plan (pls release-plan with a new id).")
+        return (head + f" and {', '.join(written)} was NOT restored. Restore it from releases/{release}/rollback-<site>.json "
+                f"(a person, in Pleasanter), then export every site and run pls mark-applied {release} {exports} to record "
+                f"the state.")
     if st == "refused":
         return f"{release}: refused — nothing was written"
     if st == "rolled-back":
@@ -1364,8 +1432,20 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     }
 
 
+def summarize_scope(site: str, msgs: list[str], top: int = 5) -> list[str]:
+    """`--summary` of the scope refusal: one line per site (count and the first names) instead of one line per
+    component; every other message is kept as it is, and the full list is one command away (without --summary)."""
+    prefix = f"SCOPE {site}: "
+    names = [m[len(prefix):].replace(" (no round-trip evidence)", "") for m in msgs if m.startswith(prefix)]
+    if not names:
+        return msgs
+    line = (f"SCOPE {site}: {len(names)} component(s) without round-trip evidence: {', '.join(names[:top])}"
+            f"{' …' if len(names) > top else ''} (all of them: run again without --summary)")
+    return [line] + [m for m in msgs if not m.startswith(prefix)]
+
+
 def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: str | None, migration: str | None = None,
-                 accept_unverified: str | None = None) -> int:
+                 accept_unverified: str | None = None, summary: bool = False) -> int:
     need_onboarding(r, "release-plan")
     e = env_conf(r, env)
     if (r / "releases" / release / "plan.json").exists():
@@ -1392,7 +1472,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                        "a sandbox deploys only its own copies (ADR-0011)")
         ok, msgs, res = plan_site(r, e, env, site, rj(Path(path)), accept_drift, accept_unverified)
         shared = shared_write_refusals(e, env, site, read_tree(r / "config" / site))
-        for m in msgs + shared:
+        for m in (summarize_scope(site, msgs) if summary else msgs) + shared:
             print(m)
         failed |= not ok or bool(shared)
         results[site] = res
@@ -1582,7 +1662,8 @@ def adopt_package(r: Path, a) -> int:
     for name, out in created:                                         # every id is known now: map references again
         try:
             with contextlib.redirect_stdout(io.StringIO()):
-                ok = main(["unpack", str(out), "--env", a.env, "--site", name]) == 0 and main(["canon", "--site", name]) == 0
+                unpack(r, a.env, out, name)                           # adopt wrote this folder in this run
+                ok = main(["canon", "--site", name]) == 0
         except Exception:                                             # noqa: BLE001
             ok = False
         if not ok:                                                    # a rerun prints "already": say how to finish
@@ -2032,6 +2113,31 @@ def sandbox_drop(r: Path, name: str) -> int:
     return 0
 
 
+def unpack(r: Path, env: str, export: Path, site: str) -> None:
+    """Write the export of a site into config/<site> (its whole tree is replaced)."""
+    model = logical(rj(export), env_conf(r, env))
+    refuse_secrets(model, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
+    write_tree(model, r / "config" / site)
+
+
+def refuse_uncommitted_site(r: Path, site: str) -> None:
+    """`pls unpack` replaces config/<site>: refused while it holds uncommitted edits or new files (as `harvest` is),
+    so work nobody committed is never overwritten. Outside a git repository there is nothing to compare with: said
+    and allowed (`pls init` does not create the repository)."""
+    import subprocess
+    try:
+        inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=r, capture_output=True, text=True,
+                                encoding="utf-8").stdout.strip() == "true"
+    except OSError:
+        inside = False
+    if not inside:
+        print(f"note: {r} is not a git repository - config/{site} is replaced without checking for uncommitted edits")
+        return
+    if _git(r, "status", "--porcelain", "--untracked-files=all", "--", f"config/{site}").strip():
+        raise Fail(f"config/{site} has uncommitted changes — commit or stash them before unpacking (unpack replaces "
+                   "the whole folder)")
+
+
 def harvest(r: Path, env: str, site: str) -> int:
     """Bring the configuration of a site as it is on `env` into config/<site> (read only towards Pleasanter).
     Refuses when config/<site> has uncommitted changes, so a harvest never mixes with unsaved work."""
@@ -2075,7 +2181,8 @@ def merge_site_files(base: str, ours: str, theirs: str) -> int:
 
 
 def merge_install(r: Path) -> int:
-    """Register the semantic merge for config/*/site.json in this repository (local git config + .gitattributes)."""
+    """Register the semantic merge for config/*/site.json in this repository (local git config + .gitattributes;
+    ADR-0011, ADR-0022)."""
     if not (r / "pls.py").exists():
         raise Fail("merge-install runs in a project repository (pls.py launcher at its root)")
     ga = r / ".gitattributes"
@@ -2170,7 +2277,7 @@ def bind(r: Path, env: str, release: str, created: dict) -> int:
     return 0
 
 
-# ---------------------------------------------------------------- project scaffold and skills (Step 4b D3)
+# ---------------------------------------------------------------- project scaffold and skills (Step 4b D3, ADR-0022)
 
 FRAMEWORK = Path(__file__).resolve().parents[2]
 LAUNCHER = """#!/usr/bin/env python3
@@ -2183,7 +2290,16 @@ import sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
-home = os.environ.get("PLS_HOME") or json.loads((here / ".claude" / "framework.lock").read_text(encoding="utf-8-sig"))["path"]
+lock = here / ".claude" / "framework.lock"
+home = os.environ.get("PLS_HOME")
+if not home:
+    try:
+        home = json.loads(lock.read_text(encoding="utf-8-sig"))["path"]
+    except (OSError, ValueError, KeyError, TypeError):
+        home = None
+    if not isinstance(home, str) or not home:
+        sys.exit(f"pls: no framework path - {lock} is missing or has no 'path'. Restore it (pls init writes it) "
+                 "or set the PLS_HOME environment variable to the framework folder")
 tool = (here / home).resolve() / "tools" / "pls" / "pls.py"
 if not tool.exists():
     sys.exit(f"pls not found at {tool} - set 'path' in .claude/framework.lock or the PLS_HOME environment variable")
@@ -2233,26 +2349,108 @@ def _relpath(target: Path, base: Path) -> str:
         return target.as_posix()
 
 
+def _template_hashes(fw: Path) -> dict[str, str]:
+    """sha256 of each file of templates/project (line endings normalised), by its path in the project."""
+    tpl = fw / "templates" / "project"
+    return {f.relative_to(tpl).as_posix(): hashlib.sha256(f.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+            for f in sorted(tpl.rglob("*")) if f.is_file()} if tpl.is_dir() else {}
+
+
+def template_changes(lock: dict, fw: Path) -> list[str]:
+    """Template files changed or added in the framework since the hashes in the lock. The project owns its copies
+    after `pls init` (profile, environments), so they are never copied over: a person merges them by hand. A lock
+    without template hashes (made before they were recorded) reports nothing until the next sync records them."""
+    seen = lock.get("template")
+    if not isinstance(seen, dict):
+        return []
+    return [f"templates/project/{f}: {'added' if f not in seen else 'changed'} in the framework since the last sync - "
+            f"compare it with the project's {f} and merge by hand (never copied over)"
+            for f, h in _template_hashes(fw).items() if seen.get(f) != h]
+
+
+def _foreign_skill_dirs(proj: Path, lock: dict, fw_skills: dict) -> list[str]:
+    d = proj / ".claude" / "skills"
+    known = set(lock.get("skills") or {}) | set(fw_skills)
+    return sorted(x.name for x in d.iterdir() if x.is_dir() and x.name not in known) if d.is_dir() else []
+
+
+def _remove_skill_dir(dest: Path, name: str) -> None:
+    """Empty .claude/skills/<name>. Refused when it, or anything in it, is a link (symlink or junction) or resolves
+    outside .claude/skills: a sync deletes only files that are really in the project's skill folder."""
+    import os
+    tgt, base = dest / name, os.path.realpath(dest)
+    inner = sorted(tgt.rglob("*"), reverse=True)
+    for p in [tgt, *inner]:
+        inside = os.path.normcase(os.path.join(base, os.path.relpath(p, dest)))
+        if p.is_symlink() or os.path.normcase(os.path.realpath(p)) != inside:       # a junction resolves elsewhere
+            raise Fail(f".claude/skills/{name}: {p.relative_to(dest).as_posix()} is a link or points outside "
+                       ".claude/skills - pls skills sync deletes nothing there; remove the link by hand, then sync")
+    for f in inner:
+        f.unlink() if f.is_file() else f.rmdir()
+
+
 def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
+    """Install the framework's skills and launcher into the project. Skills pls installed that the framework no longer
+    has are removed; folders pls did not install are left alone; template files are only reported (`template_notes`)."""
     dest = proj / ".claude" / "skills"
     vers, skills = _skill_versions(fw), {}
-    for name, src in _framework_skills(fw).items():
+    lock_p = proj / ".claude" / "framework.lock"
+    lock = rj(lock_p) if lock_p.exists() else {}
+    fw_skills = _framework_skills(fw)
+    for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
+        if re.fullmatch(r"[a-z0-9-]+", name) and (dest / name).is_dir():   # a lock name never reaches outside
+            _remove_skill_dir(dest, name)
+            (dest / name).rmdir()
+    for name, src in fw_skills.items():
         tgt = dest / name
         if tgt.exists():
-            for f in sorted(tgt.rglob("*"), reverse=True):
-                f.unlink() if f.is_file() else f.rmdir()
+            _remove_skill_dir(dest, name)
         for f in src.rglob("*"):
             if f.is_file():
                 (tgt / f.relative_to(src)).parent.mkdir(parents=True, exist_ok=True)
                 (tgt / f.relative_to(src)).write_bytes(f.read_bytes())
         skills[name] = {"version": vers.get(name, "?"), "sha256": _tree_sha(tgt)}
-    lock_p = proj / ".claude" / "framework.lock"
-    lock = rj(lock_p) if lock_p.exists() else {}
+    (proj / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
+    notes = template_changes(lock, fw)
     lock.update({"framework": "ai-dlc-pleasanter", "path": lock.get("path") or _relpath(fw, proj),
                  "commit": _framework_commit(fw), "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
-                 "skills": skills})
+                 "skills": skills, "template": _template_hashes(fw)})
     wj(lock_p, lock)
-    return lock
+    return {**lock, "template_notes": notes}
+
+
+def _version_key(v) -> tuple | None:
+    """'0.22' -> (0, 22); None for anything else, so an unknown version is never called older or newer."""
+    return tuple(int(x) for x in v.split(".")) if isinstance(v, str) and re.fullmatch(r"\d+(\.\d+)*", v) else None
+
+
+def _version_direction(project_v, framework_v) -> str:
+    """Why a project copy differs from the framework's skill, from the versions (a hash alone cannot tell the direction)."""
+    p, f = _version_key(project_v), _version_key(framework_v)
+    if p is not None and f is not None and f > p:
+        return f"framework has a newer version ({project_v} in the project, {framework_v} in the framework) - `pls skills sync` to upgrade"
+    if p is not None and f is not None and f < p:
+        return (f"framework has an older version ({project_v} in the project, {framework_v} in the framework) - the framework "
+                f"checkout is behind: update it before any sync, or the sync would downgrade the project")
+    return (f"framework copy differs at the same version ({framework_v or '?'}) - the framework changed the skill without a "
+            f"new version; `pls skills sync` takes it, and the framework should give it a version")
+
+
+def edited_skill_warning(r: Path) -> str | None:
+    """WARNING for `step` / `gate` when a project copy of a skill was edited. It warns and never refuses (Nam's
+    decision, 2026-11-12): a project must not be stopped at a gate by a skill copy. Logged on `gate` (`skills_edited`);
+    a `step` writes its own marker event first, so the warning is not in it."""
+    if not (r / ".claude" / "framework.lock").exists():
+        return None
+    try:
+        edited = sorted(p.split(":")[0] for p in skills_check(r, FRAMEWORK) if "project copy was edited" in p)
+    except Exception:                                 # noqa: BLE001 — a check that cannot run never blocks a step
+        return None
+    if not edited:
+        return None
+    LG.record_metric(skills_edited=edited)
+    return (f"WARNING: project copies of {', '.join(edited)} were edited (differ from .claude/framework.lock) - the rules "
+            f"you follow may not be the framework's. Tell the person; skills are changed in the framework, then `pls skills sync`.")
 
 
 def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
@@ -2267,10 +2465,23 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
         elif _tree_sha(d) != entry["sha256"]:
             problems.append(f"{name}: project copy was edited (differs from the lock) - change skills in the framework, then sync")
         elif name in fw_skills and _tree_sha(fw_skills[name]) != entry["sha256"]:
-            problems.append(f"{name}: framework has a newer version ({_skill_versions(fw).get(name, '?')}) - `pls skills sync` to upgrade")
+            problems.append(f"{name}: " + _version_direction(entry.get("version"), _skill_versions(fw).get(name)))
     for name in sorted(set(fw_skills) - set(lock.get("skills") or {})):
         problems.append(f"{name}: in the framework but not installed - `pls skills sync`")
-    return problems
+    for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
+        d = proj / ".claude" / "skills" / name
+        entry = (lock.get("skills") or {}).get(name)
+        edited = d.is_dir() and isinstance(entry, dict) and entry.get("sha256") not in (None, _tree_sha(d))
+        problems.append(f"{name}: no longer in the framework - `pls skills sync` removes it" +
+                        (" (its project copy was edited: the sync deletes that edit too; keep what you need first)"
+                         if edited else ""))
+    for name in _foreign_skill_dirs(proj, lock, fw_skills):
+        problems.append(f"{name}: in .claude/skills but not installed by pls (not in the lock) - left alone; skills come "
+                        "from the framework, project solutions go to patterns/")
+    launcher = proj / "pls.py"
+    if not launcher.exists() or launcher.read_bytes().replace(b"\r\n", b"\n") != LAUNCHER.encode("utf-8"):
+        problems.append("pls.py: the launcher differs from the framework's (or is missing) - `pls skills sync` rewrites it")
+    return problems + template_changes(lock, fw)
 
 
 def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK,
@@ -2302,17 +2513,16 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
         for field in ("Approvers", "Operators", "Origin"):
             m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
-    (target / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
     sync_skills(target, fw)
 
 
-# ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification)
+# ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification, ADR-0021)
 
 def profile_dir() -> Path:
-    import os
-    return Path(os.environ.get("PLS_PROFILE_DIR") or Path.home() / ".pls" / "profiles")
+    import pls_http as H
+    return H.profile_dir()                         # one definition: key files are allowed only there and in .pls/
 
 
 def _lookup(client, path: str, column: str, value: str, id_field: str) -> int | None:
@@ -2351,7 +2561,7 @@ def _lookup_all(client, path: str, column: str, value: str, id_field: str) -> li
 
 
 def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
-    """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers."""
+    """Ask once per machine and Pleasanter environment; every `pls init` afterwards reuses the answers (ADR-0021)."""
     import getpass
     import pls_http as H
     ask_secret = ask_secret or getpass.getpass
@@ -2390,22 +2600,36 @@ def setup_profile(name: str, ask=input, ask_secret=None) -> dict:
         uid = int(q(f"Your user id (login '{login}' not found automatically)", str(old.get("user_id") or "") or None))
     print(f"ok: you = User,{uid} (principal 'admin')")
     principals = {"admin": f"User,{uid}"}
+    # The local opt-in for writes is the person's answer, never a default (ADR-0021 option B): pls writes only to
+    # environments with role dev (stg after G4) and allow_write true; production is never written.
+    # the earlier answer is offered only for the same URL: a new server starts at "n"
+    before = "y" if old.get("allow_write") is True and old.get("allow_write_answered") and url == old.get("url") else "n"
+    allow = q(f"Allow pls to write to {url} from projects made with this profile? Writes go only to role dev "
+              f"(stg after G4), never prod (y/n)", before).lower() in ("y", "yes")
+    print(f"ok: writes {'allowed' if allow else 'NOT allowed'} (allow_write {str(allow).lower()}); "
+          f"change it with pls setup, or in a project's .pls/connections.json")
     prof = {"url": url, "parent_id": parent, "login": login, "user_id": uid, "principals": principals,
-            "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": True,
-            "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
+            "keys": {"admin": f"file:{keyfile.as_posix()}"}, "default_key": "admin", "allow_write": allow,
+            "allow_write_answered": True, "saved": datetime.now().astimezone().isoformat(timespec="seconds")}
     wj(pf, prof)
     print(f"profile '{name}' saved in {pf} (no key inside; the key file is next to it, outside every repository)")
     return prof
 
 
 def apply_profile(target: Path, prof: dict, env: str = "dev") -> None:
+    """Write the profile into a new project: envs.<env> (role dev) and .pls/connections.json with its allow_write (ADR-0021)."""
     ev = rj(target / "environments.json")
     e = ev["envs"].setdefault(env, {"role": "dev", "sites": {}, "values": {}})
     e["parent_id"] = prof["parent_id"]
     e["principals"] = dict(prof["principals"])
     wj(target / "environments.json", ev)
+    # A profile saved before setup asked the question holds allow_write true that nobody chose: it counts as false.
+    allow = prof.get("allow_write") is True and prof.get("allow_write_answered") is True
     wj(target / ".pls" / "connections.json", {env: {"url": prof["url"], "keys": prof["keys"], "default_key": prof["default_key"],
-                                                    "allow_write": prof.get("allow_write", True)}})
+                                                    "allow_write": allow}})
+    if not allow:
+        print(f"note: writes to {env} are not allowed (allow_write false in .pls/connections.json): answer y in "
+              f"pls setup, or set it in .pls/connections.json yourself (dev/stg only, never prod)")
 
 
 def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict | None = None,
@@ -2502,7 +2726,7 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     return missing
 
 
-def test_users(r: Path, env: str, yes: bool = False) -> int:
+def test_users(r: Path, env: str, yes: bool = False, remove: bool = False) -> int:
     """`pls test-users --env <dev env>` (ADR-0018 option C, ADR-0019 option B): one test user per Group role of
     design/roles.json, its API key in the operator's .pls/, and its membership of the role's group. Dev only (not a
     sandbox, writes allowed), typed confirmation. Returns 1 when a person must still issue a key (fallback B)."""
@@ -2532,6 +2756,8 @@ def test_users(r: Path, env: str, yes: bool = False) -> int:
         raise Fail(f"test-users: the connections file {cf} is not the project's .pls/connections.json (PLS_CONNECTIONS) "
                    "— test users' passwords and keys are kept only under the project's .pls/ (CLAUDE.md Mandatory 1); "
                    "unset PLS_CONNECTIONS to run it")
+    if remove:
+        return remove_test_users(r, env, yes, roles, conn, client, cf)
     client_for = lambda k: H.Client(conn["url"], k, timeout=H.conn_timeout(conn))   # noqa: E731
     try:
         entries = TU.plan_roles(roles, e.get("principals") or {}, conn, r / ".pls", r.name, env, client, client_for)
@@ -2579,6 +2805,45 @@ def test_users(r: Path, env: str, yes: bool = False) -> int:
     return 1 if left else 0
 
 
+def remove_test_users(r: Path, env: str, yes: bool, roles: dict, conn: dict, client, cf: Path) -> int:
+    """`pls test-users --env <dev env> --remove` (TD-24): delete the test users this machine can prove pls created
+    here (password file and a key file whose key the API accepts now), then their key and password files and
+    keys.<role>. Called after the guards of test_users (dev, not a sandbox, allow_write, the project's own connections
+    file). Returns 1 when something is left for a person."""
+    import pls_http as H
+    client_for = lambda k: H.Client(conn["url"], k, timeout=H.conn_timeout(conn))   # noqa: E731
+    try:
+        entries, notes = TR.plan_removals(roles, conn, r / ".pls", r.name, env, client, client_for)
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users --remove: {ex}")
+    for line in notes:
+        print(f"PERSON STEP — {line}")
+    if not entries:
+        print("no test user or test-user file of this project to remove")
+        return 1 if notes else 0
+    if not _confirm(env, yes, f"removes on {env} (tenant-wide users) and in .pls/:\n  " +
+                    "\n  ".join(TR.what(x) for x in entries), "the environment name"):
+        raise Fail("not confirmed — nothing removed")
+    made: dict = {"test_users_delete_answered": [], "test_users_removed": []}
+
+    def drop_key_ref(role: str, ref: str) -> None:
+        cur = rj(cf)
+        keys = cur[env].get("keys") or {}
+        if keys.get(role) == ref:                      # only the test user's own reference, never another key
+            del keys[role]
+            wj(cf, cur)
+    try:
+        problems = TR.delete_and_clean(entries, client, drop_key_ref,
+                                        lambda **kw: [made[k].append(v) for k, v in kw.items()])
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users --remove: {ex} — run it again: it looks every user up first")
+    finally:
+        LG.record_metric(**{k: v for k, v in made.items() if v}, _env=env)
+    for line in problems:
+        print(f"PERSON STEP — {line}")
+    return 1 if problems or notes else 0
+
+
 def _git_first_commit(target: Path) -> str:
     import subprocess
     try:
@@ -2616,6 +2881,24 @@ def _confirm(release: str, yes: bool, what: str, token: str = "the release id") 
         print("not confirmed — nothing written")
         return False
     return True
+
+
+STANDING_PERMISSION_COMMANDS = ("apply", "bootstrap", "migrate")      # ADR-0024: nothing else, never stg or prod
+
+
+def _confirm_write(r: Path, cmd: str, env: str, release: str, yes: bool, what: str) -> str | None:
+    """How a write to `env` is confirmed, or None when it is not: --yes (on the person's instruction), the standing
+    permission for dev writes recorded in the person's words (ADR-0024: apply / bootstrap / migrate on role dev
+    only), or the release id typed at a terminal. The result goes into the release records."""
+    if yes:
+        return "--yes"
+    rec = PR.dev_writes(r, env) if cmd in STANDING_PERMISSION_COMMANDS else None
+    if rec:
+        print(what)
+        print(f"confirmed by the standing permission for writes to {env}: {rec['_path']} ({rec['approver']}, "
+              f"{rec.get('date')}) — revoke with pls profile set dev-writes off --env {env} (ADR-0024)")
+        return f"standing permission ({rec['_path']}, {rec['approver']})"
+    return "typed at a terminal" if _confirm(release, False, what) else None
 
 
 def _stamp() -> str:
@@ -2709,16 +2992,25 @@ def http_cmd(r: Path, a) -> int:
             if probs:
                 raise H.TransportError(f"{a.release}: " + "; ".join(probs) + " (ADR-0004)")
             direction = "rollback" if a.rollback else "forward"
-            todo = []
+            todo, skipped = [], []
             try:
                 for m in migs:
+                    if (not a.rollback and plan.get("status") == "planned"
+                            and (MI.last(plan, m, "forward") or {}).get("status") == "migrated"
+                            and not MI.last(plan, m, "rollback")):  # a rolled-back folder is never skipped as done
+                        skipped.append(m)            # done by an earlier run that stopped later: never sent twice
+                        continue
                     why = MI.state_problem(plan, m, a.rollback)
                     if why:
                         raise MI.MigrateError(why)
                     mg = MI.load(r, m, a.rollback)
                     todo.append(dict(mg, site_id=MI.target(e, plan["env"], mg["site"])))
+                if not todo:                             # every folder migrated, none rolled back
+                    raise MI.MigrateError(MI.state_problem(plan, skipped[0], False) + f" — next: pls apply {a.release}")
             except MI.MigrateError as ex:
                 raise H.TransportError(f"{a.release}: {ex}")
+            for m in skipped:
+                print(f"{m}: already migrated by an earlier run — skipped, never sent twice")
             try:
                 eff = env_effects(r, e)
                 jobs = SE.declared_jobs(r)
@@ -2738,10 +3030,21 @@ def http_cmd(r: Path, a) -> int:
             if warning:
                 print(warning)
             what = ", ".join(f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
-            if not _confirm(a.release, a.yes, f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}"):
+            confirmed = _confirm_write(r, "migrate", plan["env"], a.release, a.yes,
+                                       f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}")
+            if not confirmed:
                 return 1
+            LG.record_metric(confirmed=confirmed)
             for t in todo:
+                try:                                     # read again before each migration: a change stops the rest
+                    write_guard_now(r, plan["env"], a.release, "migrating data")
+                except H.TransportError as ex:
+                    print(f"{a.release}: stopped before {t['dir']} — the write guard refuses now: {str(ex).rstrip('.')}. "
+                          f"The migrations above are recorded in plan.json; once the guard allows it, pls migrate "
+                          f"{a.release} sends only the ones not migrated yet")
+                    return 1
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
+                entry.update(executed_by=LG.actor(r), confirmed=confirmed)    # how this run was confirmed (ADR-0024)
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
                 res = H.migrate(c, t["site_id"], t["keys"], t["data"])
                 LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
@@ -2769,7 +3072,7 @@ def http_cmd(r: Path, a) -> int:
                 except GT.GateError as ex:
                     raise H.TransportError(str(ex))
             if plan.get("status") != "planned":
-                raise H.TransportError(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+                raise H.TransportError(not_planned_message(a.release, plan))
             if MI.pending(plan):                         # ADR-0004 order: backup → conversion → configuration
                 raise H.TransportError(f"{a.release}: migrations {MI.pending(plan)} have not run — pls migrate {a.release} first "
                                        "(ADR-0004: data is converted before the configuration changes)")
@@ -2777,8 +3080,8 @@ def http_cmd(r: Path, a) -> int:
                 conf = e["sites"].get(s_) or {}
                 if conf.get("id") != plan["per_site"][s_].get("site_id") or conf.get("shared_from") or \
                         (e.get("sandbox_of") and not conf.get("sandbox")):
-                    raise H.TransportError(f"{a.release}: {s_} → site {plan['per_site'][s_].get('site_id')} is not a site this "
-                                           f"release may write in {plan['env']} (stale plan, or a shared site)")
+                    raise H.TransportError(stale_site_message(a.release, s_, plan["per_site"][s_].get("site_id"),
+                                                              plan["env"]))
             bad_step = plan_steps_problem(plan)          # the writes use steps/rollback, not per_site
             if bad_step:
                 raise H.TransportError(f"{a.release}: {bad_step} — make a new release plan")
@@ -2809,8 +3112,10 @@ def http_cmd(r: Path, a) -> int:
                 raise H.TransportError(refusal)
             if warning:
                 print(warning)
-            if not _confirm(a.release, a.yes, f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
-                                             f"{plan.get('classification')}" + (f"\n{warning}" if warning else "")):
+            confirmed = _confirm_write(r, "apply", plan["env"], a.release, a.yes,
+                                       f"apply {a.release} to {plan['env']} ({conn['url']}): {' → '.join(plan['sites'])}, "
+                                       f"{plan.get('classification')}" + (f"\n{warning}" if warning else ""))
+            if not confirmed:
                 return 1
             # Recorded before the first write: if the process dies mid-way, the release is not "planned" any more,
             # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
@@ -2818,9 +3123,10 @@ def http_cmd(r: Path, a) -> int:
             wj(rel / "plan.json", plan)
             # Who ran it and how it was confirmed stay in the release folder, not only in the run log. The name is
             # the run-log actor (PLS_ACTOR or git user.name): self-asserted, not an identity check (ADR-0014 TB-2).
-            ran = {"executed_by": LG.actor(r), "confirmed": "--yes" if a.yes else "typed at a terminal"}
+            ran = {"executed_by": LG.actor(r), "confirmed": confirmed}
+            LG.record_metric(confirmed=confirmed)
             try:
-                res = H.apply_release(c, plan, files)
+                res = H.apply_release(c, plan, files, guard=lambda: write_guard_now(r, plan["env"], a.release))
             except H.TransportError as ex:           # only the preflight reads raise: nothing was written
                 res = {"status": "refused", "log": [f"preflight: {ex}"]}
             except Exception as ex:                  # unknown point of failure: keep "applying" and leave evidence
@@ -2881,16 +3187,26 @@ def http_cmd(r: Path, a) -> int:
                     GT.require(r, "G4", a.release, f"creating sites in {plan['env']}")
                 except GT.GateError as ex:
                     raise H.TransportError(str(ex))
-            if not _confirm(a.release, a.yes, f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
-                                             f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)"):
+            confirmed = _confirm_write(r, "bootstrap", plan["env"], a.release, a.yes,
+                                       f"create {[s['site'] for s in plan['steps']]} under {plan['parent_id']} in "
+                                       f"{plan['env']} ({conn['url']}) — undo is manual (ADR-0007)")
+            if not confirmed:
                 return 1
+            LG.record_metric(confirmed=confirmed)
+            # Who ran it and how it was confirmed, one entry per run, in a file of its own: bootstrap.json is covered by
+            # the G4 digest, so writing it here would refuse the re-run of a partial stg bootstrap (ADR-0024).
+            blog = bp.with_name("bootstrap-log.json")
+            runs = (rj(blog).get("runs") or []) if blog.exists() else []
+            wj(blog, {"runs": runs + [{"at": _now(), "executed_by": LG.actor(r), "confirmed": confirmed,
+                                       "sites": [s["site"] for s in plan["steps"]]}]})
             def in_flight(site: str) -> None:
                 # Written before the request: a run that dies between the server creating the site and pls binding
                 # its id (killed process, power loss) leaves the same record as an unanswered request, and the
                 # re-run waits for a person instead of creating the site a second time.
                 wj(bp, dict(rj(bp), uncertain=site))
 
-            res = H.bootstrap(c, plan, before=in_flight)
+            res = H.bootstrap(c, plan, before=in_flight,
+                              guard=lambda: write_guard_now(r, plan["env"], a.release, "creating sites"))
             LG.record_target(env=plan["env"], release=a.release, written=list(res["created"].values()))
             for line in res["log"]:
                 print(line)
@@ -3033,9 +3349,20 @@ def http_cmd(r: Path, a) -> int:
                 probes = KV.load_probes(kb)
             except (OSError, ValueError, KeyError) as ex:
                 raise H.TransportError(f"probes: {ex}")
+            guarded = [p["_name"] for p in probes if KG.is_guarded(p)]
             if not _confirm("kb-verify", a.yes, f"kb-verify writes {len(probes)} probe site(s) and test records under folder "
-                                                f"{parent_i} in {a.env} ({conn['url']})"):
+                                                f"{parent_i} in {a.env} ({conn['url']})" +
+                                                (f"; with a server script or a test user's key (ADR-0025): {', '.join(guarded)}"
+                                                 if guarded else "")):
                 return 1
+            role_clients: dict = {}
+
+            def probe_client(role):                  # a declared role's test-user key (checked by KG.not_runnable)
+                if not role:
+                    return c
+                if role not in role_clients:
+                    role_clients[role] = H.Client(conn["url"], H.resolve_key(conn, role), timeout=H.conn_timeout(conn))
+                return role_clients[role]
             state_f = r / ".pls" / f"kb-probes-{a.env}.json"
             state = rj(state_f) if state_f.exists() else {}
             if state.get("url") != conn["url"] or state.get("parent") != parent_i:
@@ -3045,6 +3372,13 @@ def http_cmd(r: Path, a) -> int:
             for p in probes:
                 name, rt, log, status = p["_name"], p["site"]["ReferenceType"], [], "pass"
                 row = {"entry": p["entry"], "probe": name, "status": "pass", "log": log}
+                is_g = KG.is_guarded(p)
+                why = KG.not_runnable(p, a.env, e, conn, Path(conn.get("_dir") or r / ".pls")) if is_g else None
+                if why:                                  # decided before anything is written for this probe
+                    row["status"] = results[name] = "error"
+                    log.append(f"not run: {why}")
+                    rows.append(row)
+                    continue
                 try:
                     sid = state["sites"].get(name)
                     if sid:
@@ -3066,8 +3400,10 @@ def http_cmd(r: Path, a) -> int:
                         wj(state_f, state)
                     row["site_id"] = sid
                     settings = {"Version": schema, "ReferenceType": rt, **(p["site"].get("SiteSettings") or {})}
-                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
-                                                                       "Body": "", "SiteSettings": settings})
+                    body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": settings}
+                    if p.get("roles"):                     # the role's group may use the probe site (D15 shape)
+                        body.update(InheritPermission=sid, Permissions=KG.permissions(p, uid, e.get("principals") or {}))
+                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", body)
                     want = p.get("expect_save", 200)
                     ok = code == want
                     log.append(f"{'ok' if ok else 'NG'} save → HTTP {code} (expected {want})")
@@ -3086,12 +3422,12 @@ def http_cmd(r: Path, a) -> int:
                         vars_ = KV.date_vars(server_day) | {"admin_uid": uid}
                         specs = [dict(t, vars=dict(vars_)) for t in p.get("tests") or []]
                         if specs:
-                            res = H.run_tests(lambda role: c, sid, specs, a.env)
+                            res = H.run_tests(probe_client, sid, specs, a.env)
                             for t in res["tests"]:
                                 log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
                                 if t["status"] not in ("pass", "pass-api-only"):
                                     status = "fail"
-                    if p.get("teardown"):                      # leave the probe site usable in the UI (D21)
+                    if p.get("teardown") and not is_g:         # leave the probe site usable in the UI (D21)
                         td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
                         code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
                                                                            "Body": "", "SiteSettings": td})
@@ -3101,6 +3437,32 @@ def http_cmd(r: Path, a) -> int:
                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
                     status = "error"
                     log.append(str(ex))
+                finally:                                     # also after an unexpected error or Ctrl-C
+                    own_sid = row.get("site_id")                 # set only for a site created or proven to be this probe's
+                    if is_g and own_sid:                         # no script; a roles probe's grant is removed
+                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
+                        td.pop("ServerScripts", None)
+                        body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": td}
+                        if p.get("roles"):
+                            body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
+                        try:
+                            code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
+                        except H.TransportError as ex:
+                            code = str(ex)
+                        log.append(f"teardown → HTTP {code}")
+                        if code != 200:
+                            status = "error"
+                            log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
+                                       "permissions — a person removes them in Pleasanter")
+                        # then delete the site, and believe it only when getsite no longer finds it (ADR-0025)
+                        gone, why_kept = KG.delete_probe_site(
+                            c, own_sid, lambda site: KV.is_own_probe_site(site, name, rt, parent_i, app_ids))
+                        log.append(why_kept or f"site {own_sid} deleted (deletesite, then getsite no longer finds it)")
+                        if gone:
+                            state["sites"].pop(name, None)
+                            wj(state_f, state)
+                        else:
+                            status = "error"
                 if p.get("observe") and status == "pass":
                     status = "observed"
                 row["status"] = status
@@ -3248,6 +3610,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
     s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
     s.add_argument("--accept-unverified", help="decision record that accepts components without round-trip evidence (ADR-0001)")
+    s.add_argument("--summary", action="store_true", help="one SCOPE line per site (count and first names) instead of one per component")
     s = sp.add_parser("bootstrap-plan")
     s.add_argument("--env", required=True)
     s.add_argument("--release", required=True)
@@ -3279,7 +3642,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True, help="default site of the specs (processes are read from it)")
     s.add_argument("--out", help="result file (default tests/results/<env>-<date>-<name>.json)")
-    s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=44656)")
+    s.add_argument("--var", action="append", default=[], metavar="NAME=VALUE", help="fixture for spec vars (e.g. e=<record id>)")
     s.add_argument("--release", help="outside dev: the release under test; its recorded G4 approval allows tests that change records")
     s.add_argument("--yes", action="store_true",
                    help="outside dev without --release: skip typing the environment name (only when the person asks for it)")
@@ -3347,9 +3710,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
     s.add_argument("action", choices=["set"])
-    s.add_argument("field", choices=PR.FIELDS + (PR.ROLE,))
+    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV)
     s.add_argument("value")
-    s.add_argument("--env", help="role: the environment in environments.json")
+    s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
     s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s = sp.add_parser("review", help="record that the person reviewed an as-is document (I4); never record it yourself")
@@ -3401,6 +3764,9 @@ def build_parser() -> argparse.ArgumentParser:
                                          "in .pls/ and its membership of the role's group (ADR-0018, ADR-0019)")
     s.add_argument("--env", required=True)
     s.add_argument("--yes", action="store_true", help="the person's confirmation, given on their instruction")
+    s.add_argument("--remove", action="store_true", help="delete the test users this machine can prove pls created here "
+                                                         "(password file and a working key file), then their key and "
+                                                         "password files and keys.<role> (TD-24)")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     return ap
@@ -3438,17 +3804,19 @@ def _main(argv=None) -> int:
         raise Fail(str(ex))
     if a.cmd == "skills":
         if a.action == "sync":
-            lock = sync_skills(r)
+            lock = sync_skills(r, FRAMEWORK)
             print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit']})")
+            for line in lock["template_notes"]:
+                print(line)
             return 0
-        problems = skills_check(r)
+        problems = skills_check(r, FRAMEWORK)
         print("\n".join(problems) if problems else "skills match the lock and the framework")
         return 1 if problems else 0
 
     if a.cmd == "test-users":
         import pls_http as H
         try:
-            return test_users(r, a.env, yes=a.yes)
+            return test_users(r, a.env, yes=a.yes, remove=a.remove)
         except H.TransportError as ex:
             print(f"pls: {ex}", file=sys.stderr)
             return 2
@@ -3482,7 +3850,7 @@ def _main(argv=None) -> int:
         if not plan.get("sites"):
             raise Fail("only multi-site release plans (release-plan) are packaged")
         if plan.get("status") != "planned":
-            raise Fail(f"{a.release} has status {plan.get('status')!r}, not 'planned'")
+            raise Fail(not_planned_message(a.release, plan))
         bad_step = plan_steps_problem(plan)
         if bad_step:
             raise Fail(f"{a.release}: {bad_step} — make a new release plan")
@@ -3584,7 +3952,12 @@ def _main(argv=None) -> int:
             LG.record_metric(sessions=len(files))
             print(f"{len(files)} session(s) → ops/usage/ ({len(steps)} step marker(s) in the run log)")
             return 0
-        rows = US.report(US.load(r), a.by)
+        loaded = US.load(r)
+        rows = US.report(loaded, a.by)
+        for sid, phases in sorted(US.sessions_with_several_change_requests(loaded).items()):
+            print(f"WARNING: session {sid} did {'/'.join(p for p in phases if p in US.WORK_PHASES)} work after a G4 "
+                  f"({' → '.join(phases)}) — one Claude Code session per change request (pls-x-lifecycle §2, "
+                  f"ADR-0013): start a new session for the next change request.", file=sys.stderr)
         if a.json:
             print(json.dumps(rows, ensure_ascii=False, indent=1))
             return 0
@@ -3599,6 +3972,8 @@ def _main(argv=None) -> int:
             need_onboarding(r, f"step {a.phase}")
         f = LG.step(r, a.phase, a.title)
         print(f"step {a.phase}: {a.title} → {f.relative_to(r).as_posix()}")
+        if (w := edited_skill_warning(r)):
+            print(w, file=sys.stderr)
         return 0
 
     if a.cmd == "gate":
@@ -3609,6 +3984,8 @@ def _main(argv=None) -> int:
         except GT.GateError as ex:
             raise Fail(str(ex))
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
+        if (w := edited_skill_warning(r)):
+            print(w, file=sys.stderr)
         print(f"{a.gate} {a.decision} by {rj(out)['approver']}: {out.relative_to(r).as_posix()}")
         for rel_id, b in (rj(out).get("bound") or {}).items():
             print(f"  {rel_id}: " + (f"bound to its content for {b['env']} (sha256 {b['sha256'][:12]}…) — any later change "
@@ -3627,7 +4004,7 @@ def _main(argv=None) -> int:
 
     if a.cmd == "release-plan":
         exports = dict(x.split("=", 1) for x in a.export)
-        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified)
+        return release_plan(r, a.env, a.release, exports, a.accept_drift, a.migration, a.accept_unverified, a.summary)
 
     if a.cmd == "mark-applied" and (load_plan(r / "releases" / a.release / "plan.json").get("sites")):
         rel = r / "releases" / a.release
@@ -3750,10 +4127,8 @@ def _main(argv=None) -> int:
         return 0
 
     if a.cmd == "unpack":
-        e = env_conf(r, a.env)
-        model = logical(rj(Path(a.export)), e)
-        refuse_secrets(model, f"unpack {a.site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
-        write_tree(model, r / "config" / a.site)
+        refuse_uncommitted_site(r, a.site)
+        unpack(r, a.env, Path(a.export), a.site)
         print(f"unpacked {a.export} → config/{a.site}")
         return 0
 
@@ -3881,9 +4256,26 @@ def _main(argv=None) -> int:
     return 2
 
 
-if __name__ == "__main__":
+def cli(argv=None) -> int:
+    """Entry point of the command line: a refusal (`Fail`) is one line, exit 2. Any other error was not expected by
+    pls: the person sees one line (exit 3), the trace only when PLS_DEBUG=1 is set; the run log has already recorded
+    the message (pls_log.run)."""
     try:
-        sys.exit(main())
+        return main(argv)
     except Fail as ex:
         print(f"pls: {ex}", file=sys.stderr)
-        sys.exit(2)
+        return 2
+    except Exception as ex:                                         # noqa: BLE001 — the last line of defence
+        import os
+        import traceback
+        if os.environ.get("PLS_DEBUG") == "1":
+            traceback.print_exc()
+        first = (str(ex).splitlines() or [""])[0][:300]
+        print(f"pls: unexpected error ({type(ex).__name__}{': ' + first if first else ''}) — pls stopped here; nothing "
+              f"after this point ran. If the message does not point to this machine (a file, the disk, the network), it "
+              f"is a defect in pls: run the command again with PLS_DEBUG=1 and report the trace.", file=sys.stderr)
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(cli())

@@ -38,6 +38,12 @@
           "date": "2026-11-08",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -58,6 +64,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -137,6 +149,12 @@
           "date": "2026-11-08",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -163,6 +181,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -193,6 +217,12 @@
           "date": "2026-11-08",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -207,6 +237,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-08",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -232,6 +268,12 @@
           "date": "2026-11-08",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -246,6 +288,22 @@
         "1.5.2"
       ],
       "probes": []
+    },
+    "D33": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D33-near-completion-range"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ]
     }
   }
 }

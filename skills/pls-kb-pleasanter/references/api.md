@@ -1,5 +1,7 @@
 # Pleasanter API facts (verified on 1.5.2)
 
+Evidence: spike round 1 (`spike/round-trip/report-20261105.md`) and slices #1–#3 (`docs/slices/slice-01-report.md` … `slice-03-report.md`), MADLAB dev 1.5.2, unless a row names its own D-entry, probe or source; rows marked source-derived are not verified on a server.
+
 All endpoints are `POST` with a JSON body containing `"ApiVersion": 1.1`. Authentication: `"ApiKey"` in the body, or the browser session of a logged-in user.
 
 ## Site configuration
@@ -42,7 +44,7 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 
 `pls version` uses this: build token and schema detected, the application version recorded by a person from `/versions` (ADR-0009).
 
-## Site package exported from the UI (seen 2026-11-05, 1.5.2, site 797)
+## Site package exported from the UI (seen 2026-11-05, 1.5.2, an adopted brownfield site)
 
 A JSON file a person exports from the UI (no API key needed — useful for a customer's prod). `pls env-compare` and `pls version --from-package` read it.
 
@@ -56,7 +58,7 @@ A JSON file a person exports from the UI (no API key needed — useful for a cus
 
 Compared with getsite of the same site after mapping ids: 0 differences (settings, scripts, permissions).
 
-**Importing a site package (UI), seen 2026-11-08, 1.5.2, PLAY BOARD (23 sites) imported twice into empty folders:** the folder tree is recreated with new site ids. `Links[].SiteId` and the `"SiteId"` of lookups inside `ChoicesText` are mapped to the new ids. **Script, style and HTML bodies are not changed** (151 of 151 byte-identical): numbers in them still name the source environment's sites. Lookup view filters come back with values as strings (`"Status": 1` → `"1"`). Records are not imported when the package has none, so settings an app keeps in records (e.g. a 共通設定 site) are empty in the copy. Parts left out by the `Include…` flags are missing from `SiteSettings`; whether `IncludeNotifications: false` also strips process-level notifications (`Processes[].Notifications`) is **not verified** — `env-compare` treats them as left out too (safe side).
+**Importing a site package (UI), seen 2026-11-08, 1.5.2, a brownfield app (23 sites) imported twice into empty folders:** the folder tree is recreated with new site ids. `Links[].SiteId` and the `"SiteId"` of lookups inside `ChoicesText` are mapped to the new ids. **Script, style and HTML bodies are not changed** (151 of 151 byte-identical): numbers in them still name the source environment's sites. Lookup view filters come back with values as strings (`"Status": 1` → `"1"`). Records are not imported when the package has none, so settings an app keeps in records (e.g. a 共通設定 site) are empty in the copy. Parts left out by the `Include…` flags are missing from `SiteSettings`; whether `IncludeNotifications: false` also strips process-level notifications (`Processes[].Notifications`) is **not verified** — `env-compare` treats them as left out too (safe side).
 
 ## Errors seen
 

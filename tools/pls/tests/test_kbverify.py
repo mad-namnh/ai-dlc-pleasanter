@@ -61,6 +61,19 @@ class PureTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 KV.check_probe(json.loads(json.dumps(p)))
 
+    def test_date_variables_take_a_day_offset(self):
+        """A probe of a relative date range needs dates N days from today: `$today+90`, `$today-1`."""
+        import datetime
+        import pls_http as H
+        v = KV.date_vars(datetime.date(2026, 11, 11)) | {"admin_uid": "1"}
+        self.assertEqual(H._subst("$today+90", v), "2027-02-09")
+        self.assertEqual(H._subst("$today+91", v), "2027-02-10")
+        self.assertEqual(H._subst("$today-1", v), "2026-11-10")
+        self.assertEqual(H._subst({"CompletionTime": "$tomorrow+0"}, v), {"CompletionTime": "2026-11-12"})
+        self.assertEqual(H._subst("$admin_uid+1", v), "$admin_uid+1")      # not a date: left as written
+        self.assertEqual(H._subst("$nothing+1", v), "$nothing+1")          # unknown: left as written
+        self.assertEqual(H._subst("$today", v), "2026-11-11")              # unchanged without an offset
+
     def test_admin_principal_must_be_a_user(self):
         self.assertEqual(KV.admin_uid({"admin": "User,7"}), "7")
         for bad in ({}, {"admin": "Group,375"}, {"admin": "1"}, {"admin": "User,"}):
@@ -87,7 +100,7 @@ class CliTest(unittest.TestCase):
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
 
     def writes(self, n=0):
-        return [p for p, _ in self.fake.calls[n:] if p.endswith(("/createsite", "/updatesite", "/create", "/update"))]
+        return [p for p, _ in self.fake.calls[n:] if p.endswith(("/createsite", "/updatesite", "/deletesite", "/create", "/update"))]
 
     def test_probe_folder_must_be_a_folder_of_its_own(self):
         self.use_kb({"D1-ok": OK})

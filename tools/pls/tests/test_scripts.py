@@ -1,4 +1,6 @@
 """Script tooling (BR7):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import os
 import sys
@@ -34,12 +36,12 @@ class PureTest(unittest.TestCase):
                          "siteId = ${site:anken}; d='M0 -4.797 2.127'; x=1.797-1.798; y=797.5; [[${site:anken}]]")
 
     def test_only_numbers_written_as_site_ids_are_replaced(self):
-        # real lines of the PLAY BOARD app (site ids 103-120 collide with status codes, timings and colours)
-        kept = ("const CASE_INFLUENCER_STATUS_SELECTION = 103;\nconst JUNCTION_STATUS_CODES = [102, 103, 104, 107];\n"
-                "box-shadow: 0 2px 8px rgba(103,58,183,.35);\nsetTimeout(restoreHashtag, 103);\nconst maxAttempts = 103;\n"
-                "103,ユーザー無効\n/* site 103 を変更しない */\npbWarn('[playboard][product-103] 失敗');\n")
+        # lines shaped like those of a brownfield trial app (site ids 103-120 collide with status codes, timings, colours)
+        kept = ("const ORDER_STATUS_SELECTION = 103;\nconst LINK_STATUS_CODES = [102, 103, 104, 107];\n"
+                "box-shadow: 0 2px 8px rgba(103,58,183,.35);\nsetTimeout(restoreFilter, 103);\nconst maxAttempts = 103;\n"
+                "103,ユーザー無効\n/* site 103 を変更しない */\nappWarn('[app][product-103] 失敗');\n")
         self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
-        ids = ('_notiPickSiteId("NOTIFICATION_SITE_ID", 103);\nif ($p.siteId() === 103) {}\nitems.Get(103, "{}");\n'
+        ids = ('_pickSiteId("NOTIFICATION_SITE_ID", 103);\nif ($p.siteId() === 103) {}\nitems.Get(103, "{}");\n'
                "$p.apiGet({ id: 103, done: f });\nfetch('/api/items/103/get');\nurl = '/api/items/' + 103;\n"
                '"SiteId": 103,\n[[103]]\nClassA~103,Title\nconst X_SITE_ID = 103;\n')
         out = SX.replace_ids(ids, {"103": "x"})
@@ -51,11 +53,25 @@ class PureTest(unittest.TestCase):
     def test_possible_numbers_are_grouped_for_reading(self):
         g = SX.possible_group
         self.assertEqual(g("  // site 103 を変更しない"), "comment")
-        self.assertEqual(g("  pbWarn('[playboard][product-104] 失敗');"), "log or message text")
-        self.assertEqual(g("const CASE_INFLUENCER_STATUS_SELECTION = 103;"), "status or code value")
-        self.assertEqual(g("setTimeout(restoreHashtag, 120);"), "timing or retry")
+        self.assertEqual(g("  appWarn('[app][product-104] 失敗');"), "log or message text")
+        self.assertEqual(g("const ORDER_STATUS_SELECTION = 103;"), "status or code value")
+        self.assertEqual(g("setTimeout(restoreFilter, 120);"), "timing or retry")
         self.assertEqual(g("box-shadow: 0 2px 8px rgba(103,58,183,.35);"), "colour or layout")
         self.assertEqual(g("        return 797;"), "other")                       # a person has to read this one
+
+    def test_possible_group_log_calls_without_app_names(self):
+        # a project's own logger or notifier, or a message that starts with a bracketed tag, is message text —
+        # recognised by shape, not by one application's logger names
+        g = SX.possible_group
+        self.assertEqual(g("  notify('[orders] item 104 failed');"), "log or message text")
+        self.assertEqual(g("  ordersLogger.info(`[sync] retry 104`);"), "log or message text")
+        self.assertEqual(g("  reportError(104, err);"), "log or message text")
+        self.assertEqual(g("  var sel = $('[data-id] input'); return 104;"), "other")   # a selector is not a tag
+        self.assertEqual(g("  var list = [[104]];"), "other")
+        self.assertEqual(g("  dialog.open(104);"), "other")                  # "log" inside a word is not a logger
+        self.assertEqual(g("  catalog(104);"), "other")
+        self.assertEqual(g("  login(104); logo(104);"), "other")              # a word that starts with "log" neither
+        self.assertEqual(g("  logEvent(104);"), "log or message text")
 
     def test_look_alike_names_and_calls_are_not_contexts(self):
         s = ("this.items.splice(103, 1); cart.items.push(103); updateStatus(siteId, 103); SITE_IDLE_TIMEOUT = 103; "
@@ -162,6 +178,26 @@ class CliTest(unittest.TestCase):
     def script_file(self):
         return next((self.r / "config/anken/scripts").glob("*.js"))
 
+    def test_refs_summary_keeps_the_lines_to_read_and_the_counts(self):
+        body = "var s = 797;\r\nsetTimeout(f, 797);\r\n// keep 797\r\nconsole.log('x', 797);\r\n"
+        self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}]), ensure_ascii=False),
+                            encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
+
+        def run(*extra):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(pls.main(["refs", "--site", "anken", *extra]), 0)
+            return out.getvalue().splitlines()
+        full, short = run(), run("--summary")
+        self.assertEqual(len([x for x in full if x.startswith("POSSIBLE [")]), 4)
+        self.assertEqual([x.split("]")[0] for x in short if x.startswith("POSSIBLE [")], ["POSSIBLE [other"])
+        self.assertIn("var s = 797", next(x for x in short if x.startswith("POSSIBLE [")))   # the line to read stays whole
+        groups = next(x for x in short if x.startswith("POSSIBLE by group:"))
+        for g in ("other 1", "timing or retry 1", "comment 1", "log or message text 1"):
+            self.assertIn(g, groups)
+        self.assertEqual(full[-1], short[-1])                                          # same totals line
+
     def raw(self):
         with open(self.script_file(), encoding="utf-8", newline="") as fh:
             return fh.read()
@@ -216,6 +252,47 @@ class CliTest(unittest.TestCase):
                                    ).replace('"SiteId": 797', '"SiteId": 9001'), encoding="utf-8")
         self.assertEqual(pls.main(["unpack", str(prod), "--env", "prod", "--site", "anken"]), 0)
         self.assertIn("var s = ${site:anken};", self.raw())
+
+    def test_site_id_under_a_json_escaped_or_backtick_quoted_key_is_a_site_id(self):
+        # JSON kept in a JS string (parsed at run time) and template-literal quotes
+        s = ("const RAW = '{\\\"siteId\\\": \\\"103\\\"}';\n"                     # {\"siteId\": \"103\"}
+             "const RAW2 = \"{\\\"SiteId\\\":103}\";\n"                            # {\"SiteId\":103}
+             "const RAW3 = '{\\'siteId\\': \\'103\\'}';\n"                          # {\'siteId\': \'103\'}
+             "t = {`siteId`: 103};\nu = {\"siteId\": `103`};\n")
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 5)
+        self.assertIn('{\\"siteId\\": \\"${site:x}\\"}', out)                      # quotes and backslashes stay
+        self.assertIn("`siteId`: ${site:x}", out)
+        self.assertEqual(SX.unstable_refs('x = \'{\\"siteId\\": \\"${site:x}\\"}\';', "s"), [])
+        self.assertEqual(SX.literal_left('{\\"siteId\\": \\"103\\"}', "103"), [15])  # lint L-REF-01 sees it too
+        kept = ('{\\"siteIdx\\": \\"103\\", \\"website_id\\": \\"103\\", \\"status\\": \\"103\\", '
+                '\\"siteId\\": \\"103px\\"} `siteIdx`: 103')
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+
+    def test_site_id_under_a_bracketed_name_or_with_a_backtick_or_escaped_value_is_a_site_id(self):
+        s = ('p["SiteId"] = 103;\nif (p[\'site_id\'] === 103) {}\nif (103 === p["siteId"]) {}\n'
+             'o = {["siteId"]: 103};\nq = {[`siteId`]: 103};\nr = {siteId: `103`};\nif (siteId === `103`) {}\n'
+             "const RAW = '{siteId: \\\"103\\\"}';\n")                                # {siteId: \"103\"}
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 8)
+        self.assertIn('p["SiteId"] = ${site:x};', out)
+        self.assertIn("r = {siteId: `${site:x}`};", out)
+        self.assertEqual(SX.literal_left('p["SiteId"] = 103;', "103"), [14])          # lint L-REF-01
+        self.assertEqual(SX.unstable_refs('if (${site:x} === p["siteId"]) {}', "s"), [])
+        kept = ('p["siteIdx"] = 103; p["website_id"] = 103; p["status"] = 103; if (103 === p["siteIdx"]) {} '
+                'r = {siteIdx: `103`}; s = {siteId: `103px`}; p["siteId"] + 103; t = [p["siteId"], 103];')
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+
+    def test_site_id_in_an_escaped_json_string_survives_unpack_and_follows_the_environment(self):
+        body = 'const RAW = \'{\\"related\\": {\\"siteId\\": \\"797\\"}}\';\nconst CONF = JSON.parse(RAW);\n'
+        self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}])), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
+        self.assertIn('\\"siteId\\": \\"${site:anken}\\"', self.raw())
+        self.assertNotIn("L-REF-03", {i["rule"] for i in pls.lint(self.r)})
+        p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
+        self.assertIn('\\"siteId\\": \\"9001\\"', p["SiteSettings"]["Scripts"][0]["Body"])   # prod gets its own id
 
     def test_quoted_site_id_in_a_script_config_survives_unpack_and_follows_the_environment(self):
         body = 'const CONF = {"related": {"siteId": "797", "link": "ClassA"}};\n'

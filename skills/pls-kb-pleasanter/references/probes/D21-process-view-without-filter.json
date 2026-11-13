@@ -1,6 +1,6 @@
 {
   "entry": "D21",
-  "title": "A process whose View holds only defaults (no filter, as the UI stores it, e.g. site 797) runs through the API (HTTP 200, status changed) — only a missing View fails",
+  "title": "A process whose View holds only defaults (no filter, as the UI stores it) runs through the API (HTTP 200, status changed) — only a missing View fails",
   "site": {
     "ReferenceType": "Issues",
     "SiteSettings": {
