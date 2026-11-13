@@ -1,0 +1,618 @@
+diff --git a/HANDOFF.md b/HANDOFF.md
+index b6dbe5a..87ba320 100644
+--- a/HANDOFF.md
++++ b/HANDOFF.md
+@@ -25,7 +25,7 @@
+ - Row 0: passed for skill discovery (the task did not name the skill); the agents were discovered through the skill. The cold question as written was not asked.
+ - Still not verified: row 15 (the reviewer has no write tool; row 16 covers the question). Known limit, in ADR-0016: other spellings of a push (absolute path to git, `sh -c`, a script).
+ 
+-**Next build work (roadmap order):** P3 done except Nam's patch for P3-8 (P3-2…P3-7 done 2026-11-12). **AU3 done (2026-11-13, committed; two review rounds, `plans/2026-11-12-au3-standing-permission-for-dev-writes/review.md`): ADR-0024 Accepted (Nam: option B until revoked; only apply / bootstrap / migrate; one record per sandbox)** — `pls profile set dev-writes on|off --env <dev env> --approver … --quote …` records the person's standing permission; `_confirm_write` then confirms `apply` / `bootstrap` / `migrate` on that `role: dev` environment by itself (environments.json **and** its role record must say dev; a damaged record falls back to the typed confirmation) and the release names the record (`apply-log.json`, `bootstrap-log.json`, `plan.json` `migrations_run`: `confirmed`); stg, prod, other commands unchanged. Lifecycle 0.24, `docs/setup.md`. **Patches waiting for Nam:** `plans/2026-11-12-au3-standing-permission-for-dev-writes/proposed-CLAUDE-md-mandatory-1.patch`, `…/proposed-template-CLAUDE-md-rule-3.patch`. Trial on `pls-demo-contracts` P3 is the person's. Next: AU1 rest or current-version evals (TD-37). **P2-7 done** (2026-11-12, `bfd0b14`): `docs/tech-debt.md` TD-25…TD-38 (a line with a deadline for every open review item: TD-36 roadmap P3-2…P3-8, TD-37 current-version evals, TD-38 method-L / B1 live / C10); `docs/review-findings.md` has a Trace column, statuses checked against the code, D21–D33 imported, ids cited as RF-… (plan, log, review `plans/2026-11-12-p2-7-tech-debt-and-findings-trace/`). **P2-6 done** (2026-11-11, agent part; Nam's decisions in item 7 above): ADR-0020…0022 Proposed (as built, with options), `docs/adr/README.md` has a "Built and relied upon" column, `docs/architecture.md` I4, I7, §4, §7.3, §8, §10 point to the ADRs and to `skills/README.md` instead of restating them (plan, log, review `plans/2026-11-11-p2-6-adr-governance/`). **Proposed by Nam 2026-11-11:** Step 4d "Spec-to-app automation" in `docs/plan.md` (AU1–AU6: design-time probes on dev, groups from roles.json, dev writes without typed confirmation, mail on dev testable, role tests, usage collect) — from the trial `pls-demo-contracts` (new app, P1 → G2 done on 2026-11-11; P3 waits for groups, department names and dev write confirmations). AU1 and AU3 need ADRs first. **AU2 done** (2026-11-11): ADR-0017 Accepted (option B); probe on dev showed group create/delete by API work and the server does not refuse a duplicate name (KB 0.16); `pls principals --env dev --create` creates the missing groups with the operator as member (dev only, not a sandbox, typed confirmation; ambiguous names refused also when binding); P2 0.8, lifecycle 0.18 not yet evaluated; trial run on dev: three groups created and bound, operator membership confirmed by Nam (KB 0.17) (plan, reviews `plans/2026-11-11-au2-groups-from-roles/`). **AU6 done** (2026-11-11): run-log events carry `session`; `pls usage collect` also counts a session opened in another folder, inside its window in this project (limits in ADR-0013; plan and review `plans/2026-11-11-au6-usage-from-any-session-folder/`). **AU5 done** (2026-11-11; trial on dev 2026-11-11 (`pls-demo-contracts`, Nam): three test users created (ids 10067–10069), each added to its role's group (378–380), keys issued through the screens; a second run reported every role ready with no write; Nam checked the members of the three groups in the UI): ADR-0018 option C (B fallback) and ADR-0019 option B; probes on dev: user create/delete by API, duplicate LoginId refused, login with the creation password and `/users/createapikey` work, a key dies with its user, group members readable and an update replaces the list (KB 0.18–0.20, D32; plans `plans/2026-11-11-au5-role-test-users/`, `plans/2026-11-11-test-users-in-groups/`). CLAUDE.md Mandatory 1 exception applied by Nam (`20fe494`). **Built** (2026-11-11): `pls test-users --env dev` — one test user per Group role, key issued through the screens only where KB D32 is verified (else exit 1 and a person step), `keys.<role>` added to `.pls/connections.json` when absent, membership by read, add, write, check (plan, review `plans/2026-11-11-build-test-users/`). Evaluated 2026-11-11 (`evals/results/pls-p4-test-writer/2026-11-11.md`, `evals/results/pls-x-lifecycle/2026-11-11.md`): P4 0.9 cases 001 and 002 pass; lifecycle 0.20 cases 004 and 007 pass, new case 008 run 2 passes under the rubric without the stg item (Nam, `89a6376`). `pls lint` without `config/` fixed (`4545128`). Eval runner brief: one turn ends with either a command or the report (`89a6376`). Lifecycle of test users is TD-24; `http-check` with the role keys not run in the trial (the ready run already checks each key with the API). Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
++**Next build work (roadmap order):** P3 done except Nam's patch for P3-8 (P3-2…P3-7 done 2026-11-12). **AU3 done (2026-11-13, committed; two review rounds, `plans/2026-11-12-au3-standing-permission-for-dev-writes/review.md`): ADR-0024 Accepted (Nam: option B until revoked; only apply / bootstrap / migrate; one record per sandbox)** — `pls profile set dev-writes on|off --env <dev env> --approver … --quote …` records the person's standing permission; `_confirm_write` then confirms `apply` / `bootstrap` / `migrate` on that `role: dev` environment by itself (environments.json **and** its role record must say dev; a damaged record falls back to the typed confirmation) and the release names the record (`apply-log.json`, `bootstrap-log.json`, `plan.json` `migrations_run`: `confirmed`); stg, prod, other commands unchanged. Lifecycle 0.24, `docs/setup.md`. **Patches waiting for Nam:** `plans/2026-11-12-au3-standing-permission-for-dev-writes/proposed-CLAUDE-md-mandatory-1.patch`, `…/proposed-template-CLAUDE-md-rule-3.patch`. Trial on `pls-demo-contracts` P3 is the person's. **ADR-0023 Accepted** (2026-11-12, option A); **TD-28 closed** (Nam: drop). **AU1 rest built but NOT COMMITTED (2026-11-13; parked as a patch, `plans/2026-11-13-au1-script-and-role-probes/`; ADR-0025 Proposed — Nam decides whether "left harmless" may stand in for his guard "probe site deleted afterwards", review finding F1 High):** `kb-verify` runs probes with a server script and steps under a role's test-user key — only with mail sink/disabled, the role bound to a group and its own `pls test-users` key file; the probe site is left without the script and with the administrator alone afterwards (site deletion waits for a verified delete API). Next for AU1: the C-1 probe file (KB curator) and a `kb-verify` run on dev by the person. Nam's decisions of 2026-11-12 evening for the rest of the night: TD-37 evals run all; TD-24 `test-users --remove` on dev; TD-32 not split; TD-29 patch only. **P2-7 done** (2026-11-12, `bfd0b14`): `docs/tech-debt.md` TD-25…TD-38 (a line with a deadline for every open review item: TD-36 roadmap P3-2…P3-8, TD-37 current-version evals, TD-38 method-L / B1 live / C10); `docs/review-findings.md` has a Trace column, statuses checked against the code, D21–D33 imported, ids cited as RF-… (plan, log, review `plans/2026-11-12-p2-7-tech-debt-and-findings-trace/`). **P2-6 done** (2026-11-11, agent part; Nam's decisions in item 7 above): ADR-0020…0022 Proposed (as built, with options), `docs/adr/README.md` has a "Built and relied upon" column, `docs/architecture.md` I4, I7, §4, §7.3, §8, §10 point to the ADRs and to `skills/README.md` instead of restating them (plan, log, review `plans/2026-11-11-p2-6-adr-governance/`). **Proposed by Nam 2026-11-11:** Step 4d "Spec-to-app automation" in `docs/plan.md` (AU1–AU6: design-time probes on dev, groups from roles.json, dev writes without typed confirmation, mail on dev testable, role tests, usage collect) — from the trial `pls-demo-contracts` (new app, P1 → G2 done on 2026-11-11; P3 waits for groups, department names and dev write confirmations). AU1 and AU3 need ADRs first. **AU2 done** (2026-11-11): ADR-0017 Accepted (option B); probe on dev showed group create/delete by API work and the server does not refuse a duplicate name (KB 0.16); `pls principals --env dev --create` creates the missing groups with the operator as member (dev only, not a sandbox, typed confirmation; ambiguous names refused also when binding); P2 0.8, lifecycle 0.18 not yet evaluated; trial run on dev: three groups created and bound, operator membership confirmed by Nam (KB 0.17) (plan, reviews `plans/2026-11-11-au2-groups-from-roles/`). **AU6 done** (2026-11-11): run-log events carry `session`; `pls usage collect` also counts a session opened in another folder, inside its window in this project (limits in ADR-0013; plan and review `plans/2026-11-11-au6-usage-from-any-session-folder/`). **AU5 done** (2026-11-11; trial on dev 2026-11-11 (`pls-demo-contracts`, Nam): three test users created (ids 10067–10069), each added to its role's group (378–380), keys issued through the screens; a second run reported every role ready with no write; Nam checked the members of the three groups in the UI): ADR-0018 option C (B fallback) and ADR-0019 option B; probes on dev: user create/delete by API, duplicate LoginId refused, login with the creation password and `/users/createapikey` work, a key dies with its user, group members readable and an update replaces the list (KB 0.18–0.20, D32; plans `plans/2026-11-11-au5-role-test-users/`, `plans/2026-11-11-test-users-in-groups/`). CLAUDE.md Mandatory 1 exception applied by Nam (`20fe494`). **Built** (2026-11-11): `pls test-users --env dev` — one test user per Group role, key issued through the screens only where KB D32 is verified (else exit 1 and a person step), `keys.<role>` added to `.pls/connections.json` when absent, membership by read, add, write, check (plan, review `plans/2026-11-11-build-test-users/`). Evaluated 2026-11-11 (`evals/results/pls-p4-test-writer/2026-11-11.md`, `evals/results/pls-x-lifecycle/2026-11-11.md`): P4 0.9 cases 001 and 002 pass; lifecycle 0.20 cases 004 and 007 pass, new case 008 run 2 passes under the rubric without the stg item (Nam, `89a6376`). `pls lint` without `config/` fixed (`4545128`). Eval runner brief: one turn ends with either a command or the report (`89a6376`). Lifecycle of test users is TD-24; `http-check` with the role keys not run in the trial (the ready run already checks each key with the API). Still without a current-version eval: P1–P4, P6, onboarding, spec-recovery, script-engineer (H6).
+ 
+ **Agent team (set up 2026-11-11; ADR-0016 Accepted by Nam on 2026-11-11 after two trial tasks, P3-1 parts 1 and 2).** Framework tasks start with the skill `pls-x-dev-orchestrator` (`.claude/skills/`); rules in `docs/agent-rules.md`; three subagents in `.claude/agents/` (reviewer, eval case-runner, KB curator); permission `deny` rules in `.claude/settings.json` (no hook yet — TD-21). Setup evidence: `plans/2026-11-11-agent-team-setup/`. Protected paths (`.claude/**`, `docs/agent-rules.md`, `docs/review-criteria.md`, `evals/**/expected.md`, `templates/project/CLAUDE.md`) are changed by Nam: an agent writes `plans/<date>-<slug>/proposed-<file>.patch` with the reason, Nam applies and commits it. Still open: the 4 open questions of ADR-0016.
+ - **Patches applied by Nam** (`bc8df4a`, 2026-11-11; the patch files stay in `plans/2026-11-11-p3-1-project-layout-checked-by-test/` as the record): `templates/project/CLAUDE.md` Layout table now lists the folders the skills use and points to architecture §3.2 (new projects only; existing projects keep their own `CLAUDE.md`); `docs/agent-rules.md` describes the patch procedure for protected paths and names ADR-0016 as Accepted. No patch is waiting.
+diff --git a/docs/adr/README.md b/docs/adr/README.md
+index 702255b..6c02b64 100644
+--- a/docs/adr/README.md
++++ b/docs/adr/README.md
+@@ -28,5 +28,6 @@
+ | [0022](0022-framework-distribution-to-project-repositories.md) | Framework distribution: launcher, `framework.lock`, `skills check|sync` | Proposed (2026-11-11) — option A for `demo` | yes |
+ | [0023](0023-configuration-shapes-the-kb-does-not-cover.md) | Configuration shapes the KB does not cover: source at the version's tag → KB probe → `kb-verify` → KB + scope key, once in the framework | Accepted (2026-11-12, Nam) — option A | yes, as option A: `references/kb-gaps.md` in the lifecycle skill; P2/P3 skills; `$today±N` probe variables; `[${principal:x}]` in mail addresses |
+ | [0024](0024-standing-permission-for-dev-writes.md) | Standing permission for dev writes: recorded once per project and dev environment in the person's words, it confirms `apply` / `bootstrap` / `migrate` on role dev until revoked | Accepted (2026-11-12) — option B | yes: `pls profile set dev-writes on|off --env <dev env>`, `_confirm_write`; apply-log `confirmed` |
++| [0025](0025-kb-probes-with-server-scripts-and-test-user-keys.md) | KB probes with a server script or steps under a role's test-user key, guarded (dev only, probe folder, mail sink/disabled, the test user's own key, site left harmless) — amends ADR-0009's probe rules | Proposed — option B chosen by Nam (2026-11-12); deleting the probe site not built, waits for Nam | yes: `pls_kbverify_guarded.py`, `kb-verify` |
+ 
+ New ADR: copy `0000-template.md` and use the next number. Accepted ADRs are not edited; changes are made through a new ADR with status "Supersedes".
+diff --git a/docs/architecture.md b/docs/architecture.md
+index aaa48c0..1a15b58 100644
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -348,7 +348,7 @@ One file, `traceability.json`, links the chain in both directions:
+ | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
+ | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
+ | `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package; names the KB entries not verified on that version, as `release-plan` does in its `VERSION` lines (ADR-0009) | branch `brownfield-adr` |
+-| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
++| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). A probe may carry a server script or steps under a role's test-user key only with mail to a sink or disabled, the role bound to a group and its own test-user key file; the site is left without the script, and a roles probe's grant is removed afterwards, also after a failure (ADR-0025, Proposed). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
+ | `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
+ | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
+ | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
+diff --git a/docs/plan.md b/docs/plan.md
+index 82dcd89..def86ea 100644
+--- a/docs/plan.md
++++ b/docs/plan.md
+@@ -148,7 +148,7 @@ Migrations over HTTP, reviewer agents, CI, Playwright smoke, prod / customer-sid
+ 
+ | # | Item | Content | Decision needed first | Done when |
+ |---|---|---|---|---|
+-| AU1 | **Design-time probes on dev, automated** | P2 writes a probe spec for every behaviour the KB lacks (format of `references/probes/*.json`); a `pls` command runs it in the dev probe folder, records the result, deletes the probe site, and the KB curator records the entry. Extends the kb-verify runner to server scripts and a second user's key under explicit guards (dev only, probe folder only, no mail) | ADR (amends ADR-0009 safety rules) | DES-001 C-1 and C-2 of the trial run as probes before G2, with no UI step — **first part 2026-11-11:** ADR-0023 (Accepted 2026-11-12, option A): shapes the KB lacks come from the source at the version's tag and a KB probe run by `kb-verify` (C-2 → probe D33); server-script probes (C-1) and a second key still open |
++| AU1 | **Design-time probes on dev, automated** | P2 writes a probe spec for every behaviour the KB lacks (format of `references/probes/*.json`); a `pls` command runs it in the dev probe folder, records the result, deletes the probe site, and the KB curator records the entry. Extends the kb-verify runner to server scripts and a second user's key under explicit guards (dev only, probe folder only, no mail) | ADR (amends ADR-0009 safety rules) | DES-001 C-1 and C-2 of the trial run as probes before G2, with no UI step — **first part 2026-11-11:** ADR-0023 (Accepted 2026-11-12, option A): shapes the KB lacks come from the source at the version's tag and a KB probe run by `kb-verify` (C-2 → probe D33); server-script probes (C-1) and a second key still open — **built 2026-11-13, not merged** (ADR-0025 Proposed — option B chosen by Nam; his guard "probe site deleted afterwards" waits for his decision: `kb-verify` runs probes with a server script and steps under a role's test-user key, guarded: dev only, probe folder, mail sink/disabled, the test user's own key file, site left harmless afterwards; site deletion waits for the delete API to be verified). The C-1 probe itself and its run on dev are the next step (KB curator, the person runs `kb-verify`) |
+ | AU2 | **Groups from `design/roles.json`** | After G2, `pls principals --env dev --create` creates the missing groups and binds them | KB probe: can the 1.5.x API create a group (unknown); if not, the item stays a person step | the three groups of the trial exist on dev without a UI step — **done 2026-11-11** (ADR-0017 Accepted; probe: create/delete work, duplicates not refused by the server; the trial's three groups were created and bound on dev by `pls principals --env dev --create`, operator membership checked in the UI) |
+ | AU3 | **Dev writes without a typed confirmation, once allowed** | The person records once per project, in their words (`pls profile set …`), that the agent may run `bootstrap` / `apply` / `migrate` on `role: dev`; stg and prod unchanged | ADR (ADR-0008, ADR-0014 TB-3) — Critical, write guard | the trial's P3 runs on dev without a typed confirmation, and stg still refuses — **built 2026-11-12** (ADR-0024 Accepted, option B: `pls profile set dev-writes on --env dev …`; only apply / bootstrap / migrate on role dev; one record per sandbox; revocable). The trial run on `pls-demo-contracts` is the person's |
+ | AU4 | **Mail on dev made testable** | A mail catcher (or a dev mail setting) recorded as `side_effects.mail`; P4 tests read the caught mails, so reminders and notifications are tested automatically | infrastructure choice (Nam); ADR-0010 | DES-001 C-4 (reminder once or daily) is answered by a P4 test — **out of scope for now** (Nam, 2026-11-11: a separate infrastructure setting) |
+diff --git a/skills/README.md b/skills/README.md
+index 71c3f60..e6786c0 100644
+--- a/skills/README.md
++++ b/skills/README.md
+@@ -6,7 +6,7 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
+ |---|---|---|---|
+ | `pls-kb-pleasanter` | all (knowledge base) | 0.24 | 0.24: every `behaviours.md` row has an ID, a version or a marker (design rule / source-derived / version not recorded) and, when probed, what its probe contained and did not cover (design review F1); D34 status impact (design rule), D35 server-script timeouts (source-derived from `Pleasanter_1.5.2.0` `Script.json`: 10 000 ms, HTTP client 100 000 ms; effect on the save open); D5 and D11 traced; `api.md` and `schema.md` state their evidence; no fact verified anew. 0.23: wording only — D21, `api.md` site package notes and probe D21 name an adopted brownfield site / app instead of its id or name (design review A5); no fact changed. 0.22: D33 verified on 1.5.2 (probe `D33-near-completion-range`, `pls kb-verify` on MADLAB dev 2026-11-12): Before 0 / After 90 stored and used — the `General.json` maximum 30 does not limit a value sent through `updatesite`; the absent Status condition and the negative filter stay source-derived; every other probe passed again the same day; scope keys `NearCompletionTimeBeforeDays/AfterDays`. 0.21: D33 `NearCompletionTime` range with probe (source-derived from `Pleasanter_1.5.2.0`, **not verified** until `kb-verify` passes; `General.json` maximum 30 is open); schema.md source-derived rows for `Aggregations`, `Reminders` and address tokens; D8: `Title.ValidateRequired` dropped on an Issues round trip (one observation) (ADR-0023). 0.20: D32 — screen login and API key issue of a created user (1.5.2). 0.19: api.md "Users and groups" — group members readable by `/api/groups/get`, `update` replaces `GroupMembers`, keeps omitted fields and the administrator flag; a deleted user leaves its groups (group-members probe 2026-11-11). 0.18: api.md "Users and groups" — user create/delete by API (duplicate LoginId refused; a key dies with its user), login and API key issue through the screens (user probe 2026-11-11). 0.17: `GroupMembers` on group create observed (operator as member). 0.16: api.md "Users and groups" — group create/delete by API (write probe 2026-11-11; the server does not refuse a duplicate group name). 0.15: pls names entries not verified on an environment's version. 0.14: D4a (no conditional write; the remaining race). 0.13: probes + `index.json` (verified_on) for D8, D10, D21, D24, D27, D28, D30; `pls kb-verify` (BR8).  0.12: api.md site package format (BR5).  0.11: D29 Htmls/Scripts/Styles, D30 dashboard parts, D31 background server scripts (BR3).  0.10: api.md "Version" (where 1.5.2 shows its version; ADR-0009).  0.9: D28 `[[Users*]]` user choice (equipment-loan demo R-20261105-01-dev).  0.8: `references/skeletons.md` (new-site skeletons, verified built-in columns; B3).  0.7: D21–D26 (equipment demo PRB-001, ADR-0007). D12–D20 from dev probes; facts 11–13 (process buttons for read-only users, summaries, removed definitions); rule: a probe is evidence only for the configuration it reproduces (slice #2, S2-1) |
+ | `pls-p1-requirements-analyst` | P1 | 0.7 | 0.7: impact analysis reads each notification and process by its condition (watched columns, condition view, process filter), not only its recipient, and a reminder's condition from the exported settings (not in the KB: recorded as unverified); an open question that could add a status names every element that depends on status (eval case 001 on 0.6 missed the 対応期限 reminder twice). 0.7 **passed eval case 001** (2026-11-11, 10 of 10 Must) and **eval case 002** (2026-11-11, 9 of 9 Must); and **eval case 003** (2026-11-11, 13 of 13 Must, no correction of the person role; proposals still not exercised); one run each. 0.6: interview mode — a wish the KB does not cover is a requirement marked `[unverified]` that P2 must verify, neither dropped nor promised (Nam's decision after case 003 run 1). 0.6 **passed eval case 003** run 2 (2026-11-11; the person-role subagent was corrected once, proposals not exercised). 0.6 **passed eval case 002** (2026-11-11, claude-opus-5-5). 0.6 **failed eval case 001** (2026-11-11, claude-opus-5-5): 9 of 10 Must — the 対応期限 reminder (condition view 未完了) was judged unaffected without its status dependency; run 3 the same miss (run 2 stopped on an ambiguous case input, fixed); the miss is systematic on 0.6. 0.5: interview mode for a rough idea (`references/interview.md`): at most 3 rounds, questions and answers verbatim in `requirements/sources/`, every requirement names its source answers, an unaccepted proposal of the AI is a question. 0.5 **failed eval case 003** run 1 (2026-11-11): 12 of 13 Must items pass, the Teams wish the KB does not cover was written as a requirement (`[unverified]`, optional) — the skill text did not say whether such a wish may be a requirement (resolved in 0.6). 0.4: derived requirements for a new app (impact between requested behaviours only); index template has a Derived-from column. 0.2 passed eval case 001. 0.3 **passed eval case 002** run 1 (2026-11-05; header contamination noted, input fixed) |
+-| `pls-p2-solution-designer` | P2 | 0.9 | 0.9: a shape the KB does not cover follows `pls-x-lifecycle/references/kb-gaps.md` (ADR-0023) instead of a project probe — not yet evaluated. 0.8: groups on dev created by `pls principals --create` after G2; unique group names (ADR-0017) — not yet evaluated. 0.7 **passed eval cases 001 and 002** (2026-11-11, 8 of 8 and 7 of 7 Must; one run each; the runner has no shell, so the `pls xref`/`lint` steps were not exercised). 0.7: DES template: a server script row names the site and the script (L-LAD-01). 0.6: impact analysis uses `pls xref` (BR7). 0.3 **failed eval case 002** run 1 (2026-11-05): design-changing probe scheduled after G2. 0.4: such probes are G2 prerequisites, otherwise take the safe branch. 0.4 **passed eval case 002** run 2 (2026-11-05): access control on the process as the safe branch, probe as G2 prerequisite. 0.5: new sites (`references/new-sites.md`, ADR-0007) — not yet evaluated |
++| `pls-p2-solution-designer` | P2 | 0.10 | 0.10: server-script and role behaviour are probed by `kb-verify` too (ADR-0025) — not yet evaluated. 0.9: a shape the KB does not cover follows `pls-x-lifecycle/references/kb-gaps.md` (ADR-0023) instead of a project probe — not yet evaluated. 0.8: groups on dev created by `pls principals --create` after G2; unique group names (ADR-0017) — not yet evaluated. 0.7 **passed eval cases 001 and 002** (2026-11-11, 8 of 8 and 7 of 7 Must; one run each; the runner has no shell, so the `pls xref`/`lint` steps were not exercised). 0.7: DES template: a server script row names the site and the script (L-LAD-01). 0.6: impact analysis uses `pls xref` (BR7). 0.3 **failed eval case 002** run 1 (2026-11-05): design-changing probe scheduled after G2. 0.4: such probes are G2 prerequisites, otherwise take the safe branch. 0.4 **passed eval case 002** run 2 (2026-11-05): access control on the process as the safe branch, probe as G2 prerequisite. 0.5: new sites (`references/new-sites.md`, ADR-0007) — not yet evaluated |
+ | `pls-p3-config-builder` | P3 | 0.8 | 0.8: step 5 names the standing permission for dev writes (ADR-0024) — not yet evaluated. 0.7: Outputs section (design review I1). 0.6: a property not in the KB stops that element and follows `kb-gaps.md` (ADR-0023), not the UI first; `[${principal:x}]` inside mail addresses (config-layout) — not yet evaluated. 0.5: config-layout: how `${env:x}` maps back (L-REF-04). 0.4: `pls refs --keep/--ref` need `--quote` (the person's own words, never relayed). 0.3: sandboxes, harvest, merge driver (BR6). 0.2: L-SCR-02 syntax, `pls refs` literal numbers (BR7). D2: design → `config/` (layout and references in `references/config-layout.md`), canon/lint/coverage loop, dev deploy until round trip 0. Case 001 run 1 pass (2026-11-05) |
+ | `pls-p4-test-writer` | P4 | 0.9 | 0.9: `per-role keys` on dev come from `pls test-users` (ADR-0018). 0.8: coverage is per environment and shows api-only / failed / error / not-run. 0.7: test-spec: `as_key` specs run only with `pls test` (the runner refuses them). 0.6: runs tests on dev only; outside dev is P5 with the release's G4. 0.5: test-spec: a step writes only to a site of its own environment (pls refuses others). 0.4: `exec` expects 200 unless `expectHttp` says otherwise (pls); G3 folder for a stg/prod target. 0.3: test-spec: mail safety refusal (ADR-0010).  0.2: `references/test-spec.md`: `siteConfig` does not substitute `$vars` (TD-14h).  D2: acceptance criteria → test specs (`references/test-spec.md` = the spec format), role tests, triage, G3 evidence (`references/g3-template.md`). Case 001 run 1 pass (specs, not run) |
+ | `pls-p5-release-manager` | P5 | 0.12 | 0.12: migrate on dev may run under the standing permission (ADR-0024). 0.11: Outputs section (design review I1). 0.10: release folder records executor, confirmation and read-back; undo is a new release. 0.9: a site changed since the preflight stops the release (`rolled-back`). 0.8: smoke tests with `--release <R>` (G4 of the release), never `--yes` unasked. 0.7: prod target ends with `pls package` (zip + `verify.py`) for the customer's operator (ADR-0003). 0.6: G4 recorded after `release-plan` (bound to the plan's content); data migrations with `pls migrate` before `apply`. 0.5: scheduled scripts after apply — hand over the resolved files, record `pls jobs-verified` only after the operator says it (I4). 0.4: operator part of the report written by `release-plan`. 0.3: G4 recorded with `pls gate` before apply / bootstrap on stg. 0.2: adoption records (BR4). D2: dev target = drift 0 + release record; stg = release-plan → G4 → apply → round trip → smoke; Japanese diff report (`references/diff-report-template.md`). Evaluated end to end in D7 |
+@@ -14,7 +14,7 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
+ | `pls-x-spec-recovery` | before P1 / P1–P2 input | 0.4 | 0.4: the as-is review is recorded with `pls review as-is` (a G2 approver's words); DES-000 counts only for reviewed, unchanged documents. 0.3: starts from `pls spec-skeleton`; the LLM writes only marked places. BR9: as-is 画面設計書 (Japanese) from config, inferences marked; DES-000 for adopted scripts after review. Case 001 **pass** 2026-11-05; 0.2 adds 設定未確認, review record, view-name conditions |
+ | `pls-p3-script-engineer` | P3 | 0.6 | 0.6: sandbox apply may run under the sandbox's own standing permission (ADR-0024). 0.5: checklist before P4 replaces the hand-over paragraph; time limit row cites KB D35 (source-derived, effect on the save not verified) (design review I1). 0.4: `${env:x}` inside a body only for distinctive values (L-REF-04). 0.3: a sandbox plan refuses writes to a shared site; `--allow-shared-writes` is the person's. BR9: rules for editing (legacy) scripts — references, D7, timeouts, D25, minimal diffs, L-SCR-02, xref impact, sandbox deploy. Case 001 **pass** 2026-11-05; 0.2 adds env values per environment, raw `${env:x}`, old ids as a separate decision |
+ | `pls-p6-maintenance-triage` | P6 | 0.3 | 0.3: checklist before the answer goes out (design review I1). BR9: inquiries/incidents → facts, drift, version, env-compare, xref → cause and route (no fix). Case 001 **pass** 2026-11-05; 0.2 adds the path for an unreachable environment (package + env-compare, --from-package) |
+-| `pls-x-lifecycle` | all (orchestration) | 0.24 | 0.24: rule 3 — standing permission for dev writes recorded with `pls profile set dev-writes` in the person's words (ADR-0024); `migrate` named with apply / bootstrap; P3 / CR steps name it — not yet evaluated. 0.23: `release-plan --summary` among the summary forms. 0.22: `pls skills check` first in section 1; completion report at the end of every phase and session (rule 9, EV-07); checklist at the end of a session (design review I1, I3, I6) — not yet evaluated. 0.21: `references/kb-gaps.md` (ADR-0023): source at the version's tag → framework KB probe → `pls kb-verify` by the person → KB + scope key; a scope refusal is no longer settled with `--accept-unverified` — not yet evaluated. 0.20: test-users exit 1 / PERSON STEP explained to the person; test users and groups are created on dev only. 0.19: with `per-role keys`, the person runs `pls test-users --env dev` after principals (ADR-0018, ADR-0019). 0.18: principals after G2 — the person runs `pls principals --env dev --create` (ADR-0017). 0.17: coverage per environment (`--env`). 0.16: stg smoke tests run with `--release <R>`; typed confirmations need the person's terminal. 0.15: Approvers / Operators / Origin only through `pls profile set` (never by hand, never relayed words); agents never drive the browser runner; migrations with `pls migrate`. 0.14: `jobs-verified` follows the gate rule (person's words, never your own; never edit `Operators`). 0.13: the onboarding-first rule of section 0 is enforced by `pls` (L-ONB-01, refusals). 0.12: step markers and token usage (ADR-0013), one session per CR, summary forms. 0.11: gate decisions recorded with `pls gate` (I4 checked by the tool). 0.10: approver not named → ask at the gate. 0.9: routing cases 002/003 **pass** 2026-11-08; pending requests saved verbatim, Origin updated after the person's answer. 0.8: section 0 routes by profile Origin (new / existing): no P1 before onboarding for an existing app. 0.7: 0.7: routes to onboarding, spec-recovery, script-engineer, triage (BR9). 0.6: 0.6: env-compare, version from a site package (BR5). 0.5: adopt existing sites (BR4); adoption records are not releases. 0.4: scope refusal (ADR-0001, BR3). 0.3: version check at the start (ADR-0009). 0.2: rule 2 covers `side_effects` (ADR-0010). D1 (Step 4b): phase order, gate stops and records (`references/gates.md`), `pls` commands per step, token rules; project `CLAUDE.md` template in `templates/project/`. Lifecycle case 001 **passed** (fresh agent stops at G1, 2026-11-05) |
++| `pls-x-lifecycle` | all (orchestration) | 0.25 | 0.25: `references/kb-gaps.md` step 4 — server-script and role probes (ADR-0025) — not yet evaluated. 0.24: rule 3 — standing permission for dev writes recorded with `pls profile set dev-writes` in the person's words (ADR-0024); `migrate` named with apply / bootstrap; P3 / CR steps name it — not yet evaluated. 0.23: `release-plan --summary` among the summary forms. 0.22: `pls skills check` first in section 1; completion report at the end of every phase and session (rule 9, EV-07); checklist at the end of a session (design review I1, I3, I6) — not yet evaluated. 0.21: `references/kb-gaps.md` (ADR-0023): source at the version's tag → framework KB probe → `pls kb-verify` by the person → KB + scope key; a scope refusal is no longer settled with `--accept-unverified` — not yet evaluated. 0.20: test-users exit 1 / PERSON STEP explained to the person; test users and groups are created on dev only. 0.19: with `per-role keys`, the person runs `pls test-users --env dev` after principals (ADR-0018, ADR-0019). 0.18: principals after G2 — the person runs `pls principals --env dev --create` (ADR-0017). 0.17: coverage per environment (`--env`). 0.16: stg smoke tests run with `--release <R>`; typed confirmations need the person's terminal. 0.15: Approvers / Operators / Origin only through `pls profile set` (never by hand, never relayed words); agents never drive the browser runner; migrations with `pls migrate`. 0.14: `jobs-verified` follows the gate rule (person's words, never your own; never edit `Operators`). 0.13: the onboarding-first rule of section 0 is enforced by `pls` (L-ONB-01, refusals). 0.12: step markers and token usage (ADR-0013), one session per CR, summary forms. 0.11: gate decisions recorded with `pls gate` (I4 checked by the tool). 0.10: approver not named → ask at the gate. 0.9: routing cases 002/003 **pass** 2026-11-08; pending requests saved verbatim, Origin updated after the person's answer. 0.8: section 0 routes by profile Origin (new / existing): no P1 before onboarding for an existing app. 0.7: 0.7: routes to onboarding, spec-recovery, script-engineer, triage (BR9). 0.6: 0.6: env-compare, version from a site package (BR5). 0.5: adopt existing sites (BR4); adoption records are not releases. 0.4: scope refusal (ADR-0001, BR3). 0.3: version check at the start (ADR-0009). 0.2: rule 2 covers `side_effects` (ADR-0010). D1 (Step 4b): phase order, gate stops and records (`references/gates.md`), `pls` commands per step, token rules; project `CLAUDE.md` template in `templates/project/`. Lifecycle case 001 **passed** (fresh agent stops at G1, 2026-11-05) |
+ 
+ ## Installing into a project repository
+ 
+diff --git a/skills/pls-p2-solution-designer/SKILL.md b/skills/pls-p2-solution-designer/SKILL.md
+index a3df9b5..9fb135a 100644
+--- a/skills/pls-p2-solution-designer/SKILL.md
++++ b/skills/pls-p2-solution-designer/SKILL.md
+@@ -27,7 +27,7 @@ description: Phase P2 of AI-DLC for Pleasanter. Designs how G1-approved requirem
+    - Use only `${principal:<role>}` in the configuration.
+    - The groups are created **after G2**: on dev by `pls principals --env dev --create` (run by the person, ADR-0017), on other environments by the person or the customer. `pls principals --env <e>` then binds their ids by name. Nothing about groups is prepared before the design. A group name must be unique in the tenant: Pleasanter does not refuse a duplicate name, and `pls` refuses to bind one.
+ 2. **Climb the ladder only when forced** (invariant I5, `references/ladder.md`). Record the rung for every element; anything at rung 3 or higher needs a written reason why lower rungs cannot work.
+-3. **Check feasibility against the knowledge base.** If a mechanism depends on a shape or behaviour not listed in `pls-kb-pleasanter`, follow `pls-x-lifecycle/references/kb-gaps.md` (ADR-0023): the shape from canonical exports of the same environment or from the Pleasanter source at the version's tag (recorded in the KB as source-derived), then a framework KB probe that the person runs with `pls kb-verify --env <dev>`. The result goes into the knowledge base for every project, not into this project only. A probe counts as evidence only if it reproduces the combination the design relies on (permission + process + display condition, summary + existing children, …); say what the probe contained. A probe whose result can **change the design** (add or remove an element, a requirement or a classification) is a **G2 prerequisite**: run it before G2. If it cannot be run before G2, design the branch that is **safe if the expectation is wrong** (e.g. restrict a process with access control instead of relying on a read-only permission to hide its button) and present the probe as a confirmation, not as the decision — never present only the expected branch. Record rejected alternatives and why, citing the knowledge-base entry (e.g. a checkbox-based display condition is rejected because of D9).
++3. **Check feasibility against the knowledge base.** If a mechanism depends on a shape or behaviour not listed in `pls-kb-pleasanter`, follow `pls-x-lifecycle/references/kb-gaps.md` (ADR-0023): the shape from canonical exports of the same environment or from the Pleasanter source at the version's tag (recorded in the KB as source-derived), then a framework KB probe that the person runs with `pls kb-verify --env <dev>`. A behaviour of a server script, or of what a role can do, is probed the same way (ADR-0025: the probe carries the script and `roles`; it needs mail to a sink or disabled on that dev environment, and `pls principals` / `pls test-users` run there first). The result goes into the knowledge base for every project, not into this project only. A probe counts as evidence only if it reproduces the combination the design relies on (permission + process + display condition, summary + existing children, …); say what the probe contained. A probe whose result can **change the design** (add or remove an element, a requirement or a classification) is a **G2 prerequisite**: run it before G2. If it cannot be run before G2, design the branch that is **safe if the expectation is wrong** (e.g. restrict a process with access control instead of relying on a read-only permission to hide its button) and present the probe as a confirmation, not as the decision — never present only the expected branch. Record rejected alternatives and why, citing the knowledge-base entry (e.g. a checkbox-based display condition is rejected because of D9).
+ 4. **Allocate column slots** in `design/slot-ledger.json` using the existing entry shape: `"<slot>": {"label", "status": "allocated", "zone", "req"}` (add `"design": "DES-NNN"` when useful). Pick the first slot of the needed type that the ledger has never allocated, and record in the design that it must be confirmed empty in every environment's export. Never reuse a slot that held data (A2, ADR-0002).
+ 5. **Impact analysis** with `references/impact-checklist.md`: every existing view, notification, reminder, aggregation, script and permission that the change touches. New impacts become derived requirements → back to P1/G1 (do not silently absorb them). For a site with scripts, run `pls xref --site <s>` and read `ops/xref/<s>.json`: it lists which scripts use each column and site you change (static text match — a name in a comment counts too, a name built at run time does not).
+ 6. **Classify the change** (ADR-0004): config-only / data-impacting / permission-impacting, with reasons. Data-impacting changes need a migration plan in the design.
+diff --git a/skills/pls-x-lifecycle/references/kb-gaps.md b/skills/pls-x-lifecycle/references/kb-gaps.md
+index 9fb9819..5c87460 100644
+--- a/skills/pls-x-lifecycle/references/kb-gaps.md
++++ b/skills/pls-x-lifecycle/references/kb-gaps.md
+@@ -9,7 +9,7 @@ Use this when a design element needs a SiteSettings property, value or behaviour
+ | 1 | `pls-kb-pleasanter` (`schema.md`, `behaviours.md`, `skeletons.md`) | verified shape and behaviour, with the version | you |
+ | 2 | canonical exports already in git for the **same environment** (`config/<site>/site.json` of another project on that server) | a stored shape, as Pleasanter wrote it | you |
+ | 3 | Pleasanter source at the tag of the environment's recorded version — `https://github.com/Implem/Implem.Pleasanter`, tag `Pleasanter_<app version>` (e.g. `Pleasanter_1.5.2.0`; the version comes from `pls http-check`) | the shape (class fields, enums, defaults in `App_Data/Parameters/*.json`) and how it is evaluated | you, read only; send nothing about the project |
+-| 4 | a KB probe `skills/pls-kb-pleasanter/references/probes/<D…>.json` | an executable check: `expect_stored` for the stored shape, record tests for the behaviour (kb-verify dates: `$today+N`, `$today-N`) | the framework (KB curator), from the source evidence |
++| 4 | a KB probe `skills/pls-kb-pleasanter/references/probes/<D…>.json` | an executable check: `expect_stored` for the stored shape, record tests for the behaviour (kb-verify dates: `$today+N`, `$today-N`); a server script at the top level of the probe's settings and steps under a test user's key (`roles` + `as_key`) under the guards of ADR-0025 (mail to a sink or disabled, the role's own test-user key, a teardown) | the framework (KB curator), from the source evidence |
+ | 5 | `pls kb-verify --env <dev>` | the result on the server | **the person** runs it, or names `--yes` for that dev environment (it creates probe sites) |
+ | 6 | KB entry verified on that version; a new top-level key in `tools/pls/pls_scope.py` `VERIFIED_KEYS` with the evidence | the project may use it | the framework, then `pls skills sync` in the project |
+ 
+diff --git a/tools/pls/pls.py b/tools/pls/pls.py
+index aea2917..f4bdb2c 100644
+--- a/tools/pls/pls.py
++++ b/tools/pls/pls.py
+@@ -75,6 +75,7 @@ import pls_compare as CMP                                   # noqa: E402 — one
+ import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
+ import pls_merge as MG                                      # noqa: E402 — semantic merge of site.json (BR6)
+ import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
++import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
+ import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
+ import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
+ import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
+@@ -3193,9 +3194,20 @@ def http_cmd(r: Path, a) -> int:
+                 probes = KV.load_probes(kb)
+             except (OSError, ValueError, KeyError) as ex:
+                 raise H.TransportError(f"probes: {ex}")
++            guarded = [p["_name"] for p in probes if KG.is_guarded(p)]
+             if not _confirm("kb-verify", a.yes, f"kb-verify writes {len(probes)} probe site(s) and test records under folder "
+-                                                f"{parent_i} in {a.env} ({conn['url']})"):
++                                                f"{parent_i} in {a.env} ({conn['url']})" +
++                                                (f"; with a server script or a test user's key (ADR-0025): {', '.join(guarded)}"
++                                                 if guarded else "")):
+                 return 1
++            role_clients: dict = {}
++
++            def probe_client(role):                  # a declared role's test-user key (checked by KG.not_runnable)
++                if not role:
++                    return c
++                if role not in role_clients:
++                    role_clients[role] = H.Client(conn["url"], H.resolve_key(conn, role), timeout=H.conn_timeout(conn))
++                return role_clients[role]
+             state_f = r / ".pls" / f"kb-probes-{a.env}.json"
+             state = rj(state_f) if state_f.exists() else {}
+             if state.get("url") != conn["url"] or state.get("parent") != parent_i:
+@@ -3205,6 +3217,13 @@ def http_cmd(r: Path, a) -> int:
+             for p in probes:
+                 name, rt, log, status = p["_name"], p["site"]["ReferenceType"], [], "pass"
+                 row = {"entry": p["entry"], "probe": name, "status": "pass", "log": log}
++                is_g = KG.is_guarded(p)
++                why = KG.not_runnable(p, a.env, e, conn, Path(conn.get("_dir") or r / ".pls")) if is_g else None
++                if why:                                  # decided before anything is written for this probe
++                    row["status"] = results[name] = "error"
++                    log.append(f"not run: {why}")
++                    rows.append(row)
++                    continue
+                 try:
+                     sid = state["sites"].get(name)
+                     if sid:
+@@ -3226,8 +3245,10 @@ def http_cmd(r: Path, a) -> int:
+                         wj(state_f, state)
+                     row["site_id"] = sid
+                     settings = {"Version": schema, "ReferenceType": rt, **(p["site"].get("SiteSettings") or {})}
+-                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
+-                                                                       "Body": "", "SiteSettings": settings})
++                    body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": settings}
++                    if p.get("roles"):                     # the role's group may use the probe site (D15 shape)
++                        body.update(InheritPermission=sid, Permissions=KG.permissions(p, uid, e.get("principals") or {}))
++                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", body)
+                     want = p.get("expect_save", 200)
+                     ok = code == want
+                     log.append(f"{'ok' if ok else 'NG'} save → HTTP {code} (expected {want})")
+@@ -3246,12 +3267,12 @@ def http_cmd(r: Path, a) -> int:
+                         vars_ = KV.date_vars(server_day) | {"admin_uid": uid}
+                         specs = [dict(t, vars=dict(vars_)) for t in p.get("tests") or []]
+                         if specs:
+-                            res = H.run_tests(lambda role: c, sid, specs, a.env)
++                            res = H.run_tests(probe_client, sid, specs, a.env)
+                             for t in res["tests"]:
+                                 log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
+                                 if t["status"] not in ("pass", "pass-api-only"):
+                                     status = "fail"
+-                    if p.get("teardown"):                      # leave the probe site usable in the UI (D21)
++                    if p.get("teardown") and not is_g:         # leave the probe site usable in the UI (D21)
+                         td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
+                         code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
+                                                                            "Body": "", "SiteSettings": td})
+@@ -3261,6 +3282,23 @@ def http_cmd(r: Path, a) -> int:
+                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
+                     status = "error"
+                     log.append(str(ex))
++                finally:                                     # also after an unexpected error or Ctrl-C
++                    own_sid = row.get("site_id")                 # set only for a site created or proven to be this probe's
++                    if is_g and own_sid:                         # no script; a roles probe's grant is removed
++                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
++                        td.pop("ServerScripts", None)
++                        body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": td}
++                        if p.get("roles"):
++                            body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
++                        try:
++                            code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
++                        except H.TransportError as ex:
++                            code = str(ex)
++                        log.append(f"teardown → HTTP {code}")
++                        if code != 200:
++                            status = "error"
++                            log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
++                                       "permissions — a person removes them in Pleasanter")
+                 if p.get("observe") and status == "pass":
+                     status = "observed"
+                 row["status"] = status
+diff --git a/tools/pls/pls_kbverify.py b/tools/pls/pls_kbverify.py
+index 0acfc14..a13f452 100644
+--- a/tools/pls/pls_kbverify.py
++++ b/tools/pls/pls_kbverify.py
+@@ -13,8 +13,10 @@ Each KB entry that skills rely on has probes in skills/pls-kb-pleasanter/referen
+      "teardown": {"SiteSettings": {…}}}                                 # saved after the run: leave the site harmless
+ 
+ Safety: a probe can only create records on its own site and act on records it created (no `site`, `run_on`,
+-`as_key`, `vars`; ops create/get/list/exec). Probe sites never send mail (no notifications at any depth, no server
+-scripts). kb-verify reuses a probe site only when the site is provably its own (parent folder, title, type).
++`vars`; ops create/get/list/exec). Probe sites have no notifications or reminders at any depth. A server script at
++the top level of the probe's settings and `as_key` for a declared test-user role are allowed only under the guards
++of pls_kbverify_guarded (ADR-0025). kb-verify reuses a probe site only when the site is provably its own (parent
++folder, title, type).
+ """
+ from __future__ import annotations
+ 
+@@ -24,9 +26,11 @@ import re
+ from pathlib import Path
+ from typing import Any
+ 
++import pls_kbverify_guarded as KG
++
+ SELECTOR = re.compile(r"^(\w+)\[(\w+)=([^\]]*)\]$")
+ OPS = ("create", "get", "list", "exec")
+-FORBIDDEN_KEYS = ("site", "run_on", "as_key", "vars")
++FORBIDDEN_KEYS = ("site", "run_on", "vars")      # as_key: KG.check (declared roles only)
+ TITLE = "zz_kbprobe_{}"
+ 
+ 
+@@ -46,9 +50,12 @@ def _mail_parts(o: Any, path: str = "") -> list[str]:
+ 
+ def check_probe(p: dict) -> None:
+     """Raise ValueError when a probe could send mail or touch anything but its own site and records."""
+-    mail = _mail_parts(p["site"].get("SiteSettings") or {}) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
++    own = {k: v for k, v in (p["site"].get("SiteSettings") or {}).items() if k != "ServerScripts"}   # KG.check
++    mail = _mail_parts(own) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
+     if mail:
+-        raise ValueError(f"probe sites must not send mail or run server scripts: {mail}")
++        raise ValueError(f"probe sites must not send mail, and server scripts are allowed only at the top level of "
++                         f"the probe's settings (ADR-0025): {mail}")
++    KG.check(p)
+     for spec in (p.get("tests") or []) + ([{"id": "cleanup", "steps": p["cleanup"]}] if p.get("cleanup") else []):
+         bad = [k for k in FORBIDDEN_KEYS if k in spec]
+         saved: set[str] = set(p.get("_shared_saves") or [])
+diff --git a/docs/adr/0025-kb-probes-with-server-scripts-and-test-user-keys.md b/docs/adr/0025-kb-probes-with-server-scripts-and-test-user-keys.md
+new file mode 100644
+index 0000000..d6c95af
+--- /dev/null
++++ b/docs/adr/0025-kb-probes-with-server-scripts-and-test-user-keys.md
+@@ -0,0 +1,58 @@
++# ADR-0025: KB probes with server scripts and a test user's key
++
++- **Status:** Proposed — option B chosen by Nam (2026-11-12); one of his guards (the probe site is deleted afterwards) is **not built** and waits for his decision (see Decision); built 2026-11-13 as described, not committed
++- **Date:** 2026-11-13
++- **Deciders:** Nam
++- **Related:** I5, I9 (`docs/architecture.md` §2); ADR-0009 (version detection, `kb-verify` and its safety rules — this ADR amends them), ADR-0010 (mail and job safety outside production), ADR-0018 / ADR-0019 (test users per role and their keys), ADR-0023 (configuration shapes the KB does not cover); `docs/plan.md` Step 4d **AU1**; origin: trial `pls-demo-contracts` DES-001 C-1 (a server script reading the stored status), 2026-11-11
++
++## Context
++
++ADR-0023 lets the framework verify a configuration shape with `pls kb-verify` before a project relies on it. Two kinds of behaviour could not be probed that way, because the safety rules of ADR-0009 forbid them in probes:
++
++- **server scripts** — probe sites refused `ServerScripts` at any depth, so behaviour such as "a `BeforeUpdate` script can read the stored value and refuse a direct status change" (trial C-1) had no automated check; the trial moved it to P3/P4 tests on the project's own site;
++- **a second user's key** — probes ran under the administrator's key only (`as_key` forbidden), so "what a role can do on a site" (KB D19, D20) had only manual evidence.
++
++Since AU5 (ADR-0018), `pls test-users --env <dev>` creates one test user per role on dev with its own key file under the operator's `.pls/test-users/`, and `pls principals` binds each role to a group. ADR-0010 records per environment whether mail goes to a sink, is disabled, or is live.
++
++## Open questions
++
++- [ ] Can a site be deleted through the API on 1.5.x (path, rights, trash box)? Not in the KB (only groups and users have a verified delete, KB api.md). Until a probe answers it, a probe site is **left harmless** after each run (no server script, administrator only) and reused, instead of being deleted.
++- [ ] The names a server script uses to reach beyond its record (`items`, `notifications`, `httpClient`) come from the Pleasanter manual's object list as known to the framework, not from a check of the source at the version's tag. Whether `items` / `httpClient` in a server script honour the acting user's rights is not verified either.
++- [ ] Not verified on a server: that `updatesite` without `ServerScripts` removes a stored script (D4 says SiteSettings are replaced whole; never round-tripped with a script by a probe), and that `Permissions` in `updatesite` replaces the list (D15). The first supervised `kb-verify` run reads the site back after the teardown.
++
++## Options
++
++### Option A — Keep the ADR-0009 rules; such behaviour is tested only in projects (P3/P4)
++- Pros: nothing to build; probes cannot run code or act as another user.
++- Cons: the answer is found again by each project, after G2; the KB stays manual for scripts and roles (AU1 not met).
++
++### Option B — Allow both in `kb-verify`, under guards that `pls` checks (recommended)
++A probe may carry server scripts at the top level of its settings and steps under a declared role's key, only when all of these hold:
++1. the environment is `role: dev` and not a sandbox, and the probe site is under the probe folder (ADR-0009, unchanged);
++2. the environment's `side_effects.mail` is `sink` or `disabled` — whatever a script does, no mail reaches a person;
++3. a script body does not name `items`, `notifications` or `httpClient`, nor uses a way around a name (escapes, `globalThis`, `this[…]`, `eval`, `Function`, `require`, `import`); notifications and reminders stay forbidden at any depth. This is a name check, not a sandbox: a script runs with the administrator's rights when the administrator's key saves a record, so this check and the review of the probe file are the only controls against a script that reaches another site or the network;
++4. each role is declared with its permission value (`roles: {<role>: 1–511}`), bound to a group on the environment, and its key reference is the test user's own key file written by `pls test-users` (never an operator's or a person's key);
++5. the probe has a teardown without server scripts; after the run — also after a failure or an unexpected error — `pls` saves it, and for a probe with roles sets the site's permissions back to the administrator alone (a probe without roles never changes them). A site named by the state file but not provably the probe's own is never written (ADR-0009, unchanged).
++A rule the probe file alone decides (3, 4's declaration, 5's teardown) refuses the whole `kb-verify` run before any write; a condition of the environment (2, 4's group and key file) makes only that probe `error` with the reason, before anything is written for it, and the other probes still run.
++- Pros: C-1-style behaviour and role behaviour are verified once, in the framework, with evidence per version; no project decides it.
++- Cons: a probe runs code on the dev server with the administrator's rights and acts as a test user; a mistaken script that gets past the name check could write outside the probe folder or call the network — the review of each probe file is part of the control.
++
++### Option C — Server scripts only
++- Pros: smaller change.
++- Cons: role behaviour stays manual.
++
++## Decision
++
++**Option B** was chosen by Nam on 2026-11-12 (AskUserQuestion; the option he picked: "Both, guarded (Recommended)" — "kb-verify may run server-script probes and probes under a test user's key (keys.<role> from AU5). Guards: role dev only, the probe folder only, side_effects.mail must say no mail, probe site deleted afterwards. A write to dev still needs the person's command or --yes.").
++
++**Pending (Nam):** "probe site deleted afterwards" is not built — no site-delete API is verified for 1.5.x (open question 1; `CLAUDE.md` Mandatory 5). What is built instead is guard 5 (the site is kept, without its script and without the roles' grant; its records stay). Nam decides:
++- (a) accept guard 5 in place of deletion until a KB probe verifies the site-delete API (then deletion is added); or
++- (b) keep guarded probes off until deletion can be built (the code stays unmerged, or the guarded path refuses every probe).
++The ADR stays Proposed until he answers.
++
++## Consequences
++
++- Easier: P2 can ask for a probe of a script or a role behaviour; `pls kb-verify` answers it on the environment's version, and the KB records it (ADR-0023 order of sources, step 4–6).
++- Harder / costs: a probe file with a script or a role is reviewed like code; a person runs `kb-verify` (or names `--yes` for that dev environment) as before; the dev environment needs `pls test-users` and `pls principals` first for role probes.
++- ADR-0009 (Proposed) still lists "no server scripts" and "no `as_key`" among its probe rules; this ADR amends them, and ADR-0009 changes only with Nam's decision on it.
++- Built (2026-11-13): `tools/pls/pls_kbverify_guarded.py`; `kb-verify` per-role clients, permissions of the probe site while it runs, forced teardown; tests `tools/pls/tests/test_kbverify_guarded_probes.py`. The probe for C-1 itself is written by the KB curator with evidence, when a project asks for it.
+diff --git a/tools/pls/pls_kbverify_guarded.py b/tools/pls/pls_kbverify_guarded.py
+new file mode 100644
+index 0000000..6bd04b8
+--- /dev/null
++++ b/tools/pls/pls_kbverify_guarded.py
+@@ -0,0 +1,107 @@
++"""Guarded KB probes (ADR-0025): a probe with a server script, or with steps run under a test user's key.
++
++A probe file may carry, beyond the shape of pls_kbverify:
++
++    "site": {"SiteSettings": {"ServerScripts": [{"Id": 1, "Name": "…", "BeforeUpdate": true, "Body": "…"}], …}},
++    "roles": {"<role>": <site permission value 1–511 for the role's group>},     # e.g. 1 = read (KB D19)
++    "tests": [{"id": "…", "steps": [{"op": "create", …}, {"op": "exec", "as_key": "<role>", …}]}],
++    "teardown": {"SiteSettings": {…}}                                          # required; never a server script
++
++Guards, all checked by pls (Nam's decision of 2026-11-12, "Both, guarded"):
++- kb-verify itself runs only on a dev environment that is not a sandbox, under the probe folder (ADR-0009);
++- the environment's `side_effects.mail` is `sink` or `disabled`: a script that sends mail reaches nobody;
++- a script body names none of `items`, `notifications`, `httpClient` (other sites, mail, the network) and uses no
++  way around a name (escapes, `globalThis`, `this[…]`, `eval`, `Function`, `require`, `import`). This is a name
++  check, not a sandbox: a script runs with the administrator's rights when the administrator's key saves a record, so
++  this check and the review of the probe file are the only controls against a script that reaches another site or
++  the network; the mail guard holds for mail only;
++- a role is bound to a group on the environment (`pls principals`), and its key reference is the test user's own key
++  file that `pls test-users` writes (never an operator's or a person's key);
++- after the run pls saves the teardown settings without any server script and, for a probe with roles, sets the
++  site's permissions back to the administrator alone — also when the probe failed or stopped on an unexpected
++  error. A probe without roles never changes the site's permissions. The probe site and its records stay in the
++  probe folder (site deletion through the API is not verified, ADR-0025).
++"""
++from __future__ import annotations
++
++import re
++from pathlib import Path
++
++import pls_side_effects as SE
++import pls_test_users as TU
++
++SCRIPT_FORBIDDEN = re.compile(r"\b(?:items|notifications|httpClient|globalThis|eval|Function|require|import)\b"
++                              r"|\\[ux]|\bthis\s*\[")                # names, and ways around a name
++ROLE_NAME = re.compile(r"^[a-z0-9_]+$")
++ADMIN_ALL = 511                                     # all rights (KB api.md, site permissions)
++
++
++def scripts(p: dict) -> list:
++    return list(((p.get("site") or {}).get("SiteSettings") or {}).get("ServerScripts") or [])
++
++
++def is_guarded(p: dict) -> bool:
++    return bool(scripts(p) or p.get("roles"))
++
++
++def _as_keys(p: dict) -> set[str]:
++    out = set()
++    for spec in (p.get("tests") or []) + ([{"steps": p["cleanup"]}] if p.get("cleanup") else []):
++        out |= {str(spec["as_key"])} if "as_key" in spec else set()
++        out |= {str(st["as_key"]) for st in spec.get("steps") or [] if "as_key" in st}
++    return out
++
++
++def check(p: dict) -> None:
++    """Raise ValueError when a guarded probe breaks a rule that the file alone decides."""
++    for i, s in enumerate(scripts(p)):
++        if not isinstance(s, dict) or not isinstance(s.get("Body"), str):
++            raise ValueError(f"ServerScripts[{i}] must be an object with a Body")
++        bad = sorted(set(SCRIPT_FORBIDDEN.findall(s["Body"])))
++        if bad:
++            raise ValueError(f"ServerScripts[{i}] uses {bad}: a probe script stays on its own record (no other sites, "
++                             "mail or network, and no way around a name)")
++    roles = p.get("roles")
++    if roles is not None:
++        if not isinstance(roles, dict) or not roles:
++            raise ValueError("roles must be an object {role: permission value}")
++        for role, v in roles.items():
++            if not ROLE_NAME.match(str(role)) or type(v) is not int or not 1 <= v <= ADMIN_ALL:
++                raise ValueError(f"roles.{role}: a role name of a-z, 0-9, _ and a permission value 1–{ADMIN_ALL}")
++    undeclared = sorted(_as_keys(p) - set(roles or {}))
++    if undeclared:
++        raise ValueError(f"as_key {undeclared} not declared in roles (only a test user's key, ADR-0025)")
++    if is_guarded(p):
++        td = (p.get("teardown") or {}).get("SiteSettings")
++        if not isinstance(td, dict):
++            raise ValueError("a probe with a server script or roles needs a teardown that leaves the site harmless")
++        if "ServerScripts" in td:
++            raise ValueError("the teardown must not contain ServerScripts")
++
++
++def not_runnable(p: dict, env: str, env_conf: dict, conn: dict, conn_dir: Path) -> str | None:
++    """Why a guarded probe cannot run on this environment, or None. Decided before anything is written for it."""
++    try:
++        mail = SE.effects(env_conf)["mail"]
++    except ValueError as ex:
++        return str(ex)
++    if mail not in SE.MAIL_SAFE:
++        return (f"side_effects.mail of {env} is {mail!r}: a probe with a server script or a test user runs only where "
++                f"mail goes to a sink or is disabled ({', '.join(SE.MAIL_SAFE)})")
++    keys = conn.get("keys") or {}
++    for role in sorted(p.get("roles") or {}):
++        if not re.fullmatch(r"Group,\d+", str((env_conf.get("principals") or {}).get(role) or "")):
++            return f"role {role} is not bound to a group on {env} — pls principals --env {env}"
++        _, key_file, ref = TU.files(conn_dir, env, role)
++        if keys.get(role) != ref or not key_file.exists():
++            return (f"role {role}: its key is not the test user's key file ({ref}) — pls test-users --env {env}; a "
++                    "probe never runs under an operator's or a person's key")
++    return None
++
++
++def permissions(p: dict, admin_uid: str, principals: dict) -> list[str]:
++    """Site permissions while the probe runs: the administrator, and each declared role's group."""
++    out = [f"User,{admin_uid},{ADMIN_ALL}"]
++    for role, v in sorted((p.get("roles") or {}).items()):
++        out.append(f"Group,{str(principals[role]).split(',')[1]},{v}")
++    return out
+diff --git a/tools/pls/tests/test_kbverify_guarded_probes.py b/tools/pls/tests/test_kbverify_guarded_probes.py
+new file mode 100644
+index 0000000..3d4a275
+--- /dev/null
++++ b/tools/pls/tests/test_kbverify_guarded_probes.py
+@@ -0,0 +1,192 @@
++"""KB probes with a server script or a test user's key (ADR-0025): run only on dev with mail to a sink or disabled,
++under a role's own test-user key, and leave the probe site without the script and with the administrator alone —
++also when the probe fails. Fake Pleasanter on 127.0.0.1 only."""
++import copy
++import json
++import sys
++import unittest
++from pathlib import Path
++
++HERE = Path(__file__).resolve()
++sys.path.insert(0, str(HERE.parents[1]))
++sys.path.insert(0, str(HERE.parent))
++import pls  # noqa: E402
++import pls_kbverify as KV  # noqa: E402
++import test_http as TH  # noqa: E402
++import test_kbverify as TK  # noqa: E402
++
++SCRIPT = {"Id": 1, "Name": "probe", "BeforeUpdate": True, "Body": "if (model.Status === 900) { context.Error('x'); }"}
++GUARDED = {"entry": "D1", "site": {"ReferenceType": "Results", "SiteSettings": {"ServerScripts": [SCRIPT]}},
++           "roles": {"staff": 1},
++           "tests": [{"id": "D1", "steps": [{"op": "create", "save": "r", "data": {"Title": "kbprobe"}},
++                                            {"op": "create", "as_key": "staff", "data": {"Title": "x"}, "expectHttp": 403}]}],
++           "teardown": {"SiteSettings": {}}}
++
++
++def probe(**kw):
++    p = copy.deepcopy(GUARDED)
++    p.update(kw)
++    return p
++
++
++class GuardedProbeFileTest(unittest.TestCase):
++    def refused(self, p, msg):
++        with self.assertRaisesRegex(ValueError, msg):
++            KV.check_probe(json.loads(json.dumps(p)))
++
++    def test_a_guarded_probe_with_its_teardown_is_accepted(self):
++        KV.check_probe(probe())
++
++    def test_rules_the_file_alone_decides(self):
++        for body in ("items.Get(1);", "notifications.x();", "httpClient.Get('u');", "\\u0069tems.Update(1);",
++                     "\\x69tems", "globalThis['ite' + 'ms'];", "this['items'];", "eval('x');", "new Function('x');",
++                     "require('x');"):
++            p = probe()
++            p["site"]["SiteSettings"]["ServerScripts"][0]["Body"] = body
++            self.refused(p, "stays on its own record")
++        self.refused(probe(teardown={"SiteSettings": {"ServerScripts": [SCRIPT]}}),
++                     "server scripts are allowed only|teardown must not")
++        self.refused(probe(teardown=None), "needs a teardown")
++        self.refused(probe(roles={"staff": 0}), "permission value")
++        self.refused(probe(roles={"Staff!": 1}), "role name")
++        self.refused(probe(roles=None), "not declared in roles")
++        nested = probe()
++        nested["site"]["SiteSettings"]["Processes"] = [{"Name": "p", "ServerScripts": [SCRIPT]}]
++        self.refused(nested, "only at the top level")
++        self.refused(probe(site={"ReferenceType": "Results", "SiteSettings": {"ServerScripts": [SCRIPT],
++                                                                               "Notifications": [{"Id": 1}]}}), "mail")
++        self.refused(probe(roles={}), "roles must be an object")
++        self.refused(probe(roles=["staff"]), "roles must be an object")
++        self.refused(probe(site={"ReferenceType": "Results", "SiteSettings": {"ServerScripts": ["x"]}}),
++                     "object with a Body")
++
++    def test_the_guarded_check_on_its_own_refuses_a_script_in_the_teardown(self):
++        import pls_kbverify_guarded as KG                                   # also when called without check_probe
++        with self.assertRaisesRegex(ValueError, "teardown must not contain ServerScripts"):
++            KG.check(probe(teardown={"SiteSettings": {"ServerScripts": [SCRIPT]}}))
++
++
++class GuardedProbeRunTest(unittest.TestCase):
++    setUp_http = TH.HttpTest.setUp
++    tearDown = TH.HttpTest.tearDown
++    use_kb = TK.CliTest.use_kb
++    writes = TK.CliTest.writes
++
++    def setUp(self):
++        self.setUp_http()
++        self.set_dev(values={"kb_probe_parent": TK.PROBE_FOLDER}, principals={"admin": "User,7", "staff": "Group,374"},
++                     side_effects={"mail": "sink", "jobs": "disabled"})
++        self.key_ref("file:test-users/dev-staff.key")
++        (self.r / ".pls/test-users").mkdir()
++        (self.r / ".pls/test-users/dev-staff.key").write_text("K-STAFF\n", encoding="utf-8")
++
++    def key_ref(self, ref):
++        p = self.r / ".pls/connections.json"
++        c = json.loads(p.read_text(encoding="utf-8"))
++        c["dev"]["keys"]["staff"] = ref
++        p.write_text(json.dumps(c), encoding="utf-8")
++
++    def set_dev(self, **kw):
++        p = self.r / "environments.json"
++        envs = json.loads(p.read_text(encoding="utf-8"))
++        envs["envs"]["dev"].update(kw)
++        p.write_text(json.dumps(envs), encoding="utf-8")
++
++    def run_kb(self):
++        return pls.main(["kb-verify", "--env", "dev", "--yes"])
++
++    def result(self):
++        data = json.loads(next((self.r / "ops/kb-verify").glob("*-dev.json")).read_text(encoding="utf-8"))
++        return {p["probe"]: (p["status"], " ".join(p["log"])) for p in data["probes"]}
++
++    def probe_site(self):
++        sid = json.loads((self.r / ".pls/kb-probes-dev.json").read_text(encoding="utf-8"))["sites"]["D1-guarded"]
++        return self.fake.sites[sid]
++
++    def test_runs_with_the_script_and_the_role_then_leaves_the_site_harmless(self):
++        self.use_kb({"D1-guarded": probe()})
++        sent = []
++        orig = self.fake.handle
++
++        def spy(path, body):
++            if path.endswith("/updatesite"):
++                sent.append(copy.deepcopy(body))
++            return orig(path, body)
++        self.fake.handle = spy
++        self.assertEqual(self.run_kb(), 0, self.result())
++        self.assertEqual(self.result()["D1-guarded"][0], "pass")
++        self.assertEqual(sent[0]["SiteSettings"]["ServerScripts"][0]["Body"], SCRIPT["Body"])
++        self.assertEqual(sent[0]["Permissions"], ["User,7,511", "Group,374,1"])
++        site = self.probe_site()
++        self.assertIn((f"/api/items/{site['SiteId']}/create", "staff"), self.fake.calls)    # the role's own key
++        self.assertNotIn("ServerScripts", site["SiteSettings"])
++        self.assertEqual(site["Permissions"], ["User,7,511"])
++
++    def test_the_site_is_left_harmless_also_when_the_probe_fails(self):
++        p = probe()
++        p["tests"][0]["steps"][1]["expectHttp"] = 200                     # the role's create is refused: a failure
++        self.use_kb({"D1-guarded": p})
++        self.assertEqual(self.run_kb(), 1)
++        self.assertEqual(self.result()["D1-guarded"][0], "fail")
++        self.assertNotIn("ServerScripts", self.probe_site()["SiteSettings"])
++        self.assertEqual(self.probe_site()["Permissions"], ["User,7,511"])
++
++    def test_an_unexpected_error_still_removes_the_script_and_the_grant(self):
++        from unittest import mock
++        import pls_http as H
++        self.use_kb({"D1-guarded": probe()})
++        with mock.patch.object(H, "run_tests", side_effect=RuntimeError("crash")):
++            with self.assertRaises(RuntimeError):
++                self.run_kb()
++        self.assertNotIn("ServerScripts", self.probe_site()["SiteSettings"])
++        self.assertEqual(self.probe_site()["Permissions"], ["User,7,511"])
++
++    def test_a_script_only_probe_removes_its_script_and_leaves_permissions_alone(self):
++        p = probe(roles=None)
++        p["tests"][0]["steps"] = p["tests"][0]["steps"][:1]
++        self.use_kb({"D1-guarded": p})
++        self.assertEqual(self.run_kb(), 0, self.result())
++        site = self.probe_site()
++        self.assertNotIn("ServerScripts", site["SiteSettings"])
++        self.assertNotIn("Permissions", site)                              # never touched: inherits the probe folder
++
++    def assert_not_run(self, msg):
++        n = len(self.fake.calls)
++        self.assertEqual(self.run_kb(), 2)
++        status, log = self.result()["D1-guarded"]
++        self.assertEqual(status, "error")
++        self.assertIn(msg, log)
++        self.assertEqual(self.writes(n), [])
++
++    def test_mail_that_may_reach_people_stops_the_probe_before_any_write(self):
++        self.use_kb({"D1-guarded": probe()})
++        for mail in ("live", "unknown"):
++            self.set_dev(side_effects={"mail": mail, "jobs": "disabled"})
++            self.assert_not_run("sink or is disabled")
++
++    def test_only_the_test_users_own_key_file(self):
++        self.use_kb({"D1-guarded": probe()})
++        self.key_ref("file:staff.key")                                      # a person's key, not the test user's
++        self.assert_not_run("not the test user's key file")
++        self.key_ref("file:test-users/dev-staff.key")
++        (self.r / ".pls/test-users/dev-staff.key").unlink()
++        self.assert_not_run("not the test user's key file")
++
++    def test_a_role_not_bound_to_a_group_stops_the_probe(self):
++        self.use_kb({"D1-guarded": probe()})
++        self.set_dev(principals={"admin": "User,7"})
++        self.assert_not_run("not bound to a group")
++
++    def test_a_state_file_naming_another_site_is_never_torn_down(self):
++        self.use_kb({"D1-guarded": probe()})
++        (self.r / ".pls/kb-probes-dev.json").write_text(json.dumps(
++            {"url": self.url, "parent": TK.PROBE_FOLDER, "sites": {"D1-guarded": TH.LO}}), encoding="utf-8")
++        before = copy.deepcopy(self.fake.sites[TH.LO])
++        n = len(self.fake.calls)
++        self.assertEqual(self.run_kb(), 2)
++        self.assertEqual(self.writes(n), [])
++        self.assertEqual(self.fake.sites[TH.LO], before)
++
++
++if __name__ == "__main__":
++    unittest.main()

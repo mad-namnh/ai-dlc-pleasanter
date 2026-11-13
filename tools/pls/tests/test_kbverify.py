@@ -100,7 +100,7 @@ class CliTest(unittest.TestCase):
         (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
 
     def writes(self, n=0):
-        return [p for p, _ in self.fake.calls[n:] if p.endswith(("/createsite", "/updatesite", "/create", "/update"))]
+        return [p for p, _ in self.fake.calls[n:] if p.endswith(("/createsite", "/updatesite", "/deletesite", "/create", "/update"))]
 
     def test_probe_folder_must_be_a_folder_of_its_own(self):
         self.use_kb({"D1-ok": OK})

@@ -69,6 +69,14 @@ class Fake:
                 s["SiteSettings"] = {k: v for k, v in s["SiteSettings"].items() if k != self.drop_on_save}
             s["UpdatedTime"] = f"t{len(self.calls)}"
             return 200, {"Message": "updated"}
+        if act == "deletesite":                       # Pleasanter_1.5.2.0 ItemsController {id}/DeleteSite (source-derived)
+            if who != "admin" or getattr(self, "refuse_deletesite", False):
+                return 403, {"Message": "forbidden"}
+            if iid not in self.sites:
+                return 404, {"Message": "not found"}
+            if not getattr(self, "keep_deleted_site", False):   # a server that answers 200 and keeps the site
+                del self.sites[iid]
+            return 200, {"Id": iid, "StatusCode": 200, "Message": "deleted"}
         if act == "bulkupsert":                       # D13: matched by Keys → update, others created; D18: duplicates → 400
             if who != "admin":
                 return 403, {"Message": "forbidden"}
