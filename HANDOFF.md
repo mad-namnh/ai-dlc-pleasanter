@@ -10,7 +10,9 @@
 
 **TD-23 committed (2026-11-13):** `pls unpack` sees a site id also under a JSON-escaped (once) or backtick-quoted key or value and under a bracketed name (`p["SiteId"] = 797`, `797 === p["siteId"]`, `{["siteId"]: 797}`); widened after review round 1 on Nam's word; JSON escaped twice → TD-42. **Existing projects:** the next unpack turns such literals into `${site:x}` (one-time diff), lint L-REF-01 until then; scheduled scripts are not rewritten by unpack — edit them by hand. Suites 558 OK (3.12), 558 OK skipped=2 (3.10), node 15.
 
-**Next (TD-24, TD-23 done) (Nam 2026-11-13: "lam tiep TD-39 va cac task con lai"):** TD-30, TD-31, TD-26 (code), then the evals of P2 0.10 and lifecycle 0.26 (TD-37; Nam: run all). One task per commit, review per Standard/Critical task (`pls-x-dev-orchestrator`).
+**TD-30 committed (2026-11-13):** `skills check|sync` report skills the framework dropped (sync removes them), folders pls did not install (left alone), a stale launcher (sync rewrites it) and template files changed since the last sync (hashes in the lock, merged by hand); the launcher explains a missing framework path; `unpack` refuses a site folder with uncommitted edits (adopt's remap goes around it). Existing projects: the first `skills sync` rewrites `pls.py` and records template hashes. Sync never deletes through a link or junction. Lifecycle 0.27. Suites 569 OK (3.12), 569 OK skipped=2 (3.10), node 15.
+
+**Next (TD-24, TD-23, TD-30 done) (Nam 2026-11-13: "lam tiep TD-39 va cac task con lai"):** TD-31, TD-26 (code), then the evals of P2 0.10 and lifecycle 0.27 (TD-37; Nam: run all). One task per commit, review per Standard/Critical task (`pls-x-dev-orchestrator`).
 
 **Waiting for Nam (added 2026-11-13):**
 - TD-24: apply or reject `plans/2026-11-13-td-24-remove-test-users/proposed-adr-0014.patch` (TB-14) and `proposed-adr-0019.patch` (common rules: deleting a test user drops its membership); a first real `pls test-users --env dev --remove` on dev (expect: user gone from the lookup and its group, its old key 401, files and `keys.<role>` gone);

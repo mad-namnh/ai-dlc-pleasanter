@@ -1662,7 +1662,8 @@ def adopt_package(r: Path, a) -> int:
     for name, out in created:                                         # every id is known now: map references again
         try:
             with contextlib.redirect_stdout(io.StringIO()):
-                ok = main(["unpack", str(out), "--env", a.env, "--site", name]) == 0 and main(["canon", "--site", name]) == 0
+                unpack(r, a.env, out, name)                           # adopt wrote this folder in this run
+                ok = main(["canon", "--site", name]) == 0
         except Exception:                                             # noqa: BLE001
             ok = False
         if not ok:                                                    # a rerun prints "already": say how to finish
@@ -2112,6 +2113,31 @@ def sandbox_drop(r: Path, name: str) -> int:
     return 0
 
 
+def unpack(r: Path, env: str, export: Path, site: str) -> None:
+    """Write the export of a site into config/<site> (its whole tree is replaced)."""
+    model = logical(rj(export), env_conf(r, env))
+    refuse_secrets(model, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
+    write_tree(model, r / "config" / site)
+
+
+def refuse_uncommitted_site(r: Path, site: str) -> None:
+    """`pls unpack` replaces config/<site>: refused while it holds uncommitted edits or new files (as `harvest` is),
+    so work nobody committed is never overwritten. Outside a git repository there is nothing to compare with: said
+    and allowed (`pls init` does not create the repository)."""
+    import subprocess
+    try:
+        inside = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=r, capture_output=True, text=True,
+                                encoding="utf-8").stdout.strip() == "true"
+    except OSError:
+        inside = False
+    if not inside:
+        print(f"note: {r} is not a git repository - config/{site} is replaced without checking for uncommitted edits")
+        return
+    if _git(r, "status", "--porcelain", "--untracked-files=all", "--", f"config/{site}").strip():
+        raise Fail(f"config/{site} has uncommitted changes — commit or stash them before unpacking (unpack replaces "
+                   "the whole folder)")
+
+
 def harvest(r: Path, env: str, site: str) -> int:
     """Bring the configuration of a site as it is on `env` into config/<site> (read only towards Pleasanter).
     Refuses when config/<site> has uncommitted changes, so a harvest never mixes with unsaved work."""
@@ -2264,7 +2290,16 @@ import sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
-home = os.environ.get("PLS_HOME") or json.loads((here / ".claude" / "framework.lock").read_text(encoding="utf-8-sig"))["path"]
+lock = here / ".claude" / "framework.lock"
+home = os.environ.get("PLS_HOME")
+if not home:
+    try:
+        home = json.loads(lock.read_text(encoding="utf-8-sig"))["path"]
+    except (OSError, ValueError, KeyError, TypeError):
+        home = None
+    if not isinstance(home, str) or not home:
+        sys.exit(f"pls: no framework path - {lock} is missing or has no 'path'. Restore it (pls init writes it) "
+                 "or set the PLS_HOME environment variable to the framework folder")
 tool = (here / home).resolve() / "tools" / "pls" / "pls.py"
 if not tool.exists():
     sys.exit(f"pls not found at {tool} - set 'path' in .claude/framework.lock or the PLS_HOME environment variable")
@@ -2314,26 +2349,74 @@ def _relpath(target: Path, base: Path) -> str:
         return target.as_posix()
 
 
+def _template_hashes(fw: Path) -> dict[str, str]:
+    """sha256 of each file of templates/project (line endings normalised), by its path in the project."""
+    tpl = fw / "templates" / "project"
+    return {f.relative_to(tpl).as_posix(): hashlib.sha256(f.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+            for f in sorted(tpl.rglob("*")) if f.is_file()} if tpl.is_dir() else {}
+
+
+def template_changes(lock: dict, fw: Path) -> list[str]:
+    """Template files changed or added in the framework since the hashes in the lock. The project owns its copies
+    after `pls init` (profile, environments), so they are never copied over: a person merges them by hand. A lock
+    without template hashes (made before they were recorded) reports nothing until the next sync records them."""
+    seen = lock.get("template")
+    if not isinstance(seen, dict):
+        return []
+    return [f"templates/project/{f}: {'added' if f not in seen else 'changed'} in the framework since the last sync - "
+            f"compare it with the project's {f} and merge by hand (never copied over)"
+            for f, h in _template_hashes(fw).items() if seen.get(f) != h]
+
+
+def _foreign_skill_dirs(proj: Path, lock: dict, fw_skills: dict) -> list[str]:
+    d = proj / ".claude" / "skills"
+    known = set(lock.get("skills") or {}) | set(fw_skills)
+    return sorted(x.name for x in d.iterdir() if x.is_dir() and x.name not in known) if d.is_dir() else []
+
+
+def _remove_skill_dir(dest: Path, name: str) -> None:
+    """Empty .claude/skills/<name>. Refused when it, or anything in it, is a link (symlink or junction) or resolves
+    outside .claude/skills: a sync deletes only files that are really in the project's skill folder."""
+    import os
+    tgt, base = dest / name, os.path.realpath(dest)
+    inner = sorted(tgt.rglob("*"), reverse=True)
+    for p in [tgt, *inner]:
+        inside = os.path.normcase(os.path.join(base, os.path.relpath(p, dest)))
+        if p.is_symlink() or os.path.normcase(os.path.realpath(p)) != inside:       # a junction resolves elsewhere
+            raise Fail(f".claude/skills/{name}: {p.relative_to(dest).as_posix()} is a link or points outside "
+                       ".claude/skills - pls skills sync deletes nothing there; remove the link by hand, then sync")
+    for f in inner:
+        f.unlink() if f.is_file() else f.rmdir()
+
+
 def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
+    """Install the framework's skills and launcher into the project. Skills pls installed that the framework no longer
+    has are removed; folders pls did not install are left alone; template files are only reported (`template_notes`)."""
     dest = proj / ".claude" / "skills"
     vers, skills = _skill_versions(fw), {}
-    for name, src in _framework_skills(fw).items():
+    lock_p = proj / ".claude" / "framework.lock"
+    lock = rj(lock_p) if lock_p.exists() else {}
+    fw_skills = _framework_skills(fw)
+    for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
+        if re.fullmatch(r"[a-z0-9-]+", name) and (dest / name).is_dir():   # a lock name never reaches outside
+            _remove_skill_dir(dest, name)
+            (dest / name).rmdir()
+    for name, src in fw_skills.items():
         tgt = dest / name
         if tgt.exists():
-            for f in sorted(tgt.rglob("*"), reverse=True):
-                f.unlink() if f.is_file() else f.rmdir()
+            _remove_skill_dir(dest, name)
         for f in src.rglob("*"):
             if f.is_file():
                 (tgt / f.relative_to(src)).parent.mkdir(parents=True, exist_ok=True)
                 (tgt / f.relative_to(src)).write_bytes(f.read_bytes())
         skills[name] = {"version": vers.get(name, "?"), "sha256": _tree_sha(tgt)}
-    lock_p = proj / ".claude" / "framework.lock"
-    lock = rj(lock_p) if lock_p.exists() else {}
+    (proj / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
+    notes = template_changes(lock, fw)
     lock.update({"framework": "ai-dlc-pleasanter", "path": lock.get("path") or _relpath(fw, proj),
                  "commit": _framework_commit(fw), "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
-                 "skills": skills})
+                 "skills": skills, "template": _template_hashes(fw)})
     wj(lock_p, lock)
-    return lock
+    return {**lock, "template_notes": notes}
 
 
 def _version_key(v) -> tuple | None:
@@ -2385,7 +2468,20 @@ def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
             problems.append(f"{name}: " + _version_direction(entry.get("version"), _skill_versions(fw).get(name)))
     for name in sorted(set(fw_skills) - set(lock.get("skills") or {})):
         problems.append(f"{name}: in the framework but not installed - `pls skills sync`")
-    return problems
+    for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
+        d = proj / ".claude" / "skills" / name
+        entry = (lock.get("skills") or {}).get(name)
+        edited = d.is_dir() and isinstance(entry, dict) and entry.get("sha256") not in (None, _tree_sha(d))
+        problems.append(f"{name}: no longer in the framework - `pls skills sync` removes it" +
+                        (" (its project copy was edited: the sync deletes that edit too; keep what you need first)"
+                         if edited else ""))
+    for name in _foreign_skill_dirs(proj, lock, fw_skills):
+        problems.append(f"{name}: in .claude/skills but not installed by pls (not in the lock) - left alone; skills come "
+                        "from the framework, project solutions go to patterns/")
+    launcher = proj / "pls.py"
+    if not launcher.exists() or launcher.read_bytes().replace(b"\r\n", b"\n") != LAUNCHER.encode("utf-8"):
+        problems.append("pls.py: the launcher differs from the framework's (or is missing) - `pls skills sync` rewrites it")
+    return problems + template_changes(lock, fw)
 
 
 def init_project(target: Path, stage: str, release_target: str, approver: str | None, fw: Path = FRAMEWORK,
@@ -2417,7 +2513,6 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
         for field in ("Approvers", "Operators", "Origin"):
             m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
-    (target / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
     sync_skills(target, fw)
@@ -3709,10 +3804,12 @@ def _main(argv=None) -> int:
         raise Fail(str(ex))
     if a.cmd == "skills":
         if a.action == "sync":
-            lock = sync_skills(r)
+            lock = sync_skills(r, FRAMEWORK)
             print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit']})")
+            for line in lock["template_notes"]:
+                print(line)
             return 0
-        problems = skills_check(r)
+        problems = skills_check(r, FRAMEWORK)
         print("\n".join(problems) if problems else "skills match the lock and the framework")
         return 1 if problems else 0
 
@@ -4030,10 +4127,8 @@ def _main(argv=None) -> int:
         return 0
 
     if a.cmd == "unpack":
-        e = env_conf(r, a.env)
-        model = logical(rj(Path(a.export)), e)
-        refuse_secrets(model, f"unpack {a.site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
-        write_tree(model, r / "config" / a.site)
+        refuse_uncommitted_site(r, a.site)
+        unpack(r, a.env, Path(a.export), a.site)
         print(f"unpacked {a.export} → config/{a.site}")
         return 0
 

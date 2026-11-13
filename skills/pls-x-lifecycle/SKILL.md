@@ -31,7 +31,7 @@ Answer in the person's language; questions meant for the customer are in Japanes
 
 Before doing anything, establish the state from the repository. Do not rely on memory of an earlier session.
 
-First run `pls skills check`. `project copy was edited` → stop and tell the person: a local edit may have removed a rule, and skills are changed only in the framework (then `pls skills sync`). `framework has a newer version` → tell the person and run `pls skills sync` only after they agree; the session then reads the synced skills. A clean check needs no mention.
+First run `pls skills check`. `project copy was edited` → stop and tell the person: a local edit may have removed a rule, and skills are changed only in the framework (then `pls skills sync`). `framework has a newer version` → tell the person and run `pls skills sync` only after they agree; the session then reads the synced skills. `templates/project/<file>: changed` → tell the person; they merge it into the project's copy by hand (never copied over). `not installed by pls` → tell the person; leave the folder alone. A clean check needs no mention.
 
 | Look at | Tells you |
 |---|---|
