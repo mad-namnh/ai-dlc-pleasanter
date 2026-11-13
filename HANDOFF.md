@@ -1,8 +1,22 @@
-# Handoff — state as of 2026-11-10 (branch `brownfield-adr`; sections further down describe 2026-11-09 and earlier)
+# Handoff — state as of 2026-11-13 (branch `brownfield-adr`; sections further down describe 2026-11-09 and earlier)
 
 > Next session may run on another Claude account: everything needed is in the repositories; nothing lives only in the chat.
 
-## Resume here — 2026-11-10 (read this first)
+## Resume here — 2026-11-13 (read this first; the 2026-11-10 section below stays valid for everything older)
+
+**Stopped by Nam to switch accounts (2026-11-13). Working tree is NOT clean on purpose:** it holds **TD-24** (`pls test-users --env <dev> --remove`), built and reviewed once, **not committed**. Do not discard it. Resume from `plans/2026-11-13-td-24-remove-test-users/log.md` (last line) and `review.md` ("Planned fix"): fix M1 (a password file is not proof of ownership — require that the stored key still works for that user, else PERSON STEP) and L1–L7, run both suites (3.12, 3.10, node) and the parent check, review round 2 (the last), commit with the explicit paths listed in the log. `plans/2026-11-12-permission-allow-list/` is not ours — never commit it.
+
+**Committed 2026-11-12/13 (local, `brownfield-adr`, not pushed):** `2d818e4` AU3 (ADR-0024); `3229d10` ADR-0023 Accepted (A); `1f8ead4` TD-28 closed (dropped); `a50b788` TD-29 patch proposed; `f9f5bc7` evals of 6 skills (`evals/results/*/2026-11-13.md`); `2930a42` AU1 rest (ADR-0025 Accepted: kb-verify probes with a server script / a role's test-user key, probe site emptied then deleted, delete believed only on 404); `ff5d27a` TD-39 (guard read again before every bootstrap site and migration; a stopped migrate resumes; new TD-40); `17987f4` TD-34 (`file:` keys only in the project's `.pls/` or the profile folder). Suites at `17987f4`: 539 OK (3.12), 539 OK skipped=2 (3.10), node 15; with the TD-24 tree: 551.
+
+**Next after TD-24 (Nam 2026-11-13: "lam tiep TD-39 va cac task con lai"):** TD-23, TD-30, TD-31, TD-26 (code), then the evals of P2 0.10 and lifecycle 0.25 (TD-37; Nam: run all). One task per commit, review per Standard/Critical task (`pls-x-dev-orchestrator`).
+
+**Waiting for Nam (added 2026-11-13):**
+- apply the patches: TD-29 `plans/2026-11-13-td-29-template-claude-settings/*.patch`; AU3 `plans/2026-11-12-au3-standing-permission-for-dev-writes/*.patch` (CLAUDE.md Mandatory 1, template rule 3);
+- ADR-0021 Status line and Decision sentence: wording in `plans/2026-11-13-td-34-key-files-only-in-pls-or-profile/proposed-adr-0021-status-and-decision-wording.md`;
+- a first supervised `kb-verify` run on dev with a script / role probe (ADR-0025 open questions: `deletesite` on a real server, script removal by `updatesite`);
+- eval findings: rubric P6 case 001 (input without package), script-engineer Must 4 vs the skill, onboarding — P1 is unlocked by any `ops/onboarding/*-summary.md`, step 5 still offers `--accept-unverified` (`evals/results/*/2026-11-13.md`).
+
+## Resume here — 2026-11-10 (older; read after the section above)
 
 **Where things stand.** The design review of 2026-11-09 (verdict NOT READY at every stage, `docs/reviews/design-review-2026-11-09/99-final-report.md`) is being remediated item by item from its roadmap (§9). **All P0 code and text work is done** (P0-1…P0-9) plus all of P1 (P1-1…P1-8); details per item in "Remediation progress 2026-11-10" below. What is left of P0 are Nam's decisions.
 
