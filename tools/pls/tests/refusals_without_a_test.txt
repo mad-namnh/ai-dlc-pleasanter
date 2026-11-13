@@ -77,7 +77,6 @@ pls_gate.py | record | raise GateError(f"gate must be one of {', '.join(GATES)}"
 pls_http.py | backup_records | raise TransportError(f"get {site_id} offset {offset}: HTTP {st}")
 pls_http.py | load_connection | raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL " "(keys go in environment
 pls_http.py | load_connection | raise TransportError(f"{f}: no url for environment '{env}'")
-pls_http.py | resolve_key | raise TransportError(f"key '{name}': file {p} not found")
 pls_http.py | resolve_key | raise TransportError(f"no key '{name}' in the connection (keys: {sorted((conn.get('keys') or {}))})")
 pls_http.py | run_tests | raise TransportError(f"create failed: HTTP {code} {text[:200]}")
 pls_http.py | run_tests | raise TransportError(f"get {rid}: HTTP {code}")

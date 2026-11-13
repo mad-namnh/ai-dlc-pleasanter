@@ -85,8 +85,8 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | Variable | What it changes |
 |---|---|
 | `PLS_HOME` | where the project launcher `pls.py` finds the framework (instead of `path` in `.claude/framework.lock`) |
-| `PLS_CONNECTIONS` | another connection file instead of `.pls/connections.json`; the same role and `allow_write` rules apply to it (ADR-0021) |
-| `PLS_PROFILE_DIR` | where `pls setup` keeps machine profiles (default `~/.pls/profiles`) |
+| `PLS_CONNECTIONS` | another connection file instead of `.pls/connections.json`; the same role and `allow_write` rules apply to it (ADR-0021). Its `file:` keys must still lie in the project's `.pls/` or your profile folder |
+| `PLS_PROFILE_DIR` | where `pls setup` keeps machine profiles (default `~/.pls/profiles`) — and where key files may be read from besides `.pls/`: set it the same way in every shell that runs `pls`, or a profile key written under it is refused |
 | `PLS_ACTOR` | the name written into the run log as the actor (default: `git config user.name`); self-asserted, not an identity check |
 | `PLS_DEBUG` | `1` prints the Python trace of an unexpected error (exit 3) |
 | key references `env:NAME` | an API key read from the environment variable `NAME` (`.pls/connections.json` → `keys`) |
@@ -139,7 +139,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `WARNING: session … did P… work after a G4` from `usage report` | One Claude Code session held two change requests. Start a new session for each change request (lifecycle §2); the numbers are still counted. |
 | `WARNING: project copies of … were edited` from `step` / `gate` | The command ran. Tell the person; change skills in the framework and run `skills sync`. |
 
-**Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key.
+**Without a profile:** `init` still works without `pls setup`. You then fill in `environments.json` (`parent_id`, `principals.admin`) and `.pls/connections.json` yourself. Keys go there as `env:NAME` or `file:PATH`, never the literal key; a key file must lie in `.pls/` (next to the connection file) or in your machine-profile folder — any other path is refused.
 
 ## Clean up after a demo
 

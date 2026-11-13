@@ -18,14 +18,14 @@ ADR-0008 says connections are local (`.pls/connections.json`, gitignored), keys 
 
 **`pls init <dir> [--profile NAME]`** (`pls.py` `_main`, `apply_profile`): uses the named profile, or `dev` when `dev.json` exists; writes into the new project `environments.json` → `envs.dev` with **`role: dev`**, the folder id and `principals`, and `.pls/connections.json` → `dev` with the URL, the key reference and `allow_write` from the profile (until 2026-11-12 always true; since then true only from an answered yes, otherwise false). Without a profile the person fills both files by hand (`docs/setup.md`).
 
-**Key references** (`tools/pls/pls_http.py` `resolve_key`): `env:NAME` reads an environment variable; `file:PATH` reads a file, relative to the folder of the connection file — an **absolute path is used as it is** (the profile flow writes one under `~/.pls/profiles/`). A literal key is refused. Key values are never printed or logged.
+**Key references** (`tools/pls/pls_http.py` `resolve_key`): `env:NAME` reads an environment variable; `file:PATH` reads a file, relative to the folder of the connection file or absolute (the profile flow writes one under `~/.pls/profiles/`) — **since 2026-11-13 (TD-34) only when its resolved path lies inside the project's `.pls/` or the machine-profile folder**; any other path, also one below the folder of a connection file named by `PLS_CONNECTIONS`, is refused before the file is read. A literal key is refused. Key values are never printed or logged.
 
 **Environment overrides:**
 
 | Variable | Effect | Code |
 |---|---|---|
 | `PLS_CONNECTIONS` | another connection file instead of `.pls/connections.json`; the same role and `allow_write` rules apply to it. `pls test-users` refuses when it names a file outside the project's `.pls/` (test users' secrets stay there) | `pls_http.py` `connections_file`; `pls.py` test-users |
-| `PLS_PROFILE_DIR` | another folder for machine profiles | `pls.py` `profile_dir` |
+| `PLS_PROFILE_DIR` | another folder for machine profiles — and the only folder besides the project's `.pls/` that key files may be read from | `pls_http.py` `profile_dir` (`pls.py` calls it) |
 | `PLS_ACTOR` | the run-log actor (else git `user.name`, else the OS user); self-asserted, not an identity check | `tools/pls/pls_log.py` `actor` |
 | `PLS_HOME` | the framework checkout the project launcher runs (ADR-0022) | project `pls.py` launcher |
 
@@ -36,7 +36,7 @@ The table lists the variables that change what `pls` reads or who it records. Ot
 ## Open questions
 
 - [x] Should `pls setup` ask before opting in to writes, and default to `false` (roadmap P3-7)? — yes (Nam, 2026-11-12, option B); built in P3-7
-- [x] Should `file:` references be confined to `.pls/` and the profile folder (refuse other absolute paths), as ADR-0008's wording suggests? — yes (option B, Nam 2026-11-12); not built yet: TD-34
+- [x] Should `file:` references be confined to `.pls/` and the profile folder (refuse other absolute paths), as ADR-0008's wording suggests? — yes (option B, Nam 2026-11-12); built 2026-11-13 (TD-34 closed)
 
 ## Options
 
@@ -62,4 +62,4 @@ Built 2026-11-12 (roadmap P3-7): `pls setup` asks whether `pls` may write to the
 
 - Easier: what `pls setup` / `init` may write, where keys live and what each variable changes is now in one place; ADR-0008's key rule and this ADR no longer contradict each other once ADR-0008 points here.
 - Harder / costs: option B changes setup (a question, a refusal for key paths outside the two folders) and needs tests for both.
-- Follow-up: P3-7 (opt-in default) done 2026-11-12; the `file:` limit is TD-34; `docs/setup.md` points here. ADR-0008's key-file wording ("file under `.pls/`") is in its Decision section and changes only with Nam's decision on ADR-0008 (still Proposed).
+- Follow-up: P3-7 (opt-in default) done 2026-11-12; the `file:` limit built 2026-11-13 (TD-34): `pls_http.resolve_key` reads a `file:` key only when its resolved path lies inside the project's `.pls/` (also when `$PLS_CONNECTIONS` names a connection file elsewhere) or the machine-profile folder (`$PLS_PROFILE_DIR` or `~/.pls/profiles`), else refuses before reading it; tests `test_key_files_only_in_pls_or_the_profile_folder.py`; `docs/setup.md` points here. ADR-0008's key-file wording ("file under `.pls/`") is in its Decision section and changes only with Nam's decision on ADR-0008 (still Proposed).

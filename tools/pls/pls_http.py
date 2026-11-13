@@ -12,8 +12,9 @@ Connection settings live on the operator's machine, never in git:
             "allow_write": true}
   }
 Key references: "env:NAME" (environment variable) or "file:PATH" (file containing only the key,
-relative to the connections file). Literal keys are refused, so a key never sits in a JSON file that
-could be copied around by mistake.
+relative to the connections file, or absolute). A key file must lie inside the project's .pls/ or the
+machine-profile folder (ADR-0021 option B), also when $PLS_CONNECTIONS names a connection file elsewhere. Literal keys are refused, so a key never sits in a
+JSON file that could be copied around by mistake.
 
 Write guard (CLAUDE.md rule 1, ADR-0003): writes need environments.json role "dev" or "stg" AND
 allow_write true in the local connection. role "prod" is never written to by this tool.
@@ -85,11 +86,26 @@ def load_connection(root: Path, env: str) -> dict:
         raise TransportError(f"{f}: for '{env}', url must be text and keys an object of name → env:NAME or file:PATH")
     c = dict(c)
     c["_dir"] = str(f.parent)
+    c["_pls_home"] = str(root / ".pls")             # the only project folder key files may live in (ADR-0021)
     return c
 
 
+def profile_dir() -> Path:
+    """Folder of the machine profiles written by `pls setup` and their key files (ADR-0021)."""
+    return Path(os.environ.get("PLS_PROFILE_DIR") or Path.home() / ".pls" / "profiles")
+
+
+def _inside(p: Path, home: Path) -> bool:
+    try:
+        p.relative_to(home)
+        return True
+    except ValueError:
+        return False
+
+
 def resolve_key(conn: dict, name: str | None) -> str:
-    """Key value of `env:NAME` or `file:PATH` (relative to the connection file; an absolute path as it is) — ADR-0021."""
+    """Key value of `env:NAME` or `file:PATH` (relative to the connection file, or absolute) — read only from the
+    project's .pls/ or the machine-profile folder (ADR-0021)."""
     name = name or conn.get("default_key") or "admin"
     ref = (conn.get("keys") or {}).get(name)
     if not ref:
@@ -100,10 +116,22 @@ def resolve_key(conn: dict, name: str | None) -> str:
             raise TransportError(f"key '{name}': environment variable {ref[4:]} is not set")
         return v.strip()
     if ref.startswith("file:"):
-        p = Path(conn["_dir"]) / ref[5:]
-        if not p.exists():
+        # ADR-0021 option B, ADR-0014 TB-11: a key file lives in the project's .pls/ or the machine-profile folder only
+        # — not in the folder of a connection file named by PLS_CONNECTIONS, which may be anywhere
+        try:
+            p = (Path(conn["_dir"]) / ref[5:]).resolve()
+            homes = [Path(conn.get("_pls_home") or conn["_dir"]).resolve(), profile_dir().resolve()]
+        except (OSError, ValueError) as ex:
+            raise TransportError(f"key '{name}': {ref} is not a usable path ({type(ex).__name__})")
+        if not any(_inside(p, h) for h in homes):
+            raise TransportError(f"key '{name}': {ref} points outside the project's .pls/ ({homes[0]}) and the "
+                                 f"machine-profile folder ({homes[1]}) — move the key file into one of them")
+        if not p.is_file():
             raise TransportError(f"key '{name}': file {p} not found")
-        return p.read_text(encoding="utf-8-sig").strip()
+        try:
+            return p.read_text(encoding="utf-8-sig").strip()
+        except (OSError, ValueError) as ex:
+            raise TransportError(f"key '{name}': file {p} cannot be read ({type(ex).__name__})")
     raise TransportError(f"key '{name}': use 'env:NAME' or 'file:PATH', not a literal key")
 
 

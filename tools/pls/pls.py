@@ -2425,8 +2425,8 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
 # ---------------------------------------------------------------- machine profile: one-time setup (D4 simplification, ADR-0021)
 
 def profile_dir() -> Path:
-    import os
-    return Path(os.environ.get("PLS_PROFILE_DIR") or Path.home() / ".pls" / "profiles")
+    import pls_http as H
+    return H.profile_dir()                         # one definition: key files are allowed only there and in .pls/
 
 
 def _lookup(client, path: str, column: str, value: str, id_field: str) -> int | None:
