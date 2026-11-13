@@ -253,6 +253,47 @@ class CliTest(unittest.TestCase):
         self.assertEqual(pls.main(["unpack", str(prod), "--env", "prod", "--site", "anken"]), 0)
         self.assertIn("var s = ${site:anken};", self.raw())
 
+    def test_site_id_under_a_json_escaped_or_backtick_quoted_key_is_a_site_id(self):
+        # JSON kept in a JS string (parsed at run time) and template-literal quotes
+        s = ("const RAW = '{\\\"siteId\\\": \\\"103\\\"}';\n"                     # {\"siteId\": \"103\"}
+             "const RAW2 = \"{\\\"SiteId\\\":103}\";\n"                            # {\"SiteId\":103}
+             "const RAW3 = '{\\'siteId\\': \\'103\\'}';\n"                          # {\'siteId\': \'103\'}
+             "t = {`siteId`: 103};\nu = {\"siteId\": `103`};\n")
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 5)
+        self.assertIn('{\\"siteId\\": \\"${site:x}\\"}', out)                      # quotes and backslashes stay
+        self.assertIn("`siteId`: ${site:x}", out)
+        self.assertEqual(SX.unstable_refs('x = \'{\\"siteId\\": \\"${site:x}\\"}\';', "s"), [])
+        self.assertEqual(SX.literal_left('{\\"siteId\\": \\"103\\"}', "103"), [15])  # lint L-REF-01 sees it too
+        kept = ('{\\"siteIdx\\": \\"103\\", \\"website_id\\": \\"103\\", \\"status\\": \\"103\\", '
+                '\\"siteId\\": \\"103px\\"} `siteIdx`: 103')
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+
+    def test_site_id_under_a_bracketed_name_or_with_a_backtick_or_escaped_value_is_a_site_id(self):
+        s = ('p["SiteId"] = 103;\nif (p[\'site_id\'] === 103) {}\nif (103 === p["siteId"]) {}\n'
+             'o = {["siteId"]: 103};\nq = {[`siteId`]: 103};\nr = {siteId: `103`};\nif (siteId === `103`) {}\n'
+             "const RAW = '{siteId: \\\"103\\\"}';\n")                                # {siteId: \"103\"}
+        out = SX.replace_ids(s, {"103": "x"})
+        self.assertNotIn("103", out)
+        self.assertEqual(out.count("${site:x}"), 8)
+        self.assertIn('p["SiteId"] = ${site:x};', out)
+        self.assertIn("r = {siteId: `${site:x}`};", out)
+        self.assertEqual(SX.literal_left('p["SiteId"] = 103;', "103"), [14])          # lint L-REF-01
+        self.assertEqual(SX.unstable_refs('if (${site:x} === p["siteId"]) {}', "s"), [])
+        kept = ('p["siteIdx"] = 103; p["website_id"] = 103; p["status"] = 103; if (103 === p["siteIdx"]) {} '
+                'r = {siteIdx: `103`}; s = {siteId: `103px`}; p["siteId"] + 103; t = [p["siteId"], 103];')
+        self.assertEqual(SX.replace_ids(kept, {"103": "x"}), kept)
+
+    def test_site_id_in_an_escaped_json_string_survives_unpack_and_follows_the_environment(self):
+        body = 'const RAW = \'{\\"related\\": {\\"siteId\\": \\"797\\"}}\';\nconst CONF = JSON.parse(RAW);\n'
+        self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}])), encoding="utf-8")
+        self.assertEqual(pls.main(["unpack", str(self.exp), "--env", "dev", "--site", "anken"]), 0)
+        self.assertIn('\\"siteId\\": \\"${site:anken}\\"', self.raw())
+        self.assertNotIn("L-REF-03", {i["rule"] for i in pls.lint(self.r)})
+        p = pls.payload(pls.read_tree(self.r / "config/anken"), ENVS["envs"]["prod"], "anken")
+        self.assertIn('\\"siteId\\": \\"9001\\"', p["SiteSettings"]["Scripts"][0]["Body"])   # prod gets its own id
+
     def test_quoted_site_id_in_a_script_config_survives_unpack_and_follows_the_environment(self):
         body = 'const CONF = {"related": {"siteId": "797", "link": "ClassA"}};\n'
         self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}])), encoding="utf-8")

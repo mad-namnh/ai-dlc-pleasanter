@@ -117,8 +117,13 @@ def _spans(s: str, contexts: list[str]) -> list[tuple[int, int]]:
 # not websiteId, siteIdx, SITE_IDLE_TIMEOUT (a camel-case or `_` boundary before "site", nothing but `_…` after "id").
 SITE_ID_NAME = r"(?:(?<![A-Za-z])site|Site|SITE)_?(?:Id|ID|id)(?:_\w*)?(?![A-Za-z0-9])"
 ID_CONTEXT = re.compile(r"""(?x)(?:
-      %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*["']?            # siteId === 1001, siteId: 1001, getSiteId(1001
-    | %(name)s["']\s*[:,]\s*["']?                                  # "SiteId": 1001, "siteId": "1001", 'NOTIFICATION_SITE_ID', 116
+      %(name)s(?:\(\))?\s*(?:===?|!==?|=|:|\()\s*(?:\\?["'`])?    # siteId === 1001, siteId: 1001, getSiteId(1001,
+                                                                   # siteId: `1001`, siteId: \"1001\"
+    | %(name)s\\?["'`](?:\s*[:,]|\]\s*(?:===?|!==?|=|:))\s*(?:\\?["'`])?
+                                                                   # "SiteId": 1001, "siteId": "1001", 'NOTIFICATION_SITE_ID', 116,
+                                                                   # JSON escaped in a JS string {\"siteId\": \"1001\"},
+                                                                   # backticks "siteId": `1001`, brackets p["SiteId"] = 1001,
+                                                                   # p['site_id'] === 1001, {[`siteId`]: 1001}
     | (?<![\w.$])items\.[A-Z]\w*\(\s*                              # server script items.Get(1001, …) — PascalCase API only
     | \$p\.api\w*\(\s*\{[^()]{0,60}?(?<![\w$])["']?id["']?\s*:\s*  # client $p.apiGet({ … id: 1001, … })
     | /items/                                                      # /api/items/1001/get
@@ -126,8 +131,8 @@ ID_CONTEXT = re.compile(r"""(?x)(?:
     | \[\[                                                         # ChoicesText link [[1001]]
     | (?:Class|Num|Date|Description|Check|Attachments)\w*~          # linked column ClassA~1001
     )\Z""" % {"name": SITE_ID_NAME})
-# Text right after the number: 1001 === $p.siteId(), 1001 == siteId
-AFTER_CONTEXT = re.compile(r"""\A\s*(?:===?|!==?)\s*[\w$.]*?%s""" % SITE_ID_NAME)
+# Text right after the number: 1001 === $p.siteId(), 1001 == siteId, 1001 === p["siteId"]
+AFTER_CONTEXT = re.compile(r"""\A\s*(?:===?|!==?)\s*[\w$.]*?(?:\[\s*["'`])?%s""" % SITE_ID_NAME)
 CONTEXT_REACH = 80        # characters looked at around the number (line breaks included: `items.Get(\n  797`)
 
 
