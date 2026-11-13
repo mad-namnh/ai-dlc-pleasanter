@@ -81,6 +81,7 @@ import pls_profile_records as PR                            # noqa: E402 — pro
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
 import pls_test_users as TU                                 # noqa: E402 — test users for role tests (ADR-0018/0019)
+import pls_test_users_removal as TR                         # noqa: E402 — removing them again (TD-24)
 import pls_package as PK                                    # noqa: E402 — release package for the customer (ADR-0003)
 import pls_release_digest as RD                             # noqa: E402 — content a G4 approval covers
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
@@ -2630,7 +2631,7 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     return missing
 
 
-def test_users(r: Path, env: str, yes: bool = False) -> int:
+def test_users(r: Path, env: str, yes: bool = False, remove: bool = False) -> int:
     """`pls test-users --env <dev env>` (ADR-0018 option C, ADR-0019 option B): one test user per Group role of
     design/roles.json, its API key in the operator's .pls/, and its membership of the role's group. Dev only (not a
     sandbox, writes allowed), typed confirmation. Returns 1 when a person must still issue a key (fallback B)."""
@@ -2660,6 +2661,8 @@ def test_users(r: Path, env: str, yes: bool = False) -> int:
         raise Fail(f"test-users: the connections file {cf} is not the project's .pls/connections.json (PLS_CONNECTIONS) "
                    "— test users' passwords and keys are kept only under the project's .pls/ (CLAUDE.md Mandatory 1); "
                    "unset PLS_CONNECTIONS to run it")
+    if remove:
+        return remove_test_users(r, env, yes, roles, conn, client, cf)
     client_for = lambda k: H.Client(conn["url"], k, timeout=H.conn_timeout(conn))   # noqa: E731
     try:
         entries = TU.plan_roles(roles, e.get("principals") or {}, conn, r / ".pls", r.name, env, client, client_for)
@@ -2705,6 +2708,45 @@ def test_users(r: Path, env: str, yes: bool = False) -> int:
     for line in left:
         print(f"PERSON STEP — {line}")
     return 1 if left else 0
+
+
+def remove_test_users(r: Path, env: str, yes: bool, roles: dict, conn: dict, client, cf: Path) -> int:
+    """`pls test-users --env <dev env> --remove` (TD-24): delete the test users this machine can prove pls created
+    here (password file and a key file whose key the API accepts now), then their key and password files and
+    keys.<role>. Called after the guards of test_users (dev, not a sandbox, allow_write, the project's own connections
+    file). Returns 1 when something is left for a person."""
+    import pls_http as H
+    client_for = lambda k: H.Client(conn["url"], k, timeout=H.conn_timeout(conn))   # noqa: E731
+    try:
+        entries, notes = TR.plan_removals(roles, conn, r / ".pls", r.name, env, client, client_for)
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users --remove: {ex}")
+    for line in notes:
+        print(f"PERSON STEP — {line}")
+    if not entries:
+        print("no test user or test-user file of this project to remove")
+        return 1 if notes else 0
+    if not _confirm(env, yes, f"removes on {env} (tenant-wide users) and in .pls/:\n  " +
+                    "\n  ".join(TR.what(x) for x in entries), "the environment name"):
+        raise Fail("not confirmed — nothing removed")
+    made: dict = {"test_users_delete_answered": [], "test_users_removed": []}
+
+    def drop_key_ref(role: str, ref: str) -> None:
+        cur = rj(cf)
+        keys = cur[env].get("keys") or {}
+        if keys.get(role) == ref:                      # only the test user's own reference, never another key
+            del keys[role]
+            wj(cf, cur)
+    try:
+        problems = TR.delete_and_clean(entries, client, drop_key_ref,
+                                        lambda **kw: [made[k].append(v) for k, v in kw.items()])
+    except (TU.TestUsersError, H.TransportError) as ex:
+        raise Fail(f"test-users --remove: {ex} — run it again: it looks every user up first")
+    finally:
+        LG.record_metric(**{k: v for k, v in made.items() if v}, _env=env)
+    for line in problems:
+        print(f"PERSON STEP — {line}")
+    return 1 if problems or notes else 0
 
 
 def _git_first_commit(target: Path) -> str:
@@ -3627,6 +3669,9 @@ def build_parser() -> argparse.ArgumentParser:
                                          "in .pls/ and its membership of the role's group (ADR-0018, ADR-0019)")
     s.add_argument("--env", required=True)
     s.add_argument("--yes", action="store_true", help="the person's confirmation, given on their instruction")
+    s.add_argument("--remove", action="store_true", help="delete the test users this machine can prove pls created here "
+                                                         "(password file and a working key file), then their key and "
+                                                         "password files and keys.<role> (TD-24)")
     s = sp.add_parser("skills", help="check the project skills against the lock and the framework, or sync them")
     s.add_argument("action", choices=["check", "sync"])
     return ap
@@ -3674,7 +3719,7 @@ def _main(argv=None) -> int:
     if a.cmd == "test-users":
         import pls_http as H
         try:
-            return test_users(r, a.env, yes=a.yes)
+            return test_users(r, a.env, yes=a.yes, remove=a.remove)
         except H.TransportError as ex:
             print(f"pls: {ex}", file=sys.stderr)
             return 2

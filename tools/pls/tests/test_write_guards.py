@@ -32,14 +32,17 @@ ALLOWED_WRITE_SITES = {("pls_http", "Client.apply"), ("pls_http", "Client.create
                        ("pls_http", "run_tests"), ("pls", "http_cmd"),
                        ("pls_http", "Client.create_group"), ("pls_http", "Client.create_user"),
                        ("pls_http", "Client.update_group"), ("pls_test_users", "ScreenSession.issue_api_key"),
-                       ("pls_kbverify_guarded", "delete_probe_site")}                     # ADR-0025, kb-verify on dev
+                       ("pls_kbverify_guarded", "delete_probe_site"),                     # ADR-0025, kb-verify on dev
+                       ("pls_http", "Client.delete_user")}                                # TD-24, test-users --remove
 CLIENT_WRITERS = {"apply": {"apply_release", "rollback"}, "create_site": {"bootstrap"}, "bulk_upsert": {"migrate"},
                   "create_group": {"bind_principals"}, "create_user": {"write_test_users"},
-                  "update_group": {"add_test_user_to_group"}, "issue_api_key": {"issue_test_user_key"}}
+                  "update_group": {"add_test_user_to_group"}, "issue_api_key": {"issue_test_user_key"},
+                  "delete_user": {"delete_and_clean"}}
 WRITE_RUNNERS = {"apply_release": {"http_cmd"}, "rollback": {"apply_release"}, "bootstrap": {"http_cmd"}, "migrate": {"http_cmd"},
                  "run_tests": {"http_cmd"}, "bind_principals": {"_main"}, "test_users": {"_main"},
                  "write_test_users": {"test_users"}, "add_test_user_to_group": {"write_test_users"},
-                 "issue_test_user_key": {"write_test_users"}, "delete_probe_site": {"http_cmd"}}
+                 "issue_test_user_key": {"write_test_users"}, "delete_probe_site": {"http_cmd"},
+                 "remove_test_users": {"test_users"}, "delete_and_clean": {"remove_test_users"}}
 
 
 def subcommands() -> set[str]:
@@ -106,7 +109,8 @@ class StaticTest(unittest.TestCase):
                     owner = f.value.id if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) else ""
                     if attr in CLIENT_WRITERS and owner in ("client", "c", "self", "s"):
                         calls[attr].add(short)
-                    if attr in WRITE_RUNNERS and (owner in ("H", "TU", "KG", "") or m.stem in ("pls_http", "pls_test_users")):
+                    if attr in WRITE_RUNNERS and (owner in ("H", "TU", "TR", "KG", "") or
+                                                  m.stem in ("pls_http", "pls_test_users", "pls_test_users_removal")):
                         calls[attr].add(short)
         for helper, allowed in {**CLIENT_WRITERS, **WRITE_RUNNERS}.items():
             self.assertEqual(calls[helper] - allowed, set(), f"{helper} called from a new place")

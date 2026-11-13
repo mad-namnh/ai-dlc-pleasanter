@@ -221,6 +221,12 @@ class Client:
         msg = (js or {}).get("Message", "") if isinstance(js, dict) else text[:200]
         return st, (uid if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0 else None), str(msg)[:200]
 
+    def delete_user(self, user_id: int) -> tuple[int, str]:
+        """POST /api/users/{id}/delete (tenant administrator; 1.5.2: HTTP 200, the user is gone from the LoginId
+        lookup and from its groups, its key answers 401 — KB api.md "Users and groups")."""
+        st, js, text = self.call(f"/api/users/{user_id}/delete", {})
+        return st, str((js or {}).get("Message", "") if isinstance(js, dict) else text[:200])[:200]
+
     def update_group(self, group_id: int, name: str, body: str, members: list[str]) -> tuple[int, str]:
         """POST /api/groups/{id}/update (tenant administrator; 1.5.2: `GroupMembers` replaces the whole member list,
         fields left out are kept — KB api.md "Users and groups"). Callers send the full list they read."""
