@@ -330,9 +330,11 @@ def rollback(client: Client, plan: dict, files: dict, sites: list | None = None)
     return out, failed
 
 
-def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None = None) -> dict:
-    """Create the planned sites in order. `before(site)` runs just before each createsite is sent, so the caller can
-    record which site is in flight: if the process dies there, the record still names the site that may exist."""
+def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None = None,
+              guard: Callable[[], None] | None = None) -> dict:
+    """Create the planned sites in order. `guard()` runs before each createsite and stops the run when it raises
+    (the write guard read again); `before(site)` runs just before the request is sent, so the caller can record which
+    site is in flight: if the process dies there, the record still names the site that may exist."""
     created, log = {}, []
     st, js, _ = client.call(f"/api/items/{plan['parent_id']}/getsite")
     if st != 200 or not js or js["Response"]["Data"].get("ReferenceType") != "Sites":
@@ -340,6 +342,14 @@ def bootstrap(client: Client, plan: dict, before: Callable[[str], None] | None =
     for s in plan["steps"]:
         if s["op"] != "createsite" or s["parent_id"] != plan["parent_id"]:
             return {"status": "refused", "created": created, "log": log + [f"bad step {s.get('site')}"]}
+        if guard:
+            try:
+                guard()
+            except TransportError as ex:
+                return {"status": "stopped", "created": created,
+                        "log": log + [f"stopped before {s['site']}: the write guard refuses now — {ex} — the sites "
+                                      "created so far are bound next; run bootstrap again once the guard allows it "
+                                      "(it creates only the sites without an id)"]}
         if before:
             before(s["site"])
         try:

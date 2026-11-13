@@ -1222,8 +1222,9 @@ def restore_readback(client, plan: dict, files: dict, e: dict, touched: list[str
     return bad
 
 
-def write_guard_now(r: Path, env: str, release: str) -> None:
-    """The write guard of `apply`, read again from the files (checked before every site's write and every restore):
+def write_guard_now(r: Path, env: str, release: str, what: str = "applying") -> None:
+    """The write guard, read again from the files before every site's write and every restore of `apply`, every
+    `createsite` of `bootstrap` and every migration of `migrate`:
     role and allow_write (`assert_writable`) and, outside dev, the G4 record of the release. Anything that stops the
     check — an unreadable or changed environments.json, a missing record — is a TransportError: writing stops."""
     import pls_http as H
@@ -1234,7 +1235,7 @@ def write_guard_now(r: Path, env: str, release: str) -> None:
     H.assert_writable(e, H.load_connection(r, env), env)
     if e.get("role") != "dev":
         try:
-            GT.require(r, "G4", release, f"applying to {env}")
+            GT.require(r, "G4", release, f"{what} in {env}")
         except (GT.GateError, Fail, ValueError, OSError) as ex:
             raise H.TransportError(str(ex))
 
@@ -2854,16 +2855,25 @@ def http_cmd(r: Path, a) -> int:
             if probs:
                 raise H.TransportError(f"{a.release}: " + "; ".join(probs) + " (ADR-0004)")
             direction = "rollback" if a.rollback else "forward"
-            todo = []
+            todo, skipped = [], []
             try:
                 for m in migs:
+                    if (not a.rollback and plan.get("status") == "planned"
+                            and (MI.last(plan, m, "forward") or {}).get("status") == "migrated"
+                            and not MI.last(plan, m, "rollback")):  # a rolled-back folder is never skipped as done
+                        skipped.append(m)            # done by an earlier run that stopped later: never sent twice
+                        continue
                     why = MI.state_problem(plan, m, a.rollback)
                     if why:
                         raise MI.MigrateError(why)
                     mg = MI.load(r, m, a.rollback)
                     todo.append(dict(mg, site_id=MI.target(e, plan["env"], mg["site"])))
+                if not todo:                             # every folder migrated, none rolled back
+                    raise MI.MigrateError(MI.state_problem(plan, skipped[0], False) + f" — next: pls apply {a.release}")
             except MI.MigrateError as ex:
                 raise H.TransportError(f"{a.release}: {ex}")
+            for m in skipped:
+                print(f"{m}: already migrated by an earlier run — skipped, never sent twice")
             try:
                 eff = env_effects(r, e)
                 jobs = SE.declared_jobs(r)
@@ -2889,6 +2899,13 @@ def http_cmd(r: Path, a) -> int:
                 return 1
             LG.record_metric(confirmed=confirmed)
             for t in todo:
+                try:                                     # read again before each migration: a change stops the rest
+                    write_guard_now(r, plan["env"], a.release, "migrating data")
+                except H.TransportError as ex:
+                    print(f"{a.release}: stopped before {t['dir']} — the write guard refuses now: {str(ex).rstrip('.')}. "
+                          f"The migrations above are recorded in plan.json; once the guard allows it, pls migrate "
+                          f"{a.release} sends only the ones not migrated yet")
+                    return 1
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
                 entry.update(executed_by=LG.actor(r), confirmed=confirmed)    # how this run was confirmed (ADR-0024)
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
@@ -3051,7 +3068,8 @@ def http_cmd(r: Path, a) -> int:
                 # re-run waits for a person instead of creating the site a second time.
                 wj(bp, dict(rj(bp), uncertain=site))
 
-            res = H.bootstrap(c, plan, before=in_flight)
+            res = H.bootstrap(c, plan, before=in_flight,
+                              guard=lambda: write_guard_now(r, plan["env"], a.release, "creating sites"))
             LG.record_target(env=plan["env"], release=a.release, written=list(res["created"].values()))
             for line in res["log"]:
                 print(line)

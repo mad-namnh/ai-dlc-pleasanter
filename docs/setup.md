@@ -104,7 +104,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `applying` | the process stopped during the writes (crash, closed terminal) | as for `uncertain` |
 | `applied-unverified` | written, read-back not finished | export every site and run `pls mark-applied` |
 
-`role`, `allow_write` and (outside dev) the G4 record are read again before every site of a release and before restoring: switching `allow_write` to false while a release runs stops it before the next write. A site changed by someone else mid-release ends `rolled-back` when the restores read back equal. `bootstrap` and `migrate` check the guard once per command (TD-39).
+`role`, `allow_write` and (outside dev) the G4 record are read again before every site of a release and before restoring: switching `allow_write` to false while a release runs stops it before the next write. A site changed by someone else mid-release ends `rolled-back` when the restores read back equal. `bootstrap` reads it again before every site it creates, and `migrate` before every migration folder: a stop leaves what was done recorded (created sites bound, finished migrations in `plan.json`), and running the command again does only the rest. Only the browser runner still checks once per command (TD-39).
 
 ## Commands that need you
 
