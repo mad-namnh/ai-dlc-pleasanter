@@ -449,12 +449,15 @@ def _check(actual: Any, expected: Any) -> bool:
     return json.dumps(actual, sort_keys=True, ensure_ascii=False) == json.dumps(expected, sort_keys=True, ensure_ascii=False)
 
 
-def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list, env: str) -> dict:
-    """clients(role) → Client using that role's key ("as" in a spec; None = default key)."""
+def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list, env: str, confine: bool = False) -> dict:
+    """clients(role) → Client using that role's key ("as" in a spec; None = default key).
+    confine: a step on one record (get, exec, update, delete) may only name a record that a create of the same spec
+    returned — kb-verify probes act on their own records only (ADR-0009, ADR-0026)."""
     out = []
     for spec in specs:
         c = clients(spec.get("as_key"))
         vars_ = dict(spec.get("vars") or {})
+        created: set = set()                          # ids returned by this spec's creates (confine)
         log: list[str] = []
         status = "pass"
         try:
@@ -466,6 +469,8 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                 op = st["op"]
                 c = clients(st["as_key"]) if st.get("as_key") else spec_client   # step-level key: fixtures as 総務, checks as 社員
                 rid = vars_.get(st["record"].lstrip("$")) if st.get("record") else None
+                if confine and op in ("get", "exec", "update", "delete") and (rid is None or rid not in created):
+                    raise TransportError(f"{op} {st.get('record')!r}: not a record this probe created — nothing sent")
                 if op == "create":
                     code, js, text = c.call(f"/api/items/{st.get('site') or site_id}/create", _subst(st.get("data") or {}, vars_))
                     if st.get("expectHttp"):
@@ -477,6 +482,7 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                     if not js or not js.get("Id"):
                         raise TransportError(f"create failed: HTTP {code} {text[:200]}")
                     vars_[st["save"]] = js["Id"]
+                    created.add(js["Id"])
                     log.append(f"create → {js['Id']}")
                 elif op == "exec":
                     p = procs.get(st["process"])

@@ -36,7 +36,6 @@ pls.py | env_compare | raise Fail("give at least two --source ENV=FILE (or --sou
 pls.py | harvest | raise Fail(f"{site} has no id in {env}")
 pls.py | http_cmd | raise Fail(f"--from-package {a.from_package}: {ex}")
 pls.py | http_cmd | raise H.TransportError("single-site plans: use pls release-plan (multi-site format) for the HTTP transport")
-pls.py | http_cmd | raise H.TransportError(f"createsite → HTTP {code}")
 pls.py | http_cmd | raise H.TransportError(f"envs.{a.env}.{ex}")
 pls.py | http_cmd | raise H.TransportError(f"envs.{plan['env']} / {SE.JOBS_DIR.as_posix()}: {ex}")
 pls.py | http_cmd | raise H.TransportError(f"envs.{plan['env']}.{ex}")

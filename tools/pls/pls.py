@@ -3350,7 +3350,8 @@ def http_cmd(r: Path, a) -> int:
             except (OSError, ValueError, KeyError) as ex:
                 raise H.TransportError(f"probes: {ex}")
             guarded = [p["_name"] for p in probes if KG.is_guarded(p)]
-            if not _confirm("kb-verify", a.yes, f"kb-verify writes {len(probes)} probe site(s) and test records under folder "
+            if not _confirm("kb-verify", a.yes, f"kb-verify writes {sum(len(KV.probe_sites(p)) for p in probes)} probe site(s) "
+                                                f"({len(probes)} probes) and test records under folder "
                                                 f"{parent_i} in {a.env} ({conn['url']})" +
                                                 (f"; with a server script or a test user's key (ADR-0025): {', '.join(guarded)}"
                                                  if guarded else "")):
@@ -3379,40 +3380,56 @@ def http_cmd(r: Path, a) -> int:
                     log.append(f"not run: {why}")
                     rows.append(row)
                     continue
+                psites = KV.probe_sites(p)               # main first, then the probe's further sites (ADR-0026)
+                own: dict = {}                           # key → id, only for sites created or proven this probe's
+
+                def is_own(ps):
+                    return lambda site: KV.is_own_probe_site(site, ps["state"], ps["rt"], parent_i, app_ids)
                 try:
-                    sid = state["sites"].get(name)
-                    if sid:
-                        code, sjs, _ = c.call(f"/api/items/{sid}/getsite")
-                        if code == 404:
-                            sid = None
-                        elif code != 200:
-                            raise H.TransportError(f"getsite {sid} → HTTP {code}")
-                        elif not KV.is_own_probe_site(sjs["Response"]["Data"], name, rt, parent_i, app_ids):
-                            raise H.TransportError(f"site {sid} in the state file is not this probe's site (folder, title or type "
-                                                   f"differ) — nothing written; check .pls/kb-probes-{a.env}.json")
-                    if not sid:
-                        code, cjs, text = c.call(f"/api/items/{parent_i}/createsite",
-                                                 {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": {}})
-                        if code != 200 or not (cjs or {}).get("Id"):
-                            raise H.TransportError(f"createsite → HTTP {code}")
-                        sid = int(cjs["Id"])
-                        state["sites"][name] = sid
-                        wj(state_f, state)
-                    row["site_id"] = sid
-                    settings = {"Version": schema, "ReferenceType": rt, **(p["site"].get("SiteSettings") or {})}
-                    body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": settings}
-                    if p.get("roles"):                     # the role's group may use the probe site (D15 shape)
-                        body.update(InheritPermission=sid, Permissions=KG.permissions(p, uid, e.get("principals") or {}))
-                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", body)
-                    want = p.get("expect_save", 200)
-                    ok = code == want
-                    log.append(f"{'ok' if ok else 'NG'} save → HTTP {code} (expected {want})")
-                    status = status if ok else "fail"
-                    if ok and code == 200:
+                    for ps in psites:
+                        sid = state["sites"].get(ps["state"])
+                        if sid:
+                            code, sjs, _ = c.call(f"/api/items/{sid}/getsite")
+                            if code == 404:
+                                sid = None
+                            elif code != 200:
+                                raise H.TransportError(f"getsite {sid} → HTTP {code}")
+                            elif not is_own(ps)(sjs["Response"]["Data"]):
+                                raise H.TransportError(f"site {sid} in the state file is not this probe's site (folder, title or "
+                                                       f"type differ) — nothing written; check .pls/kb-probes-{a.env}.json")
+                        if not sid:
+                            code, cjs, text = c.call(f"/api/items/{parent_i}/createsite",
+                                                     {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"],
+                                                      "Body": "", "SiteSettings": {}})
+                            if code != 200 or not (cjs or {}).get("Id"):
+                                raise H.TransportError(f"createsite → HTTP {code}")
+                            sid = int(cjs["Id"])
+                            state["sites"][ps["state"]] = sid
+                            wj(state_f, state)
+                        own[ps["key"]] = sid
+                    sid = row["site_id"] = own["main"]
+                    if len(psites) > 1:
+                        row["site_ids"] = dict(own)
+                    saved_ok = True
+                    for ps in psites:
+                        settings = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(ps["settings"], own)}
+                        body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": settings}
+                        if p.get("roles"):                 # the role's group may use the probe site (D15 shape)
+                            body.update(InheritPermission=own[ps["key"]], Permissions=KG.permissions(p, uid, e.get("principals") or {}))
+                        code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite", body)
+                        want = p.get("expect_save", 200) if ps["key"] == "main" else 200
+                        ok = code == want
+                        where = "" if ps["key"] == "main" else f" {ps['key']}"
+                        log.append(f"{'ok' if ok else 'NG'} save{where} → HTTP {code} (expected {want})")
+                        status = status if ok else "fail"
+                        saved_ok = saved_ok and ok and code == 200
+                        if ps["key"] == "main" and not saved_ok:
+                            break                            # a main site that is expected to refuse: nothing more to save
+                    if saved_ok:
                         data = c.export_site(sid)["Response"]["Data"]
                         for path, exp in (p.get("expect_stored") or {}).items():
                             act = KV.get_path(data["SiteSettings"], path)
-                            good = H._check(act, exp)
+                            good = H._check(act, KV.substitute_sites(exp, own))
                             log.append(f"{'ok' if good else 'NG'} stored {path} = {json.dumps(act, ensure_ascii=False)}")
                             status = status if good else "fail"
                         server_day = None
@@ -3420,49 +3437,65 @@ def http_cmd(r: Path, a) -> int:
                             server_day = datetime.fromisoformat(str(data["UpdatedTime"])[:19]).date()
                             log.append(f"server date {server_day}")
                         vars_ = KV.date_vars(server_day) | {"admin_uid": uid}
-                        specs = [dict(t, vars=dict(vars_)) for t in p.get("tests") or []]
+                        vars_ |= {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
+                                  for role in (p.get("roles") or {})}           # bound: checked by KG.not_runnable
+                        specs = [dict(t, vars=dict(vars_),
+                                      steps=[dict(st, site=own[st["site"]]) if "site" in st else st
+                                             for st in t.get("steps") or []])
+                                 for t in p.get("tests") or []]
                         if specs:
-                            res = H.run_tests(probe_client, sid, specs, a.env)
+                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True)
                             for t in res["tests"]:
                                 log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
                                 if t["status"] not in ("pass", "pass-api-only"):
                                     status = "fail"
-                    if p.get("teardown") and not is_g:         # leave the probe site usable in the UI (D21)
-                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
-                        code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
-                                                                           "Body": "", "SiteSettings": td})
-                        log.append(f"teardown → HTTP {code}")
-                        if code != 200:
-                            raise H.TransportError(f"teardown failed (HTTP {code}): the probe site may stay broken in the UI")
+                    if not is_g:                             # leave the probe sites usable in the UI (D21)
+                        for ps in psites:
+                            if not ps["teardown"]:
+                                continue
+                            td = {"Version": schema, "ReferenceType": ps["rt"],
+                                  **KV.substitute_sites(ps["teardown"].get("SiteSettings") or {}, own)}
+                            code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite",
+                                                {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"],
+                                                 "Body": "", "SiteSettings": td})
+                            log.append(f"teardown{'' if ps['key'] == 'main' else ' ' + ps['key']} → HTTP {code}")
+                            if code != 200:
+                                raise H.TransportError(f"teardown failed (HTTP {code}): the probe site may stay broken in the UI")
                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
                     status = "error"
                     log.append(str(ex))
                 finally:                                     # also after an unexpected error or Ctrl-C
-                    own_sid = row.get("site_id")                 # set only for a site created or proven to be this probe's
-                    if is_g and own_sid:                         # no script; a roles probe's grant is removed
-                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
-                        td.pop("ServerScripts", None)
-                        body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": td}
-                        if p.get("roles"):
-                            body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
-                        try:
-                            code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
-                        except H.TransportError as ex:
-                            code = str(ex)
-                        log.append(f"teardown → HTTP {code}")
-                        if code != 200:
-                            status = "error"
-                            log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
-                                       "permissions — a person removes them in Pleasanter")
-                        # then delete the site, and believe it only when getsite no longer finds it (ADR-0025)
-                        gone, why_kept = KG.delete_probe_site(
-                            c, own_sid, lambda site: KV.is_own_probe_site(site, name, rt, parent_i, app_ids))
-                        log.append(why_kept or f"site {own_sid} deleted (deletesite, then getsite no longer finds it)")
-                        if gone:
-                            state["sites"].pop(name, None)
-                            wj(state_f, state)
-                        else:
-                            status = "error"
+                    if is_g:                                 # every own site: no script, no grant, then deleted
+                        for ps in reversed(psites):          # further sites first, the main site last
+                            own_sid = own.get(ps["key"])     # set only for a site created or proven to be this probe's
+                            if not own_sid:
+                                continue
+                            td_src = (ps["teardown"] or {}).get("SiteSettings") or {}
+                            if KV.site_refs(td_src) - set(own):      # names a site that was never created
+                                log.append(f"teardown of {ps['key']} names a site not created — saved empty")
+                                td_src = {}
+                            td = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(td_src, own)}
+                            td.pop("ServerScripts", None)
+                            body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": td}
+                            if p.get("roles"):
+                                body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
+                            try:
+                                code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
+                            except H.TransportError as ex:
+                                code = str(ex)
+                            log.append(f"teardown → HTTP {code}")
+                            if code != 200:
+                                status = "error"
+                                log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
+                                           "permissions — a person removes them in Pleasanter")
+                            # then delete the site, and believe it only when getsite no longer finds it (ADR-0025)
+                            gone, why_kept = KG.delete_probe_site(c, own_sid, is_own(ps))
+                            log.append(why_kept or f"site {own_sid} deleted (deletesite, then getsite no longer finds it)")
+                            if gone:
+                                state["sites"].pop(ps["state"], None)
+                                wj(state_f, state)
+                            else:
+                                status = "error"
                 if p.get("observe") and status == "pass":
                     status = "observed"
                 row["status"] = status
