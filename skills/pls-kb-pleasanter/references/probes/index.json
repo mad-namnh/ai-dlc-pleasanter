@@ -44,6 +44,12 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -70,6 +76,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -155,6 +167,12 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -187,6 +205,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -223,6 +247,12 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -243,6 +273,12 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -274,6 +310,12 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -302,21 +344,47 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
     "D36": {
-      "verified_on": [],
+      "verified_on": [
+        "1.5.2"
+      ],
       "probes": [
         "D36-permission-for-creating-child-site",
         "D36-permission-for-creating-group",
         "D36-permission-for-creating-group-column"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D37": {
-      "verified_on": [],
+      "verified_on": [
+        "1.5.2"
+      ],
       "probes": [
         "D37-process-validate-inputs-required-api"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D38": {
@@ -324,29 +392,82 @@
       "probes": []
     },
     "D39": {
-      "verified_on": [],
+      "verified_on": [
+        "1.5.2"
+      ],
       "probes": [
         "D39-crosstab-view-settings"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
     "D40": {
       "verified_on": [],
       "probes": [
         "D40-link-lookup-copy"
-      ]
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "fail"
+        }
+      ],
+      "note": "Failed on 1.5.2: the lookup did not copy on an API create (NumB 0, expected 1000). Cause open (hypotheses in the entry, not verified)."
     },
     "D41": {
-      "verified_on": [],
+      "verified_on": [
+        "1.5.2"
+      ],
       "probes": [
-        "D41-formula-after-lookup",
         "D41-formula-multiply"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     },
-    "D42": {
+    "D41a": {
       "verified_on": [],
+      "probes": [
+        "D41-formula-after-lookup"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "fail"
+        }
+      ],
+      "note": "Failed because the lookup (D40) did not copy (NumB 0, so NumC 0): not established, not shown wrong."
+    },
+    "D42": {
+      "verified_on": [
+        "1.5.2"
+      ],
       "probes": [
         "D42-status-control-column-readonly-api",
         "D42-status-control-readonly-record"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
       ]
     }
   }

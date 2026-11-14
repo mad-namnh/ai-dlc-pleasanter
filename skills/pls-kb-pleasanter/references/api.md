@@ -19,7 +19,7 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 
 | Operation | Endpoint | Notes |
 |---|---|---|
-| Create | `/api/items/{siteId}/create` | Fields: `Title`, `Body`, `Status`, `ClassHash`, `NumHash`, `DateHash`, `DescriptionHash`, `CheckHash`; returns `Id`. Server scripts run (`BeforeCreate`…) |
+| Create | `/api/items/{siteId}/create` | Fields: `Title`, `Body`, `Status`, `ClassHash`, `NumHash`, `DateHash`, `DescriptionHash`, `CheckHash`; returns `Id`. Server scripts run (`BeforeCreate`…). A `Default` formula is computed on create and update (D41, verified 1.5.2; over a looked-up column not established, D41a); a link lookup in the `ChoicesText` JSON form did **not** copy on create (D40, failed 1.5.2, cause open) |
 | Read | `/api/items/{recordId}/get` | `Response.Data[0]` |
 | Update | `/api/items/{recordId}/update` | Add `"ProcessId": n` to execute a process (spelling in the manual table is `ProccessId`; `ProcessId` works on 1.5.2). Display condition is enforced → HTTP 400 `要求が不正です。` outside it (D10) |
 
@@ -32,7 +32,7 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 | Site permissions | `getsite` → `InheritPermission` (site id), `Permissions` (`["User,1,511", "Group,2,…", "Dept,3,…"]`); `updatesite` accepts both (D15) | 511 = all rights (bit flags) |
 | Principals | `/api/users/get`, `/api/groups/get`, `/api/depts/get` | IDs are per environment — map to logical names |
 
-**Permission values — source-derived, not verified on a server** (`Implem.Pleasanter/Libraries/Security/Permissions.cs`, `enum Types : long`, tag `Pleasanter_1.5.2.0`; values from the trial hand-over that cites this file, recorded in the source notes of 2026-11-14): NotSet 0, Read 1, Create 2, Update 4, Delete 8, SendMail 16, Export 32, Import 64, ManageSite 128, ManagePermission 256, ManageTenant 1073741824, ManageService 2147483648. Read through ManagePermission add up to 511, consistent with "511 = all rights" above (verified). Combinations used in the KB: 1 read-only (D19), 15 read + create + update + delete (D36 probes). Serialised as numbers (no string converter).
+**Permission values — source-derived, not verified on a server** (`Implem.Pleasanter/Libraries/Security/Permissions.cs`, `enum Types : long`, tag `Pleasanter_1.5.2.0`; values from the trial hand-over that cites this file, recorded in the source notes of 2026-11-14): NotSet 0, Read 1, Create 2, Update 4, Delete 8, SendMail 16, Export 32, Import 64, ManageSite 128, ManagePermission 256, ManageTenant 1073741824, ManageService 2147483648. Read through ManagePermission add up to 511, consistent with "511 = all rights" above (verified). Combinations used in the KB: 1 read-only (D19), 15 read + create + update + delete (D36 probes). Serialised as numbers (no string converter). **Observed with these values (D36 probes, 1.5.2, `pls kb-verify` 2026-11-14), consistent with the list above:** site permission 2 let a test user create records; 1 and 5 let a user list all records, and an update with 1 was refused (403); a record permission of 15 (`PermissionForCreating` `{"Group": 15}`) let the creating user list and update its own record (one test user per role: other members of its group were not probed, D36). Delete (8), the other values and the numbers themselves as an enum are still source-derived.
 
 ## Version of the installed Pleasanter (probe 2026-11-05, MADLAB dev 1.5.2, read-only)
 
@@ -68,6 +68,7 @@ Compared with getsite of the same site after mapping ids: 0 differences (setting
 |---|---|---|
 | 422 | `ServerScriptExecutionFailed` | A server script threw outside a try/catch — e.g. top-level `const` in a shared script (D7) |
 | 400 | `要求が不正です。` | Process executed outside its display condition (D10) |
+| 403 | not recorded by the probes; D19 saw `この操作を行うための権限がありません。` | API update of a record whose current status matches a status control with `ReadOnly: true`, the update keeping that status (D42 probe, 1.5.2, 2026-11-14); an update or other write by a user with site permission Read (D19; D36 probe) |
 
 ## UI endpoints useful for discovery (read-only)
 

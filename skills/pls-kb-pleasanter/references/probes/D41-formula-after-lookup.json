@@ -1,5 +1,5 @@
 {
-  "entry": "D41",
+  "entry": "D41a",
   "title": "A formula over a looked-up column is computed after the lookup: line NumC = NumB (looked up from the master) x NumA",
   "site": {
     "ReferenceType": "Results",

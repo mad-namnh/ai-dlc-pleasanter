@@ -1,0 +1,20 @@
+# Log — kb-verify results of the store-promo KB gaps
+
+- 2026-11-14 Nam ran the five steps (environments.json, principals, test-users, kb-verify) on MADLAB dev; report in the trial `ops/kb-verify/2026-11-14-dev.md` / `.json`: 18/20 probes pass; D40-link-lookup-copy, D41-formula-after-lookup fail (NumB = 0). Nam: "ok" to record results, VERIFIED_KEYS, read lookup source, two `pls` fixes.
+- Finding while reading the report: kb-verify keeps only `NG`/`exec`/`expected` lines (`pls.py` kb-verify block), so D36's passing list/update checks are not in the report; pass = every step passed (`run_tests` status). Fix 1.
+- Prompt "type the release id to confirm (kb-verify)" confused Nam; the other env-confirmations already pass a token. Fix 2.
+- Source read (sparse clone in `../_agent-scratch/pls-src`, removed at the end): `source-notes.md`. Cause not decided; two hypotheses.
+- Accident: one early `ls` touched the framework's `.pls` path; blocked by a deny rule, nothing read. Reported to Nam.
+- Implemented fixes 1–2 and `VERIFIED_KEYS` (+ PermissionForCreating, Formulas, StatusControls). `test_scope.py`: examples of an unverified key moved from StatusControls/Formulas to PermissionForUpdating/Exports (still without evidence) — same assertions.
+- Suites: 3.12 589 OK; 3.10 (CPython 3.10.21) 589 OK skipped=2; node 15 pass. Parent `b00a551` worktree: the 3 new tests fail (2 in the new file, 1 in test_scope); worktree removed.
+- Budget: subagents 0/6 so far.
+- Curator (opus, high; subagent 1/6): behaviours.md D36–D42, index.json (D40/D41 `note` field new), schema.md, api.md. DONE_WITH_CONCERNS: (a) README version left to the Orchestrator → done (0.26); (b) D41-formula-after-lookup will keep failing while D40 fails — proposal: `"control": "D40-link-lookup-copy"` (a probe change: next curator call, after Nam's D40 screen check); (c) new `note` field in index.json.
+- Orchestrator: docs/review-findings.md rows D36–D42, skills/README.md KB 0.26, HANDOFF, ADR-0023 follow-up. KB tests (test_kbverify, test_kb*) 59 OK.
+- Review round 1 started (pls-x-reviewer, opus, high; subagent 2/6). No edits until it returns.
+- Review round 1: accept with fixes (H1, M1, M2, L1–L6) → `review.md`. Fixes: M1, M2 (StatusControl.cs read: Depts/Groups/Users), L1, L2, L4, L6, TD-46 by the Orchestrator; H1, L3 by the curator (opus, high; subagent 3/6): D36 per creator, D41/D41a split, probe D41-formula-after-lookup entry → D41a, D36 probe titles reworded. Follow-ups outside the KB: README 0.26 text, review-findings D41 row, TD-44 entry names.
+- Suites: 3.12 591 OK; 3.10 591 OK skipped=2; node 15 pass. Parent worktree: 5 new tests fail; removed.
+- Review round 2 started (pls-x-reviewer, opus, high; subagent 4/6). No edits until it returns.
+- Review round 2: reject (R2-H1 High: `D41a` breaks the kb-verify report sort). Reproduced; fixed (`entry_key`, regex), R2-L3 fixed; tests. Suites 3.12 594 OK, 3.10 594 OK skipped=2, node 15; parent worktree: 6 tests of the new file fail/error; removed. Review limit reached (2 rounds) → not committed; asked Nam: commit with the fix verified by tests, or a third round. R2-L1, R2-L4 (KB text) open for the curator.
+- Budget: subagents 4/6.
+- Nam (AskUserQuestion, 2026-11-14): "Review vòng 3 rồi commit"; D40 probe: "Đồng ý, chờ kiểm tra màn hình" (R2-L2: narrowing accepted). Review round 3 (scope: R2-H1 and R2-L3 fixes) started (pls-x-reviewer, opus, high; subagent 5/6). No edits until it returns.
+- Review round 3: accept with fixes (R3-L1, R3-L2 Low) → TD-47 with R2-L1, R2-L4. Nam: "ok, xong review thi commit luon". Committing.

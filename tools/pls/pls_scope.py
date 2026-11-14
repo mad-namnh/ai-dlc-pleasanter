@@ -11,7 +11,14 @@ Evidence (0 differences after export → updatesite → export, and through pls 
   1 (timeline), 3 (HTML) and 4 (calendar);
 - KB probe D33 2026-11-12 (`pls kb-verify`, MADLAB dev 1.5.2.0, ADR-0023): NearCompletionTimeBeforeDays /
   NearCompletionTimeAfterDays stored as sent (0 and 90 — above the UI maximum 30 of General.json) and used by a view
-  with NearCompletionTime.
+  with NearCompletionTime;
+- KB probes D36, D41, D42 2026-11-14 (`pls kb-verify`, MADLAB dev 1.5.2.0 build 201520, ADR-0023; report
+  `ops/kb-verify/2026-11-14-dev.md` of the trial that ran them): PermissionForCreating (`Group` and a group column
+  key, value 15) stored as sent and applied to records created by two roles' test users and the administrator;
+  Formulas (Default method, `NumB × NumA` into NumC) computed on API create and update; StatusControls (whole-record
+  ReadOnly, and a ReadOnly column in ColumnHash) applied. These probes read back only the paths they name (e.g. a
+  formula's Target), not the whole item after a second export. A status control that names principals
+  (Depts/Groups/Users) is not covered: those ids differ per environment and pls maps none of them there.
 Add a key here only with such evidence (I9), and record it in the KB and the spike checklist.
 
 Granularity: the evidence is per **top-level key** with the attributes those sites used (columns: label, type,
@@ -33,6 +40,8 @@ VERIFIED_KEYS = frozenset({
     "ServerScripts", "Scripts", "Styles", "Htmls",
     # the 完了間近 range of NearCompletionTime views (KB D33, ADR-0023)
     "NearCompletionTimeBeforeDays", "NearCompletionTimeAfterDays",
+    # record permissions at creation, formulas, status controls (KB D36, D41, D42, ADR-0023)
+    "PermissionForCreating", "Formulas", "StatusControls",
     # dashboards (part types checked separately)
     "DashboardParts",
 })
@@ -46,6 +55,10 @@ VIEW_REQUIRED_TYPES = frozenset({1, 4, 5})    # without "View" updatesite fails 
 def unverified(settings: dict) -> list[str]:
     """Components of one SiteSettings without round-trip evidence, and dashboard parts that would fail to save."""
     out = [f"{k} (no round-trip evidence)" for k in sorted(set(settings or {}) - VERIFIED_KEYS)]
+    for c in (settings or {}).get("StatusControls") or []:
+        if isinstance(c, dict) and any(c.get(k) for k in ("Depts", "Groups", "Users")):
+            out.append(f"StatusControls[{c.get('Id', '?')}] names principals (Depts/Groups/Users): ids differ per "
+                       "environment and are not mapped (no round-trip evidence)")
     for p in (settings or {}).get("DashboardParts") or []:
         if not isinstance(p, dict):
             out.append("DashboardParts item is not an object (no round-trip evidence)")

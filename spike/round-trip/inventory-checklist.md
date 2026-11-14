@@ -10,14 +10,14 @@ Fill in after steps 3–5. Legend: ✅ round-trips 100% · 🟡 partial (explain
 | 2 | Columns | Column definitions (label, type, required, default, format) | ✓ | ✅ | ✅ | ✅ | updatesite deletes definitions missing from the payload (D4) |
 | 3 | Columns | 選択肢 (choices), choices linked to another site | ✓ | ✅ | ✅ | ✅ | `[[SiteId]]`: API keeps the original ID, package remaps (D6) |
 | 4 | Columns | Validation (入力検証), constraints | ✓ | ✅ | ✅ | ✅ | Only ValidateRequired tried |
-| 5 | Columns | Formulas (計算式) | ✓ | ➖ | ➖ | ➖ | |
+| 5 | Columns | Formulas (計算式) | ✓ | ➖ | 🟡 | ➖ | KB D41 (kb-verify 2026-11-14, 1.5.2.0): saved by updatesite, Target read back, computed on record create/update; whole item not compared |
 | 6 | Columns | Extended columns (拡張項目) | | ➖ | ➖ | ➖ | Related to ADR-0002 |
 | 7 | Screens | Editor (EditorColumnHash, tabs, セクション) | ✓ | ✅ | ✅ | ✅ | No tabs/sections yet |
 | 8 | Screens | Grid (GridColumns), filters, sorting | ✓ | ✅ | ✅ | ✅ | |
 | 9 | Screens | Views (ビュー) | | ✅ | ✅ | ✅ | Includes a Crosstab view |
 | 10 | Links | Links between sites, lookups (ルックアップ) | ✓ | ✅ | ✅ | ✅ | Links/Summaries: API keeps original IDs, package remaps (D6) |
 | 11 | Workflow | プロセス (buttons, conditions, actions) | ✓ | ✅ | ✅ | ➖ | Slices #1–#3 (D10, D20, D21) |
-| 12 | Workflow | ステータス制御 (status control) | ✓ | ➖ | ➖ | ➖ | |
+| 12 | Workflow | ステータス制御 (status control) | ✓ | ➖ | 🟡 | ➖ | KB D42 (kb-verify 2026-11-14, 1.5.2.0): ReadOnly and ColumnHash saved by updatesite and read back; principals (Depts/Groups/Users) not tried — scope check flags them |
 | 13 | Automation | 通知 (notifications) | ✓ | ✅ | ✅ | ✅ | Sample uses mail to `[Manager]`; webhooks not tried |
 | 14 | Automation | リマインダー (reminders) | | ✅ | ✅ | ✅ | |
 | 15 | Code | サーバースクリプト (server scripts) | ✓ | ✅ | ✅ | ✅ | Includes shared scripts. SiteIds inside strings not remapped (D3); plain-text secret found (D5) |

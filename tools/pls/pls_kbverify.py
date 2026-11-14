@@ -245,6 +245,12 @@ def entry_results(rows: list[dict]) -> dict[str, str]:
     return out
 
 
+def entry_key(entry: str) -> tuple:
+    """Sort key of a KB entry id: number first, then the letter of a split entry (D4 < D4a < D5)."""
+    m = re.match(r"^D(\d+)([a-z]?)$", entry)
+    return (int(m[1]), m[2]) if m else (10 ** 9, entry)
+
+
 def report(env: str, version: dict | None, rows: list[dict], no_probe: list[str], today: str) -> str:
     app = (version or {}).get("app", "unknown")
     entries = entry_results(rows)
@@ -253,10 +259,14 @@ def report(env: str, version: dict | None, rows: list[dict], no_probe: list[str]
            f"- **Result:** {sum(v == 'pass' for v in entries.values())}/{len(entries)} entries verified "
            f"({sum(r['status'] == 'pass' for r in rows)}/{len(rows)} probes pass)", "",
            "| Entry | Result |", "|---|---|"]
-    out += [f"| {k} | {v} |" for k, v in sorted(entries.items(), key=lambda x: int(x[0][1:]))]
+    out += [f"| {k} | {v} |" for k, v in sorted(entries.items(), key=lambda x: entry_key(x[0]))]
     out += ["", "| Entry | Probe | Status | Detail |", "|---|---|---|---|"]
     for r in rows:
-        out.append(f"| {r['entry']} | {r['probe']} | {r['status']} | {'; '.join(r['log'])[:300].replace('|', '/')} |")
+        passed = [x for x in r["log"] if x.startswith("ok")]               # reasons (NG, errors, control) survive the cut
+        detail = "; ".join([x for x in r["log"] if not x.startswith("ok")] + passed)
+        if len(detail) > 300:
+            detail = detail[:300] + " … (full log in the .json)"
+        out.append(f"| {r['entry']} | {r['probe']} | {r['status']} | {detail.replace('|', '/')} |")
     out += ["", "## Entries without a probe", "", ", ".join(no_probe) or "none", "",
             "A failing entry does not hold on this version: correct or split it by version (I9). "
             "`error` = the probe could not run (infrastructure), not a verdict on the entry; `inconclusive` = its control failed; `observed` = recorded behaviour without an expected outcome (read the detail)."]

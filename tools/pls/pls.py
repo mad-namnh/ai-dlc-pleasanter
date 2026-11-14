@@ -3354,7 +3354,7 @@ def http_cmd(r: Path, a) -> int:
                                                 f"({len(probes)} probes) and test records under folder "
                                                 f"{parent_i} in {a.env} ({conn['url']})" +
                                                 (f"; with a server script or a test user's key (ADR-0025): {', '.join(guarded)}"
-                                                 if guarded else "")):
+                                                 if guarded else ""), token="the command name"):
                 return 1
             role_clients: dict = {}
 
@@ -3446,7 +3446,7 @@ def http_cmd(r: Path, a) -> int:
                         if specs:
                             res = H.run_tests(probe_client, sid, specs, a.env, confine=True)
                             for t in res["tests"]:
-                                log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
+                                log += [x.strip() for x in t["log"] if x.strip()]   # passing checks are evidence too
                                 if t["status"] not in ("pass", "pass-api-only"):
                                     status = "fail"
                     if not is_g:                             # leave the probe sites usable in the UI (D21)
@@ -3506,8 +3506,8 @@ def http_cmd(r: Path, a) -> int:
                 if ctl and results.get(ctl) != "pass" and row["status"] == "pass":
                     row["status"] = "inconclusive"
                     row["log"].append(f"control {ctl} did not pass")
-            entries = set(re.findall(r"^\| (D\d+) \|", (kb / "references" / "behaviours.md").read_text(encoding="utf-8"), re.M))
-            no_probe = sorted(entries - {x["entry"] for x in rows}, key=lambda d: int(d[1:]))
+            entries = set(re.findall(r"^\| (D\d+[a-z]?) \|", (kb / "references" / "behaviours.md").read_text(encoding="utf-8"), re.M))
+            no_probe = sorted(entries - {x["entry"] for x in rows}, key=KV.entry_key)
             today = datetime.now().astimezone().date().isoformat()
             out = r / "ops" / "kb-verify" / f"{today}-{a.env}.md"
             out.parent.mkdir(parents=True, exist_ok=True)

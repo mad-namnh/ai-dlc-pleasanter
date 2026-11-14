@@ -1,6 +1,6 @@
 {
   "entry": "D36",
-  "title": "PermissionForCreating with a group column key (ClassD [[Groups*]]) gives the record permission to the group stored in that column, not to the creating user",
+  "title": "PermissionForCreating with a group column key (ClassD [[Groups*]]) gives the record permission to the group stored in that column: a Create-only user lists and updates a record the administrator created naming its group, not the record naming another group",
   "site": {
     "ReferenceType": "Issues",
     "SiteSettings": {

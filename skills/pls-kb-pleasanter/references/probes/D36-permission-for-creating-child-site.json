@@ -1,6 +1,6 @@
 {
   "entry": "D36",
-  "title": "PermissionForCreating Group 15 on a linked child site: a Create-only user lists only the child records its groups created",
+  "title": "PermissionForCreating Group 15 on a linked child site: each Create-only user lists only the child record it created (one test user per role)",
   "site": {
     "ReferenceType": "Issues",
     "SiteSettings": {
