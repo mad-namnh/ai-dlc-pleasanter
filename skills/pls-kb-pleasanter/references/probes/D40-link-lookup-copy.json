@@ -1,0 +1,95 @@
+{
+  "entry": "D40",
+  "title": "A lookup in the link column's ChoicesText JSON copies the master's value when the line is created; a later change of the master is not copied again",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "NumA"
+        ]
+      }
+    }
+  },
+  "sites": {
+    "lines": {
+      "ReferenceType": "Results",
+      "SiteSettings": {
+        "Columns": [
+          {
+            "ColumnName": "ClassB",
+            "ChoicesText": "[{\"SiteId\": ${probe_site:main}, \"Lookups\": [{\"From\": \"NumA\", \"To\": \"NumB\"}]}]"
+          }
+        ],
+        "EditorColumnHash": {
+          "General": [
+            "ResultId",
+            "Title",
+            "ClassB",
+            "NumB"
+          ]
+        }
+      }
+    }
+  },
+  "tests": [
+    {
+      "id": "D40",
+      "steps": [
+        {
+          "op": "create",
+          "save": "m",
+          "data": {
+            "Title": "kbprobe D40 master",
+            "NumHash": {
+              "NumA": 1000
+            }
+          }
+        },
+        {
+          "op": "create",
+          "site": "lines",
+          "save": "l",
+          "data": {
+            "Title": "kbprobe D40 line",
+            "ClassHash": {
+              "ClassB": "$m"
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$l",
+          "expect": {
+            "NumHash.NumB": 1000
+          }
+        },
+        {
+          "op": "update",
+          "record": "$m",
+          "data": {
+            "NumHash": {
+              "NumA": 1200
+            }
+          }
+        },
+        {
+          "op": "update",
+          "record": "$l",
+          "data": {
+            "Title": "kbprobe D40 line edited"
+          }
+        },
+        {
+          "op": "get",
+          "record": "$l",
+          "expect": {
+            "NumHash.NumB": 1000
+          }
+        }
+      ]
+    }
+  ]
+}

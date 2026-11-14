@@ -304,6 +304,50 @@
           "result": "pass"
         }
       ]
+    },
+    "D36": {
+      "verified_on": [],
+      "probes": [
+        "D36-permission-for-creating-child-site",
+        "D36-permission-for-creating-group",
+        "D36-permission-for-creating-group-column"
+      ]
+    },
+    "D37": {
+      "verified_on": [],
+      "probes": [
+        "D37-process-validate-inputs-required-api"
+      ]
+    },
+    "D38": {
+      "verified_on": [],
+      "probes": []
+    },
+    "D39": {
+      "verified_on": [],
+      "probes": [
+        "D39-crosstab-view-settings"
+      ]
+    },
+    "D40": {
+      "verified_on": [],
+      "probes": [
+        "D40-link-lookup-copy"
+      ]
+    },
+    "D41": {
+      "verified_on": [],
+      "probes": [
+        "D41-formula-after-lookup",
+        "D41-formula-multiply"
+      ]
+    },
+    "D42": {
+      "verified_on": [],
+      "probes": [
+        "D42-status-control-column-readonly-api",
+        "D42-status-control-readonly-record"
+      ]
     }
   }
 }

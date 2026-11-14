@@ -1,0 +1,94 @@
+{
+  "entry": "D41",
+  "title": "A Default formula NumC = NumB x NumA is computed on API create and on API update",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "数量"
+        },
+        {
+          "ColumnName": "NumB",
+          "LabelText": "単価"
+        },
+        {
+          "ColumnName": "NumC",
+          "LabelText": "金額"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "NumA",
+          "NumB",
+          "NumC"
+        ]
+      },
+      "Formulas": [
+        {
+          "Id": 1,
+          "CalculationMethod": "Default",
+          "Target": "NumC",
+          "Formula": {
+            "Children": [
+              {
+                "ColumnName": "NumB"
+              },
+              {
+                "ColumnName": "NumA",
+                "OperatorType": 3
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Formulas[Id=1].Target": "NumC"
+  },
+  "tests": [
+    {
+      "id": "D41",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D41",
+            "NumHash": {
+              "NumA": 3,
+              "NumB": 1000
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "NumHash.NumC": 3000
+          }
+        },
+        {
+          "op": "update",
+          "record": "$r",
+          "data": {
+            "NumHash": {
+              "NumA": 4
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "NumHash.NumC": 4000
+          }
+        }
+      ]
+    }
+  ]
+}

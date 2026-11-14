@@ -1,0 +1,67 @@
+{
+  "entry": "D42",
+  "title": "A status control that makes Status read-only in status 100 does not stop an API update that changes Status",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "StatusControls": [
+        {
+          "Id": 1,
+          "Name": "status locked in 100",
+          "Status": 100,
+          "ColumnHash": {
+            "Status": "ReadOnly"
+          }
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "StatusControls[Id=1].ColumnHash.Status": "ReadOnly"
+  },
+  "tests": [
+    {
+      "id": "D42-column",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D42 column",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "update",
+          "record": "$r",
+          "data": {
+            "Status": 900
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 900
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,10 @@
 
 > Next session may run on another Claude account: everything needed is in the repositories; nothing lives only in the chat.
 
+## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
+
+**KB gaps of trial `pls-trial-store-promo` DES-001 (2026-11-14, Nam):** source read at `Pleasanter_1.5.2.0` (`plans/2026-11-14-kb-gap-store-promo-probes/source-notes.md`); **ADR-0026 Accepted** (option B): `kb-verify` probes may own further probe sites (`${probe_site:<key>}`, `site` on create/list steps), `update` records they created, and use `$group_<role>` of a declared role; KB 0.25: D36–D42 source-derived with 10 probes pending. **Next (the person):** in the trial repository bind principals (`store_a01`, `store_a02`, `promo`, `accounting`), `pls test-users --env dev`, set `side_effects.mail` to `disabled`/`sink` and `values.kb_probe_parent` (a probe folder), then `pls kb-verify --env dev`; run the manual probe D38 (`plans/2026-11-14-kb-gap-store-promo-probes/manual-probe-D38.md`). Then the KB curator records the results and passing shapes get `VERIFIED_KEYS` (ADR-0023 step 6). Known limit: `expect_stored` reads only a probe's main site (TD-44). Follow-up: `skills/pls-x-lifecycle/references/kb-gaps.md` step 4 should name ADR-0026 (further sites, `update`, `$group_<role>`) with the next lifecycle change and its eval (review L4).
+
 ## Resume here — 2026-11-13 (read this first; the 2026-11-10 section below stays valid for everything older)
 
 **Lifecycle console moved to its own repository (2026-11-13, Nam):** the discovery record (committed here as `af17854`, removed by the next commit), the product spec and the console ADRs live in `C:\Workspace\MADLAB\01. Project\ai-dlc-pleasanter-console` (local, no remote). Nothing of the console is in this framework; framework changes it needs (JSON status output, headless end of a lifecycle run, P1 questions as records, lock covering settings and hooks, console channel in gate records) come here later as their own tasks and ADRs. Task log `plans/2026-11-13-console-spec-and-adrs/`.

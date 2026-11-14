@@ -1,0 +1,146 @@
+{
+  "entry": "D36",
+  "title": "PermissionForCreating Group 15 on a linked child site: a Create-only user lists only the child records its groups created",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "PermissionForCreating": {
+        "Group": 15
+      }
+    }
+  },
+  "sites": {
+    "lines": {
+      "ReferenceType": "Results",
+      "SiteSettings": {
+        "Columns": [
+          {
+            "ColumnName": "ClassA",
+            "ChoicesText": "[[${probe_site:main}]]"
+          }
+        ],
+        "EditorColumnHash": {
+          "General": [
+            "ResultId",
+            "Title",
+            "ClassA"
+          ]
+        },
+        "PermissionForCreating": {
+          "Group": 15
+        }
+      },
+      "teardown": {
+        "SiteSettings": {}
+      }
+    }
+  },
+  "roles": {
+    "store_a01": 2,
+    "store_a02": 2,
+    "accounting": 1
+  },
+  "expect_stored": {
+    "PermissionForCreating.Group": 15
+  },
+  "tests": [
+    {
+      "id": "D36-child",
+      "steps": [
+        {
+          "op": "create",
+          "as_key": "store_a01",
+          "save": "rA",
+          "data": {
+            "Title": "kbprobe D36 child rA",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "create",
+          "as_key": "store_a01",
+          "site": "lines",
+          "save": "lA",
+          "data": {
+            "Title": "kbprobe D36 child lA",
+            "ClassHash": {
+              "ClassA": "$rA"
+            }
+          }
+        },
+        {
+          "op": "create",
+          "as_key": "store_a02",
+          "save": "rB",
+          "data": {
+            "Title": "kbprobe D36 child rB",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "create",
+          "as_key": "store_a02",
+          "site": "lines",
+          "save": "lB",
+          "data": {
+            "Title": "kbprobe D36 child lB",
+            "ClassHash": {
+              "ClassA": "$rB"
+            }
+          }
+        },
+        {
+          "op": "list",
+          "as_key": "store_a01",
+          "site": "lines",
+          "contains": [
+            "$lA"
+          ],
+          "excludes": [
+            "$lB"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "store_a02",
+          "site": "lines",
+          "contains": [
+            "$lB"
+          ],
+          "excludes": [
+            "$lA"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "accounting",
+          "site": "lines",
+          "contains": [
+            "$lA",
+            "$lB"
+          ]
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

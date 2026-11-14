@@ -32,6 +32,8 @@ Payload fields for create/update used by `pls pack`: `Title`, `Body`, `Reference
 | Site permissions | `getsite` → `InheritPermission` (site id), `Permissions` (`["User,1,511", "Group,2,…", "Dept,3,…"]`); `updatesite` accepts both (D15) | 511 = all rights (bit flags) |
 | Principals | `/api/users/get`, `/api/groups/get`, `/api/depts/get` | IDs are per environment — map to logical names |
 
+**Permission values — source-derived, not verified on a server** (`Implem.Pleasanter/Libraries/Security/Permissions.cs`, `enum Types : long`, tag `Pleasanter_1.5.2.0`; values from the trial hand-over that cites this file, recorded in the source notes of 2026-11-14): NotSet 0, Read 1, Create 2, Update 4, Delete 8, SendMail 16, Export 32, Import 64, ManageSite 128, ManagePermission 256, ManageTenant 1073741824, ManageService 2147483648. Read through ManagePermission add up to 511, consistent with "511 = all rights" above (verified). Combinations used in the KB: 1 read-only (D19), 15 read + create + update + delete (D36 probes). Serialised as numbers (no string converter).
+
 ## Version of the installed Pleasanter (probe 2026-11-05, MADLAB dev 1.5.2, read-only)
 
 | Source | Result |
