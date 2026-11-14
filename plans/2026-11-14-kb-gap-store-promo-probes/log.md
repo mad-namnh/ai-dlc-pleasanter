@@ -26,3 +26,8 @@ Counts: subagent calls 0/6 · review rounds 0/2 · fix attempts 0/3
 - 2026-11-14 | parent d326a27: 16 new tests → 9 FAIL, 7 ERROR (all fail); worktree removed
 - 2026-11-14 | subagent 4/6: pls-x-reviewer (opus, high) round 2/2 — tree snapshot recorded; no edits until it returns
 - 2026-11-14 | review round 2/2: accept with fixes — L1–L5 Low; git status unchanged during review; fixes L1, L2, L3 (+2 tests); L4 deferred (HANDOFF), L5 to Nam; fix attempts 1/3
+- 2026-11-14 | suites before commit: py3.12 586 OK; py3.10 586 OK skipped=2; node 15
+- 2026-11-14 | commits (local, brownfield-adr, not pushed): a560993 kb-verify ADR-0026; 93fa281 KB D36–D42 + task record
+- 2026-11-14 | counts: subagents 4/6 · review rounds 2/2 · fix attempts 1/3
+- 2026-11-14 | next: Nam prepares the trial (principals, test-users, mail, kb_probe_parent) and runs kb-verify; manual probe D38
+- REPORT SENT
