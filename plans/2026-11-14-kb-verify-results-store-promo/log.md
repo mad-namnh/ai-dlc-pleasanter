@@ -18,3 +18,4 @@
 - Budget: subagents 4/6.
 - Nam (AskUserQuestion, 2026-11-14): "Review vòng 3 rồi commit"; D40 probe: "Đồng ý, chờ kiểm tra màn hình" (R2-L2: narrowing accepted). Review round 3 (scope: R2-H1 and R2-L3 fixes) started (pls-x-reviewer, opus, high; subagent 5/6). No edits until it returns.
 - Review round 3: accept with fixes (R3-L1, R3-L2 Low) → TD-47 with R2-L1, R2-L4. Nam: "ok, xong review thi commit luon". Committing.
+- Committed `01181fa` (local, brownfield-adr, not pushed). Scratch source clone removed. Subagents 5/6 (curator 2, reviewer 3). REPORT SENT.
