@@ -420,7 +420,7 @@
           "result": "fail"
         }
       ],
-      "note": "Failed on 1.5.2: the lookup did not copy on an API create (NumB 0, expected 1000). Cause open (hypotheses in the entry, not verified)."
+      "note": "The probe (API create) failed on 1.5.2: the lookup did not copy (NumB 0, expected 1000); cause open (H1 in the entry, not told apart). The screen part of the entry was observed on the screen by a person on 1.5.2 (2026-11-14/15, administrator account (stated by the person, 2026-11-15); not a probe run; not verified in the sense of ADR-0023): with the link typed and saved on the screen and AutoPostBack on the link column the lookup filled the field; the stored value after save was not observed; no screen lookup was observed on settings written through updatesite, and AutoPostBack written through updatesite was not tried. verified_on stays empty: the probed API behaviour fails and the screen part is a person's observation, not a probe run."
     },
     "D41": {
       "verified_on": [
@@ -436,7 +436,8 @@
           "env": "MADLAB dev",
           "result": "pass"
         }
-      ]
+      ],
+      "note": "The kb-verify report of 2026-11-14 lists D41 as fail because it filed probe D41-formula-after-lookup under D41 then; that probe now belongs to D41a (entry split). D41's own probe, D41-formula-multiply, passed."
     },
     "D41a": {
       "verified_on": [],

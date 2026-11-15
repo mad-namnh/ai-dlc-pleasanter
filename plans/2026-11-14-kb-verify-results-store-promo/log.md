@@ -19,3 +19,7 @@
 - Nam (AskUserQuestion, 2026-11-14): "Review vòng 3 rồi commit"; D40 probe: "Đồng ý, chờ kiểm tra màn hình" (R2-L2: narrowing accepted). Review round 3 (scope: R2-H1 and R2-L3 fixes) started (pls-x-reviewer, opus, high; subagent 5/6). No edits until it returns.
 - Review round 3: accept with fixes (R3-L1, R3-L2 Low) → TD-47 with R2-L1, R2-L4. Nam: "ok, xong review thi commit luon". Committing.
 - Committed `01181fa` (local, brownfield-adr, not pushed). Scratch source clone removed. Subagents 5/6 (curator 2, reviewer 3). REPORT SENT.
+- 2026-11-15 Nam: NumB still not filled on the screen after F5. Second read-only source read (clone re-fetched in ../_agent-scratch/pls-src, to remove when D40 closes): H3 (screen lookup filtered when the To column is posted; OverwriteForm) → source-notes.md. Asked Nam for the OverwriteForm screen check.
+- 2026-11-15 Nam: OverwriteForm check negative. Third read: AutoPostBack gate (H4) → source-notes. Asked Nam for the 自動ポストバック check.
+- 2026-11-15 Nam: 自動ポストバック on → NumB filled on the screen (H4). Asked for the separation check without OverwriteForm + save/reopen.
+- 2026-11-15 Nam: OverwriteForm not needed (自動ポストバック alone fills NumB on the screen).
