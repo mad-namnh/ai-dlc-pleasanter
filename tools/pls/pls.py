@@ -17,7 +17,7 @@ Commands:
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
-                                                set Approvers / Operators / Origin (CLAUDE.md), role (environments.json)
+                                                set Approvers / Operators / Origin / Role tests (CLAUDE.md), role (environments.json)
                                                 or dev-writes on|off (standing permission for apply / bootstrap /
                                                 migrate on a dev environment, ADR-0024) as the person stated it;
                                                 recorded under gates/profile/ (I4)
@@ -2548,8 +2548,8 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
     cm.write_text(text, encoding="utf-8", newline="\n")
     if approver:          # the person running init states these values: recorded so a later hand edit is visible (L-PRF-01)
-        said = f"pls init {target.name} --approver {approver} --origin {origin}"
-        for field in ("Approvers", "Operators", "Origin"):
+        said = f"pls init {target.name} --approver {approver} --origin {origin} --stage {stage}"
+        for field in ("Approvers", "Operators", "Origin", "Role tests"):
             m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
     (target / ".claude").mkdir(exist_ok=True)
@@ -3821,7 +3821,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
     s.add_argument("action", choices=["set"])
-    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV)
+    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV, help="quote a field with a space: \"Role tests\"")
     s.add_argument("value")
     s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
     s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")

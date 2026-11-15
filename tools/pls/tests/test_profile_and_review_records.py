@@ -1,5 +1,5 @@
 """Guard inputs and attestations come from records of the person's words, not from files an agent can edit (I4):
-profile rows Approvers / Operators / Origin and environment roles (`pls profile set`), the as-is review that lets
+profile rows Approvers / Operators / Origin / Role tests and environment roles (`pls profile set`), the as-is review that lets
 DES-000 clear L-LAD-01 (`pls review as-is`), refs decisions (`--quote`) and the jobs deploy confirmation."""
 import json
 import tempfile
@@ -83,6 +83,41 @@ class ProfileRecordTest(unittest.TestCase):
         with self.assertRaisesRegex(pls.Fail, "--env must name"):
             pls.main(["profile", "set", "role", "stg", "--env", "nowhere", "--approver", "Nam", "--quote", "x"])
 
+    def test_role_tests_change_only_with_the_persons_words(self):
+        # deferring role tests lowers what G3 proves: a hand edit is reported, the recorded value is the one shown
+        p = self.r / "CLAUDE.md"
+        p.write_text(p.read_text(encoding="utf-8") + "| Role tests | `per-role keys` |\n", encoding="utf-8")
+        self.assertTrue(any("Role tests has no record" in m for m in PRF(PR.lint(self.r))))
+        self.assertEqual(pls.main(["profile", "set", "Role tests", "per-role keys", "--approver", "Nam",
+                                   "--quote", "role tests with a key per role"]), 0)
+        self.assertEqual([m for m in PRF(PR.lint(self.r)) if "Role tests" in m], [])
+        edit_row(self.r, "Role tests", "`deferred`")
+        self.assertTrue(any("Role tests 'deferred' differs from its record" in m for m in PRF(PR.lint(self.r))))
+        self.assertIn("| Role tests | `per-role keys` |", PR.effective_profile_text(self.r))
+        self.assertEqual(pls.main(["profile", "set", "Role tests", "`deferred`", "--approver", "Nam",
+                                   "--quote", "chon C: chi co key admin"]), 0)
+        self.assertIn("| Role tests | `deferred` |", p.read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(GT.GateError, "Role tests is `deferred` or `per-role keys`"):
+            PR.set_field(self.r, "Role tests", "none", "Nam", "no role tests")
+
+    def test_an_unrecorded_role_tests_row_is_reported_unless_it_is_the_template_and_the_hint_runs(self):
+        import shlex
+        p = self.r / "CLAUDE.md"
+        base = p.read_text(encoding="utf-8")
+        for row, reported in (("`deferred` (one key, the operator's …) / `per-role keys` (a test user …)", False),
+                              ("`deferred`", True), ("`deferred` (only an admin key, chosen C)", True),
+                              ("deferred - no keys", True), ("`Deferred`", True)):
+            with self.subTest(row=row):
+                p.write_text(base + f"| Role tests | {row} |\n", encoding="utf-8")
+                msgs = [m for m in PRF(PR.lint(self.r)) if "Role tests" in m]
+                self.assertEqual(bool(msgs), reported, msgs)
+        p.write_text(base + "| Role tests | `deferred` |\n", encoding="utf-8")
+        hint = next(m for m in PRF(PR.lint(self.r)) if "Role tests" in m).split("pls profile set ", 1)[1]
+        args = shlex.split(hint.replace("<name>", "Nam").replace("<their words>", "role tests deferred"))
+        self.assertEqual(pls.main(["profile", "set", *args]), 0)                  # the printed command runs as printed
+        self.assertEqual([m for m in PRF(PR.lint(self.r)) if "Role tests" in m], [])
+        self.assertFalse([x for x in (self.r / "gates/profile").iterdir() if " " in x.name])   # no spaces in file names
+
     def test_unrecorded_rows_are_reported_and_a_damaged_record_refuses(self):
         self.assertEqual(len([m for m in PRF(PR.lint(self.r)) if "CLAUDE.md" in m and "has no record" in m]), 3)
         PR.set_field(self.r, "Approvers", "Nam (all gates)", "Nam", "Nam approves every gate")
@@ -99,7 +134,8 @@ class InitRecordsTest(unittest.TestCase):
             target = Path(t) / "app"
             pls.init_project(target, "demo", "dev", "Nam", origin="existing")
             fields = sorted(json.loads(p.read_text(encoding="utf-8"))["field"] for p in (target / "gates/profile").glob("*.json"))
-            self.assertEqual(fields, ["Approvers", "Operators", "Origin"])
+            self.assertEqual(fields, ["Approvers", "Operators", "Origin", "Role tests"])
+            self.assertIn("| Role tests | `deferred` |", (target / "CLAUDE.md").read_text(encoding="utf-8"))
             self.assertEqual(PRF(PR.lint(target)), [])
             self.assertEqual(GT.origin(target), "existing")
 

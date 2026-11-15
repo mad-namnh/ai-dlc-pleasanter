@@ -357,7 +357,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts; `usage report` warns about a session that did P1–P4 work after a G4 (one session per change request) | branch |
 | `pls jobs-verified` | P5 (ADR-0012, ADR-0020) | Record that an operator of the release's env (profile row `Operators`) or a G4 approver deployed and checked its scheduled scripts by hand; until then the next release lists them again | branch |
-| `pls profile set` | I4 (ADR-0020, ADR-0024) | Set profile rows Approvers / Operators / Origin, an environment `role`, or the standing permission `dev-writes on|off` for one dev environment (it confirms `apply` / `bootstrap` / `migrate` there instead of a typed release id) as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing; a `dev-writes` record counts only while its approver is an approver of the profile, L-PRF-01) | branch |
+| `pls profile set` | I4 (ADR-0020, ADR-0024) | Set profile rows Approvers / Operators / Origin / Role tests, an environment `role`, or the standing permission `dev-writes on|off` for one dev environment (it confirms `apply` / `bootstrap` / `migrate` there instead of a typed release id) as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing; a `dev-writes` record counts only while its approver is an approver of the profile, L-PRF-01) | branch |
 | `pls review as-is` | onboarding (I4, I5) | Record that a G2 approver reviewed `design/as-is/<site>.md`, bound to its sha256; only then does `DES-000-as-is-<site>.md` clear L-LAD-01 | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4. A G4 approval stores the digest of each planned release (`pls_release_digest`); a release changed after G4 is refused | branch |
 
@@ -390,7 +390,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 | L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
 | L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile; a damaged gate record is reported here |
-| L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
+| L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin / Role tests and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
 
 **Checks made by other commands — never in the output of `pls lint`** (not checked by the test):
 

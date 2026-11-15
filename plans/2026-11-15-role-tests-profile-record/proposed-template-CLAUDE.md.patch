@@ -1,0 +1,13 @@
+# Proposed change to templates/project/CLAUDE.md (protected path — Nam applies and commits it, or rejects it)
+# Reason: the row Role tests becomes a recorded profile field (pls profile set "Role tests" …, L-PRF-01); the hard rule must name it so an agent never edits it by hand. Apply from the repository root: git apply plans/2026-11-15-role-tests-profile-record/proposed-template-CLAUDE.md.patch
+--- a/templates/project/CLAUDE.md
++++ b/templates/project/CLAUDE.md
+@@ -29,7 +29,7 @@
+ 
+ ## Hard rules
+ 
+-1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`). The rows Origin, Approvers and Operators below and every environment `role` change only through `pls profile set … --quote "<their words>"`, never by hand.
++1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`). The rows Origin, Approvers, Operators and Role tests below and every environment `role` change only through `pls profile set … --quote "<their words>"`, never by hand.
+ 2. **Writes only to environments `pls` allows:** `role: dev`, or stg after G4, with `allow_write: true` in the operator's `.pls/connections.json`. Never change roles or `allow_write` to get past a refusal. Never write to prod.
+ 3. **`pls apply` / `pls bootstrap` / `pls migrate`, and `pls test` outside dev, need the person:** they run the command in their terminal, or they tell you to add `--yes` for that target. Never add `--yes` on your own, and never pipe text into a confirmation (pls refuses it). Smoke tests after a stg release run with `--release <R>` under that release's G4.
+ 4. **No keys, secrets or business data in git or chat.**
