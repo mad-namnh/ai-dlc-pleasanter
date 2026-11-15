@@ -160,6 +160,28 @@ function testRunner(execStatus = 200) {
 }
 const execSpec = extra => [{id: 'T', steps: [{op: 'create', save: 'r', data: {}}, {op: 'exec', record: '$r', process: 'approve', ...extra}]}];
 
+test('runTests: a refused create and a get without a record are step errors, as in pls test', async () => {
+  for (const [create, get, want] of [[[200, {Id: 1}], null, 'create failed'], [[500, {Id: 7}], null, 'create failed'],
+                                     [[200, {Id: 100}], [200, {Response: {Data: []}}], 'no record returned']]) {
+    const calls = [];
+    const fetch = async path => {
+      const [, id, op] = path.match(/\/api\/items\/(\d+)\/(\w+)/); calls.push(`${op} ${id}`);
+      const res = (status, obj) => ({status, text: async () => JSON.stringify(obj)});
+      if (op === 'getsite') return res(200, {Response: {Data: {SiteSettings: {Processes: []}}}});
+      if (op === 'create') return res(...create);
+      if (op === 'get') return res(...get);
+      return res(200, {});
+    };
+    const ctx = {fetch, console, DOMParser: class {}}; vm.createContext(ctx);
+    vm.runInContext(src + '\nthis.plsRunner = plsRunner;', ctx);
+    const out = await ctx.plsRunner.runTests(1, [{id: 'T', steps: [{op: 'create', save: 'r', data: {}},
+      {op: 'get', record: '$r', expect: {}}, {op: 'delete', record: '$r'}]}], 'dev');
+    assert.equal(out.tests[0].status, 'error', JSON.stringify(out.tests[0].log));
+    assert.ok(out.tests[0].log.some(l => l.includes(want)), JSON.stringify(out.tests[0].log));
+    assert.ok(!calls.some(c => c.startsWith('delete')));
+  }
+});
+
 test('runTests: exec answered with an unexpected status is a failure, as in pls test', async () => {
   const failed = await testRunner(500).runner.runTests(1, execSpec({}), 'dev');
   assert.equal(failed.tests[0].status, 'fail', JSON.stringify(failed.tests[0].log));

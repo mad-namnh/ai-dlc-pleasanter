@@ -472,15 +472,20 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                 if confine and op in ("get", "exec", "update", "delete") and (rid is None or rid not in created):
                     raise TransportError(f"{op} {st.get('record')!r}: not a record this probe created — nothing sent")
                 if op == "create":
-                    code, js, text = c.call(f"/api/items/{st.get('site') or site_id}/create", _subst(st.get("data") or {}, vars_))
+                    target = st.get('site') or site_id
+                    code, js, text = c.call(f"/api/items/{target}/create", _subst(st.get("data") or {}, vars_))
                     if st.get("expectHttp"):
                         ok = code == st["expectHttp"]
                         log.append(f"{'ok ' if ok else 'NG '} create refused → HTTP {code} (expected {st['expectHttp']})"
                                    + (f" {js.get('Message')}" if js and js.get("Message") else ""))
                         status = status if ok else "fail"
                         continue
-                    if not js or not js.get("Id"):
-                        raise TransportError(f"create failed: HTTP {code} {text[:200]}")
+                    # a refused create can still carry an Id — seen on 1.5.2.0 with the target site's own id (a server
+                    # script refused it): only an HTTP 200 with an Id other than the site's is a new record
+                    if code != 200 or not js or not js.get("Id") or str(js["Id"]) == str(target):
+                        raise TransportError(f"create failed: HTTP {code}"
+                                             + (f", Id {js['Id']} is the site's own id" if js and str(js.get("Id")) == str(target) else "")
+                                             + f" {(js or {}).get('Message') or text[:200]}")
                     vars_[st["save"]] = js["Id"]
                     created.add(js["Id"])
                     log.append(f"create → {js['Id']}")
@@ -508,7 +513,10 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                         continue
                     if code != 200 or not js:
                         raise TransportError(f"get {rid}: HTTP {code}")
-                    rec = js["Response"]["Data"][0]
+                    data = (js.get("Response") or {}).get("Data") or []
+                    if not data:                        # HTTP 200 without the record: the key cannot read it, or it is gone
+                        raise TransportError(f"get {rid}: HTTP 200 but no record returned")
+                    rec = data[0]
                     for path, exp in st["expect"].items():
                         act, exp = _get_path(rec, path), _subst(exp, vars_)
                         ok = _check(act, exp)

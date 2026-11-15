@@ -96,14 +96,17 @@ var plsRunner = (() => {
         for (const st of spec.steps) {
           const rid = st.record ? vars[st.record.replace('$', '')] : null;
           if (st.op === 'create') {
-            const r = await call(`/api/items/${st.site || siteId}/create`, subst(st.data));
+            const target = st.site || siteId;
+            const r = await call(`/api/items/${target}/create`, subst(st.data));
             if (st.expectHttp) {                 // negative create: must be refused with this status
               const ok = r.http === st.expectHttp;
               log.push(`${ok ? 'ok ' : 'NG '} create refused → HTTP ${r.http} (expected ${st.expectHttp})${r.json && r.json.Message ? ' ' + r.json.Message : ''}`);
               if (!ok) status = 'fail';
               continue;
             }
-            if (!r.json || !r.json.Id) throw new Error(`create failed: HTTP ${r.http} ${r.text.slice(0, 200)}`);
+            // same rule as pls test: a refused create can carry the site's own id — only HTTP 200 with another Id is a record
+            if (r.http !== 200 || !r.json || !r.json.Id || String(r.json.Id) === String(target))
+              throw new Error(`create failed: HTTP ${r.http} ${r.text.slice(0, 200)}`);
             vars[st.save] = r.json.Id; log.push(`create → ${r.json.Id}`);
           } else if (st.op === 'exec') {
             const p = procs[st.process];
@@ -125,7 +128,9 @@ var plsRunner = (() => {
               if (!ok) status = 'fail';
               continue;
             }
-            const rec = r.json.Response.Data[0];
+            const data = (r.json && r.json.Response && r.json.Response.Data) || [];
+            if (!data.length) throw new Error(`get ${rid}: HTTP ${r.http} but no record returned`);
+            const rec = data[0];
             for (const [path, exp0] of Object.entries(st.expect)) {
               const act = getPath(rec, path), exp = subst(exp0);   // "$name" in expectations = saved record id
               const ok = check(act, exp);
