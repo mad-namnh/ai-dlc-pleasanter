@@ -274,7 +274,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals). After an apply the folder also says who ran it and how it was confirmed (`apply-log.json`: `executed_by`, `confirmed`; the name is the run-log actor, self-asserted), what the read-back found (`plan.json` `readback_evidence`: per site the state and the sha256 of the live content and of the payload; `apply-log.json` `final_status` = the plan's status). Undoing an applied release is a new release until ADR-0015 (Proposed) is decided.
 - **Checks:** drift clean; plan contains complete SiteSettings only (I2); data-impacting changes have migration + dry-run; post-deploy smoke + round-trip export equals git.
 - **Gate:** G4.
-- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run).
+- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run). A data load (e.g. a first master load) travels the same way in a release that is not data-impacting; it goes in a release of its own, after the release that defines the site's columns (ADR-0004 Consequences).
 - **Status:** **proven on stg in slices #1–#3.** The release sequence:
   1. `release-plan` checks drift, slots and the migration gate, and orders multi-site releases by dependency.
   2. `applyRelease` / `pls apply` runs a preflight on `UpdatedTime`, applies in order and restores automatically on failure.
@@ -398,7 +398,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 |---|---|---|
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
-| P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
+| P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`); a folder given for any other release (a data load) gets the same checks and is kept in the plan |
 
 ### 7.3 AI assets (framework templates, installed into project repos)
 

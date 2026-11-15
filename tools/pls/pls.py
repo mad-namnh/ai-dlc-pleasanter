@@ -38,7 +38,7 @@ Commands:
                                                 (${site:x} references, referenced sites first), snapshot + rollback per
                                                 site, reverse-order rollback; nothing is written if any site fails
   bootstrap-plan --env E --release R            new sites (ADR-0007): createsite plan for managed sites without an id in E
-  migrate <release> [--rollback] [--yes]        data migrations of a data-impacting release over HTTP, before apply (ADR-0004)
+  migrate <release> [--rollback] [--yes]        data migrations or data loads of a release over HTTP, before apply (ADR-0004)
   package <release>                             G4-approved release → dist/<R>-<env>.zip with manifest, CHECKLIST and verify.py (ADR-0003)
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
@@ -1361,8 +1361,10 @@ def _migration_problems(r: Path, mig: str | None) -> list[str]:
     """Data-impacting gate (ADR-0004): a migration folder with the conversion (migration.json: site, keys,
     bulkupsert data or mapping), the backup of the affected records taken before (folder `backup/`,
     exported with the runner's backupRecords) and the log of a dry run on a copy (dry-run.md)."""
-    if not mig:
+    if mig is None:
         return ["data-impacting change without --migration DIR (ADR-0004)"]
+    if not mig:
+        return ["--migration names no folder (empty value)"]
     d = (r / mig) if not Path(mig).is_absolute() else Path(mig)
     out = [f"{mig}/{f} is missing" for f in MIGRATION_FILES if not (d / f).exists()]
     if (d / "backup").is_dir() and not any(f for f in (d / "backup").iterdir() if not f.name.startswith(".")):
@@ -1511,6 +1513,13 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                 print(f"MIGRATION {x}")
             print("release plan REFUSED: data-impacting change needs a migration (ADR-0004); no files written")
             return 1
+    elif migration:                                    # a data load without a data-impacting config change (e.g. the first
+        probs = migration_problems(r, migration)       # master load into a new site): same folder checks, and the folder is
+        if probs:                                      # kept in the plan, never dropped silently
+            for x in probs:
+                print(f"MIGRATION {x}")
+            print("release plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
+            return 1
     per_site = {}
     for s in order:
         res = results[s]
@@ -1531,7 +1540,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                      for s in reversed(order)],
         "on_failure": "stop; restore every site already touched (including the failing one) from its rollback payload, in reverse order",
         "preflight": "every site's UpdatedTime must equal expect_updated_time, otherwise nothing is applied",
-        "migration": migration if worst == "data-impacting" else None,
+        "migration": migration or None,
         "version_check": version_check(r, env),
     }
     if e.get("sandbox_of"):                            # the tenant is the base env's: a sandbox never deploys jobs (ADR-0011)
@@ -3629,7 +3638,7 @@ def build_parser() -> argparse.ArgumentParser:
         if c == "plan":
             s.add_argument("--release", required=True)
             s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-            s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+            s.add_argument("--migration", action="append", help="migration folder: required for data-impacting changes, also kept for a data load without one, e.g. a first master load (ADR-0004); repeatable")
     s = sp.add_parser("pack")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -3641,7 +3650,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--release", required=True)
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-    s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+    s.add_argument("--migration", action="append", help="migration folder: required for data-impacting changes, also kept for a data load without one, e.g. a first master load (ADR-0004); repeatable")
     s.add_argument("--accept-unverified", help="decision record that accepts components without round-trip evidence (ADR-0001)")
     s.add_argument("--summary", action="store_true", help="one SCOPE line per site (count and first names) instead of one per component")
     s = sp.add_parser("bootstrap-plan")
@@ -4254,14 +4263,15 @@ def _main(argv=None) -> int:
             print("plan REFUSED: column-slot check failed (A2, ADR-0002). Resolve in the ledger / git first.")
             return 1
         cls = classify(diffs)
-        if cls["classification"] == "data-impacting":
+        if cls["classification"] == "data-impacting" or a.migration:   # a given --migration is checked, never dropped
             probs = migration_problems(r, a.migration)
             if probs:
                 for x in cls["data_impacting"]:
                     print(f"DATA {x}")
                 for x in probs:
                     print(f"MIGRATION {x}")
-                print("plan REFUSED: data-impacting change needs a migration (ADR-0004)")
+                print("plan REFUSED: data-impacting change needs a migration (ADR-0004)" if cls["classification"] == "data-impacting"
+                      else "plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
                 return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
@@ -4274,7 +4284,7 @@ def _main(argv=None) -> int:
             "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
             "checks": {"L-DEP-01_complete_payload": not missing, "keys_missing_from_payload": missing,
                        "drift_vs_last_release": drift_note, "slot_collisions": "clean",
-                       "migration": a.migration if cls["classification"] == "data-impacting" else None},
+                       "migration": a.migration or None},
             "classification": classify(diffs),
             "steps": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "payload.json"}],
             "rollback": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "rollback.json"}],

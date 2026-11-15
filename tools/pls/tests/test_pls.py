@@ -369,6 +369,25 @@ class PlsTest(unittest.TestCase):
         self.assertIn("202", json.dumps(pa))                              # ${site:b} resolved to stg id
         self.assertNotIn("${site:", json.dumps(pa))
 
+    def test_release_plan_keeps_a_migration_of_a_release_that_is_not_data_impacting(self):
+        # a first master load into a new site changes no config, yet pls migrate must find the folder in the plan
+        sa, sb = self._two_sites()
+        rp = lambda rel, mig: pls.main(["release-plan", "--env", "stg", "--release", rel, "--export", f"a={sa}",  # noqa: E731
+                                        "--export", f"b={sb}", "--migration", mig])
+        self._migration("load", files=("migration.json",))                 # incomplete folder → refused, nothing written
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(rp("R1", "load"), 1)
+        self.assertIn("MIGRATION load/dry-run.md is missing", out.getvalue())
+        self.assertIn("the --migration folder is incomplete", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self._migration("load")
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+        self.assertEqual(rp("R2", "load"), 0)
+        plan = json.loads((self.r / "releases/R2/plan.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(plan["classification"], "data-impacting")
+        self.assertEqual(plan["migration"], ["load"])
+
     def test_release_plan_records_scheduled_script_changes_against_the_last_applied_release(self):
         import pls_side_effects as SE
         sa, sb = self._two_sites()
@@ -536,6 +555,25 @@ class PlsTest(unittest.TestCase):
         self._ledger({"ClassA": "No", "ClassB": ""})
         self.assertEqual(pls.main(["plan", str(live), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
         self.assertEqual(json.loads((self.r / "releases/R1/plan.json").read_text(encoding="utf-8"))["classification"]["classification"], "config-only")
+
+    def test_plan_keeps_a_migration_of_a_change_that_is_not_data_impacting(self):
+        # single-site plan: a data load (e.g. a first master load) is checked and kept, never dropped silently
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        plan = lambda rel: pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a",  # noqa: E731
+                                     "--release", rel, "--migration", "load"])
+        self._migration("load", files=("migration.json",))                 # incomplete folder → refused, nothing written
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(plan("R1"), 1)
+        self.assertIn("MIGRATION load/dry-run.md is missing", out.getvalue())
+        self.assertIn("the --migration folder is incomplete", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self._migration("load")
+        self.assertEqual(plan("R2"), 0)
+        p = json.loads((self.r / "releases/R2/plan.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(p["classification"]["classification"], "data-impacting")
+        self.assertEqual(p["checks"]["migration"], ["load"])
 
     def test_permission_change_is_permission_impacting(self):
         envs = json.loads(json.dumps(ENVS))

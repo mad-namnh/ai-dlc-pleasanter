@@ -1,6 +1,7 @@
 """Data migrations of a release over the guarded HTTP transport (ADR-0004, ADR-0008, ADR-0014 TB-7).
 
-A data-impacting release carries migration folders (`release-plan --migration DIR`): `migration.json`, `backup/`,
+A data-impacting release carries migration folders (`release-plan --migration DIR`); any other release may carry one
+for a data load (e.g. a first master load), checked and ordered the same way: `migration.json`, `backup/`,
 `dry-run.md`. `pls migrate <release>` sends each folder's explicit `data` with one `bulkupsert` (D13) — after the
 write guard, G4 on non-dev environments (the G4 digest covers the migration folders) and the mail / job checks —
 and records every run in `plan.json` under `migrations_run` before the call is sent. ADR-0004 order is enforced:

@@ -56,3 +56,4 @@ Probes changed the meaning of "data-impacting": on 1.5.2 configuration changes d
 
 - The CLI needs a change-classification command, run in CI, with the result shown in the diff report.
 - Each data-impacting change has a migration folder: script, dry-run log, rollback.
+- As built (2026-11-15, from the store-promo trial: a first master load was dropped from a config-only plan): a `--migration` folder given for a release that is **not** data-impacting — a data load such as a first master load — gets the same folder checks, is kept in `plan.json` and gets the same order (`pls migrate` before `apply`, `apply` refuses until it has run). Because the load runs before the configuration, it goes in a release of its own, **after** the release that defines the site's columns and keys: how `bulkupsert` behaves on columns or keys the site does not define yet is not verified on 1.5.x. The P5 skill text does not say this yet (tech debt).
