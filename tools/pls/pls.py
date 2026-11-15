@@ -70,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
+import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists (settings coverage)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
@@ -313,6 +314,15 @@ def embedded_env_refs(obj: Any) -> set:
     return set()
 
 
+def site_id_of(e: dict, name: str) -> int:
+    """This environment's id of a logical site (the same refusals as ${site:x} in from_refs)."""
+    if name not in e["sites"]:
+        raise Fail(f"unresolved reference ${{site:{name}}}")
+    if not e["sites"][name].get("id"):
+        raise Fail(f"site '{name}' is not created in this environment yet — pls bootstrap-plan, then pls bind (ADR-0007)")
+    return int(e["sites"][name]["id"])
+
+
 def from_refs(obj: Any, e: dict, key: str = "") -> Any:
     if isinstance(obj, dict):
         return {k: from_refs(v, e, k) for k, v in obj.items()}
@@ -393,6 +403,7 @@ def logical(export: Any, e: dict) -> dict:
                            reference=SX.references_for(ids.get(str(d.get("SiteId"))), ids)),
     }
     acl_to_refs(model["settings"], e)
+    SL.to_refs(model["settings"], ids)          # MoveTargets, IntegratedSites, dashboard site lists
     AP.to_refs(model["settings"], e.get("principals") or {})
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
@@ -537,6 +548,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
+    SL.from_refs(m0["settings"], lambda name: site_id_of(e, name), site, Fail)   # site lists (MoveTargets as integers)
     AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
     m = from_refs(m0, e)
     ss = m["settings"]
@@ -854,6 +866,10 @@ def lint(r: Path) -> list[dict]:
                 for x in (it.get(key) if isinstance(it.get(key), list) else []):
                     if not str(x).startswith("${principal:") and not acl_fixed(key, x):
                         issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{label} {key} uses an environment-specific id {x}; map it in environments.json principals, then pls unpack / harvest again (or write ${{principal:<name>}})"})
+        for x in SL.raw_ids(m["settings"]):
+            issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{x} — an environment-specific site id (or text whose "
+                           "site ids cannot be read); name the site in environments.json and unpack / harvest again, or "
+                           "write ${site:<name>}"})
         for path, tok in AP.raw_tokens(m["settings"]):
             issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{path}: mail address {tok} uses an environment-specific id; "
                            "map the principal in environments.json principals (git holds [${principal:<name>}])"})
@@ -2057,9 +2073,11 @@ def _git(r: Path, *args: str) -> str:
 
 def _writes_to(model: dict, dep: str) -> list[str]:
     """Places where a site's configuration may WRITE to site `dep` when records are saved: summaries aggregate into
-    the parent, scripts may call items.Update/Create on it (a reference in a script counts, read or write)."""
+    the parent, records may be moved into a move target, scripts may call items.Update/Create on it (a reference in
+    a script counts, read or write)."""
     ref = "${site:%s}" % dep
     out = [f"Summaries[{x.get('Id')}]" for x in model["settings"].get("Summaries") or [] if str(x.get("SiteId")) == ref]
+    out += ["MoveTargets"] if ref in (model["settings"].get("MoveTargets") or []) else []   # records moved into dep
     out += [f"{k}/{it.get('Name') or it.get('Title') or it.get('Id')}" for k in ("ServerScripts",)
             for it in model["scripts"].get(k) or [] if ref in (it.get("Body") or "")]
     return out

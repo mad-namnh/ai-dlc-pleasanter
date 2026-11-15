@@ -26,7 +26,7 @@
 | — without evidence, KB entry or any `pls` code | 94 |
 | Keys holding environment-specific ids | 22 |
 | — mapped fully | 10 (Columns, Links, Summaries, Processes, Notifications, Reminders, ServerScripts, Scripts, Styles, Htmls) |
-| — not (fully) mapped: ids would be deployed raw to another environment | 12 (StatusControls principals — refused today; Views, Exports, DashboardParts, Create/Read/UpdateColumnAccessControls principals; MoveTargets; IntegratedSites; MailTo/Cc/BccDefault tokens) |
+| — not (fully) mapped: ids would be deployed raw to another environment | 12 at inventory time; after WS1.1 (access lists) and WS1.3/1.4 (site lists), 2026-11-15: MailTo/Cc/BccDefault (to be excluded from git, WS1.5) and ids inside view filters (WS1.6) |
 | Keys whose change class is wrong or missing in `pls classify` | 5 (Formulas, StatusControls, Views access, Exports access, DashboardParts access) — fixed by WS2 (`plans/2026-11-15-classify-formulas-access-lists/`) |
 | API routes (1.5.2.0) | 53 in 12 controllers |
 | — used by `pls` | 15 |
@@ -114,8 +114,8 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | 63 | `LinkTableView` | — | — | — | config-only |  |
 | 64 | `RelatingColumns` | — | — | — | config-only |  |
 | 65 | `BulkUpdateColumns` | — | — | — | config-only |  |
-| 66 | `IntegratedSites` | — | — | site ids (`List<string>`) — **not mapped** | config-only |  |
-| 67 | `MoveTargets` | — | — | site ids (`List<long>`) — **not mapped** | config-only |  |
+| 66 | `IntegratedSites` | — | — | site ids or SiteName / SiteGroupName (`List<string>`) — ids mapped by WS1.3, names kept | config-only |  |
+| 67 | `MoveTargets` | — | — | site ids (`List<long>`) — mapped by WS1.3 (2026-11-15) | config-only |  |
 | | **4 Views and view modes** | | | | | |
 | 68 | `Views` | yes | schema | `Depts/Groups/Users` (view access) — mapped by WS1.1; filter values may hold user/dept ids — **not mapped** (WS1.6) | **was config-only — fixed by WS2 (2026-11-15)**; `Depts/Groups/Users` → should be permission-impacting | attributes: see table B |
 | 69 | `ViewLatestId` | yes | — | — | config-only | counter |
@@ -156,7 +156,7 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | | **8 Permissions** | | | | | |
 | 101 | `PermissionForCreating` | yes | api, behaviours, schema | keys `Group`/`Dept`/`User`/column names — no ids | permission-impacting (name contains Permission) | D36 verified |
 | 102 | `PermissionForUpdating` | — | behaviours, schema | same as PermissionForCreating | permission-impacting | D36 source-derived only |
-| 103 | `CreateColumnAccessControls` | — | — | `Depts/Groups/Users` — mapped by WS1.1; `RecordUsers` — open (WS1.2) | permission-impacting (AccessControl) |  |
+| 103 | `CreateColumnAccessControls` | — | — | `Depts/Groups/Users` — mapped by WS1.1; `RecordUsers` — column names such as Owner (ColumnAccessControl.cs l.109, source-derived): no ids (WS1.2 closed) | permission-impacting (AccessControl) |  |
 | 104 | `ReadColumnAccessControls` | — | — | same as Create | permission-impacting |  |
 | 105 | `UpdateColumnAccessControls` | — | — | same as Create (WS1.1) | permission-impacting |  |
 | 106 | `NotInheritPermissionsWhenCreatingSite` | yes | behaviours, skeletons | — | permission-impacting (the key name contains Permission) |  |
@@ -181,7 +181,7 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | 123 | `ServerScriptsGetErrorDetails` | — | — | — | config-only |  |
 | 124 | `ExtendedHeader` | — | — | HTML text — ids not scanned | config-only |  |
 | | **11 Dashboards** | | | | | |
-| 125 | `DashboardParts` | yes | behaviours, schema | `SiteId` mapped; `QuickAccessSites/TimeLineSites/CalendarSites/KambanSites/IndexSites` text and `*SitesData` — **not mapped** (WS1.4); `Depts/Groups/Users` — mapped by WS1.1 | **was config-only — fixed by WS2 (2026-11-15)**; access lists → should be permission-impacting | types 1, 3, 4 verified; 0 quick access, 5 kanban not |
+| 125 | `DashboardParts` | yes | behaviours, schema | `SiteId` mapped; `QuickAccessSites/TimeLineSites/CalendarSites/KambanSites/IndexSites` text and `*SitesData` — ids mapped by WS1.4, names kept; `Depts/Groups/Users` — mapped by WS1.1 | **was config-only — fixed by WS2 (2026-11-15)**; access lists → should be permission-impacting | types 1, 3, 4 verified; 0 quick access, 5 kanban not |
 | 126 | `DashboardPartsAsynchronousLoading` | — | — | — | config-only |  |
 | | **12 Public form** | | | | | |
 | 127 | `FormStartDateTime` | — | — | — | config-only |  |

@@ -658,6 +658,71 @@ class PlsTest(unittest.TestCase):
         with self.assertRaisesRegex(pls.Fail, "export 'csv' Users uses an environment-specific id 5"):
             pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
 
+    def test_site_lists_map_site_ids_and_keep_site_names(self):
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        ss.update(MoveTargets=[102], IntegratedSites=["102", "販促 group"],
+                  DashboardParts=[{"Id": 1, "Type": 1, "View": {}, "TimeLineSites": "101, 販促,102",
+                                   "CalendarSitesData": ["102"],
+                                   "QuickAccessSites": '[{"Id": "102", "Icon": "x"}, {"Id": "master"}]'}])
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        part = site["DashboardParts"][0]
+        self.assertEqual(site["MoveTargets"], ["${site:b}"])
+        self.assertEqual(site["IntegratedSites"], ["${site:b}", "販促 group"])           # a name is kept
+        self.assertEqual(part["TimeLineSites"], "${site:a}, 販促,${site:b}")             # layout kept
+        self.assertEqual(part["CalendarSitesData"], ["${site:b}"])
+        self.assertEqual(json.loads(part["QuickAccessSites"]), [{"Id": "${site:b}", "Icon": "x"}, {"Id": "master"}])
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["MoveTargets"], [202])                                       # an integer again
+        self.assertEqual(pl["IntegratedSites"], ["202", "販促 group"])
+        self.assertEqual(pl["DashboardParts"][0]["TimeLineSites"], "201, 販促,202")
+        self.assertEqual(json.loads(pl["DashboardParts"][0]["QuickAccessSites"])[0]["Id"], "202")
+        site["IntegratedSites"].append("999")                                            # a site environments.json lacks
+        site["MoveTargets"].append(998)
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        msgs = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("999" in m for m in msgs) and any("998" in m for m in msgs), msgs)
+        with self.assertRaisesRegex(pls.Fail, "environment-specific site id"):
+            pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")
+
+    def test_site_list_edge_shapes(self):
+        import pls_site_lists as SL
+        ids = {"102": "b"}
+        for text, want in (('[{"Id": 102}]', [{"Id": "${site:b}"}]),             # a number Id
+                           ('[{"id": "102"}]', [{"id": "${site:b}"}])):            # key case ignored (Newtonsoft)
+            s = {"DashboardParts": [{"Id": 1, "QuickAccessSites": text}]}
+            SL.to_refs(s, ids)
+            self.assertEqual(json.loads(s["DashboardParts"][0]["QuickAccessSites"]), want)
+        bad = {"DashboardParts": [{"Id": 4, "QuickAccessSites": '[{"Id": "102"},]', "TimeLineSites": "102"}]}
+        SL.to_refs(bad, ids)                                                        # other lists still mapped
+        self.assertEqual(bad["DashboardParts"][0]["TimeLineSites"], "${site:b}")
+        self.assertTrue(any("DashboardParts[4].QuickAccessSites" in x and "not readable JSON" in x for x in SL.raw_ids(bad)))
+        with self.assertRaisesRegex(pls.Fail, "not readable JSON"):
+            SL.from_refs(bad, lambda n: 202, "s", pls.Fail)
+        names = {"IntegratedSites": ["１０２", " master "],
+                 "DashboardParts": [{"Id": 2, "QuickAccessSites": '[{"Id": " master "}]'}]}
+        SL.to_refs(names, ids)                                                      # full-width digits and spaces: names
+        self.assertEqual(names["IntegratedSites"], ["１０２", " master "])
+        self.assertEqual(names["DashboardParts"][0]["QuickAccessSites"], '[{"Id": " master "}]')
+        self.assertEqual(SL.raw_ids(names), [])
+        self.assertEqual(SL.raw_ids({"MoveTargets": ["102", True]}), ["MoveTargets: 102", "MoveTargets: True"])
+        self.assertEqual(SL.raw_ids({"DashboardParts": [{"Id": 7, "CalendarSites": "5"}]}), ["DashboardParts[7].CalendarSites: 5"])
+
+    def test_site_list_refusals(self):
+        import pls_site_lists as SL
+        e = {"sites": {"a": {"id": 201}, "new": {}}}
+        resolve = lambda n: pls.site_id_of(e, n)                                          # noqa: E731
+        with self.assertRaisesRegex(pls.Fail, "environment-specific site id 999"):        # a raw id in a text list
+            SL.from_refs({"IntegratedSites": ["${site:a}", "999"]}, resolve, "s", pls.Fail)
+        with self.assertRaisesRegex(pls.Fail, r"unresolved reference \$\{site:gone\}"):
+            SL.from_refs({"MoveTargets": ["${site:gone}"]}, resolve, "s", pls.Fail)
+        with self.assertRaisesRegex(pls.Fail, "not created in this environment yet"):
+            SL.from_refs({"DashboardParts": [{"TimeLineSites": "${site:new}"}]}, resolve, "s", pls.Fail)
+
     def test_process_access_control_refs(self):
         envs = json.loads(json.dumps(ENVS))
         envs["envs"]["dev"]["principals"] = {"support": "Group,373"}
