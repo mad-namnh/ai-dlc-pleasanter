@@ -182,3 +182,9 @@ Each probe sets **non-default** values (D8: defaults are dropped) on its own pro
 1. `AddressBook` / `Mail*Default` hold customer mail addresses. Should they stay in git as `${env:x}` values, or stay out of git (excluded from `pack`)?
 2. Probing notification and reminder types needs a decision: a person's round trip on a dev site with sending disabled, or an ADR-0025 amendment that lets kb-verify create disabled notifications.
 3. Priority between M2 (prove scalars, broad) and M3/M4 (D40 fix, summary sync, deep): the plan puts M1 → M2 → M3 → M4. Is that the right order?
+
+## Decisions (Nam, 2026-11-15, verbatim "1. loai han khoi git, 2. sửa ADR-0025 để kb-verify được tạo notification ở trạng thái tắt, 3.ok")
+
+1. `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault`: **excluded from git** (not packed, not unpacked; the live value is kept on deploy). WS1.5 changes accordingly: no token mapping for these keys; instead an exclusion with a test and an ADR text (stop point 1) when WS1.5 starts.
+2. Notification / reminder probes: **amend ADR-0025** so kb-verify may create notifications and reminders that are disabled (`Disabled: true`), stored-shape only. Exact ADR text to Nam before WS3b notification probes.
+3. Order M1 → M2 → M3 → M4: approved. First task: WS2 (classification).
