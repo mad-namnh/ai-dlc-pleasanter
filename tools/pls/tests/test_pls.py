@@ -666,6 +666,51 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(c["classification"], "data-impacting")
         self.assertIn("D16", c["data_impacting"][0])
 
+    def test_classify_access_lists_and_status_controls_are_permission_impacting(self):
+        for path, kind, before, after in (
+                ("settings.StatusControls[1]", "added", None, {"Status": 200, "ReadOnly": True}),
+                ("settings.StatusControls[1].ReadOnly", "changed", True, False),
+                ("settings.Views[2].Groups", "changed", ["${principal:a}"], ["${principal:b}"]),
+                ("settings.Exports[1]", "added", None, {"Name": "x", "Users": ["${principal:u}"]}),
+                ("settings.DashboardParts[3].Depts", "added", None, ["${principal:d}"]),
+                ("settings.NotInheritPermissionsWhenCreatingSite", "changed", False, True)):
+            with self.subTest(path=path):
+                c = pls.classify([{"path": path, "kind": kind, "before": before, "after": after}])
+                self.assertEqual(c["classification"], "permission-impacting")
+        c = pls.classify([{"path": "settings.Views[2]", "kind": "added", "before": None, "after": {"Name": "all"}}])
+        self.assertEqual(c["classification"], "config-only")                        # a view without an access list
+
+    def test_classify_real_differ_paths(self):
+        # paths as flat_diff builds them: views keyed by Name (free text), formulas as objects, a look-alike key
+        def cls(before, after):
+            return pls.classify(pls.flat_diff({"settings": before}, {"settings": after}))["classification"]
+        f1 = {"Id": 1, "Target": "NumC", "Formula": {"OperatorType": "Multiplication",
+                                                    "Children": [{"ColumnName": "NumA"}, {"ColumnName": "NumB"}]}}
+        f2 = {"Id": 1, "Target": "NumC", "Formula": {"OperatorType": "Addition",
+                                                    "Children": [{"ColumnName": "NumA"}, {"ColumnName": "NumB"}]}}
+        self.assertEqual(cls({"Formulas": [f1]}, {"Formulas": [f2]}), "data-impacting")
+        self.assertEqual(cls({}, {"Formulas": [f1]}), "data-impacting")
+        self.assertEqual(cls({}, {"FormulasGetErrorDetails": True}), "config-only")          # another key, not a formula
+        self.assertEqual(cls({}, {"DashboardPartsAsynchronousLoading": True}), "config-only")
+        for name in ("All", "[Admin] list"):                                                # a name with "]"
+            with self.subTest(name=name):
+                v = {"Id": 2, "Name": name, "Groups": [3]}
+                self.assertEqual(cls({"Views": [v]}, {"Views": [dict(v, Groups=[4])]}), "permission-impacting")
+                self.assertEqual(cls({"Views": []}, {"Views": [v]}), "permission-impacting")
+                p = {"Id": 5, "Name": name, "Users": [7]}
+                self.assertEqual(cls({"Processes": [p]}, {"Processes": [dict(p, Users=[8])]}), "permission-impacting")
+                self.assertEqual(cls({"Views": [dict(v, Groups=[])]}, {"Views": [dict(v, Groups=[], ColumnSorterHash={"A": "asc"})]}),
+                                 "config-only")
+
+    def test_classify_site_formula_change_is_data_impacting(self):
+        # 1.5.2 records formulas in SiteSettings.Formulas[] (ADR-0004 Decision 1: formula changed → data-impacting)
+        for kind, before, after in (("added", None, {"Target": "NumC", "Formula": "NumA * NumB"}),
+                                    ("changed", "NumA * NumB", "NumA * NumB * 1.1"), ("removed", {"Target": "NumC"}, None)):
+            path = "settings.Formulas[1]" if kind != "changed" else "settings.Formulas[1].Formula"
+            c = pls.classify([{"path": path, "kind": kind, "before": before, "after": after}])
+            self.assertEqual(c["classification"], "data-impacting", kind)
+            self.assertIn("SynchronizeFormulas", c["data_impacting"][0])
+
     def test_classify_lookup_json_by_meaning_not_layout(self):
         before = '[\n  {\n    "SiteId" : ${site:b},\n    "View": {"ColumnFilterHash": {"Status": 1}}\n  }\n]'
         layout = '[\n  {\n    "SiteId": ${site:b},\n    "View": {\n      "ColumnFilterHash": {\n        "Status": "1"\n      }\n    }\n  }\n]'

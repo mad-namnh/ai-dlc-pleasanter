@@ -626,6 +626,12 @@ def _lookup_json(text: Any) -> Any:
     return norm(doc)
 
 
+def _names_principals(d: dict) -> bool:
+    """A whole item (or list) added, removed or changed whose before or after names Groups / Users / Depts."""
+    return any(isinstance(y, dict) and (y.get("Groups") or y.get("Users") or y.get("Depts"))
+               for x in (d["before"], d["after"]) for y in (x if isinstance(x, list) else [x]))
+
+
 def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
     for d in diffs:
@@ -645,18 +651,27 @@ def classify(diffs: list[dict]) -> dict:
                 data.append(f"{p}: choices removed {sorted(before - after)}")
             else:
                 cfg.append(p)
-        elif re.match(r"settings\.Columns\[\w+\]\.(Formula|DefaultInput)", p):
+        elif re.match(r"settings\.Columns\[\w+\]\.DefaultInput", p):
             data.append(f"{p}: formula/default changed")
+        elif re.match(r"settings\.Formulas(\[|$)", p):  # 1.5.2 keeps calculations in SiteSettings.Formulas, not in a column
+            data.append(f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
+                        "records are not known to be recomputed (the screen has 同期 / SynchronizeFormulas, no API route: "
+                        "source-derived, Pleasanter_1.5.2.0 SiteUtilities.cs); migration: the recomputed values as data, "
+                        "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
             data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
                         "migration: touch one child record per parent after the release")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
-        elif re.match(r"settings\.Processes\[[^\]]+\]\.(Groups|Users|Depts)\b", p) or (
-                re.fullmatch(r"settings\.Processes(\[[^\]]+\])?", p)
-                and any(isinstance(y, dict) and (y.get("Groups") or y.get("Users") or y.get("Depts"))
-                        for x in (d["before"], d["after"]) for y in (x if isinstance(x, list) else [x]))):
+        # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
+        elif re.fullmatch(r"settings\.Processes\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
+                re.fullmatch(r"settings\.Processes(\[.+\])?", p) and _names_principals(d)):
             perm.append(f"{p}: process access control (D20)")
+        elif re.match(r"settings\.StatusControls(\[|$)", p):   # who may change a record in a status (D42)
+            perm.append(f"{p}: status control")
+        elif re.fullmatch(r"settings\.(Views|Exports|DashboardParts)\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
+                re.fullmatch(r"settings\.(Views|Exports|DashboardParts)(\[.+\])?", p) and _names_principals(d)):
+            perm.append(f"{p}: access list of a view / export / dashboard part")
         else:
             cfg.append(p)
     cls = "data-impacting" if data else "permission-impacting" if perm else "config-only"

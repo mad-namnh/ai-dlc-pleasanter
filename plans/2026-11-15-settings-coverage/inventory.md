@@ -27,7 +27,7 @@
 | Keys holding environment-specific ids | 22 |
 | — mapped fully | 10 (Columns, Links, Summaries, Processes, Notifications, Reminders, ServerScripts, Scripts, Styles, Htmls) |
 | — not (fully) mapped: ids would be deployed raw to another environment | 12 (StatusControls principals — refused today; Views, Exports, DashboardParts, Create/Read/UpdateColumnAccessControls principals; MoveTargets; IntegratedSites; MailTo/Cc/BccDefault tokens) |
-| Keys whose change class is wrong or missing in `pls classify` | 6 (Formulas, StatusControls, Views access, Exports access, DashboardParts access, NotInheritPermissionsWhenCreatingSite) |
+| Keys whose change class is wrong or missing in `pls classify` | 5 (Formulas, StatusControls, Views access, Exports access, DashboardParts access) — fixed by WS2 (`plans/2026-11-15-classify-formulas-access-lists/`) |
 | API routes (1.5.2.0) | 53 in 12 controllers |
 | — used by `pls` | 15 |
 
@@ -36,7 +36,7 @@
 Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the `Enable*` view modes, `Allow*` features, page sizes and the form dates. A few probes that set non-default values could prove them in batches. The real gaps are:
 
 - (a) **Principals inside views, exports, dashboards, column access control and status controls.** They are not mapped, so a release would deploy dev ids to stg.
-- (b) **Change classes.** Changes to `Formulas[]` and to the access lists inside views, exports and dashboards are not classified as data-impacting or permission-impacting.
+- (b) **Change classes.** Changes to `Formulas[]` and to the access lists inside views, exports and dashboards are not classified as data-impacting or permission-impacting. (Fixed by WS2, 2026-11-15.)
 - (c) **Column attributes and view attributes.** Only a minority has evidence (table B).
 - (d) **API surfaces with no tool:** depts, CSV import/export, `SynchronizeSummaries`, `updatesitesettings` (partial update), binaries, extensions.
 
@@ -117,7 +117,7 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | 66 | `IntegratedSites` | — | — | site ids (`List<string>`) — **not mapped** | config-only |  |
 | 67 | `MoveTargets` | — | — | site ids (`List<long>`) — **not mapped** | config-only |  |
 | | **4 Views and view modes** | | | | | |
-| 68 | `Views` | yes | schema | `Depts/Groups/Users` (view access) — **not mapped**; filter values may hold user/dept ids — **not mapped** | **config-only today**; `Depts/Groups/Users` → should be permission-impacting | attributes: see table B |
+| 68 | `Views` | yes | schema | `Depts/Groups/Users` (view access) — **not mapped**; filter values may hold user/dept ids — **not mapped** | **was config-only — fixed by WS2 (2026-11-15)**; `Depts/Groups/Users` → should be permission-impacting | attributes: see table B |
 | 69 | `ViewLatestId` | yes | — | — | config-only | counter |
 | 70 | `EnableCalendar` | — | — | — | config-only |  |
 | 71 | `CalendarType` | — | schema | — | config-only |  |
@@ -138,14 +138,14 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | | **5 Links, summaries, formulas, aggregations** | | | | | |
 | 86 | `Links` | yes | api, behaviours, schema | `SiteId` — mapped | config-only | JSON form with `Lookups` through `updatesite`: empty drop-down until a screen save (KB D40, TD-50) |
 | 87 | `Summaries` | yes | schema | `SiteId` — mapped | added/changed → data-impacting note (D16) |  |
-| 88 | `Formulas` | yes | behaviours, schema | — | **config-only today** (classify checks `Columns[x].Formula`, which 1.5.2 does not record); whether stored values of existing records are recomputed is not known → treat as data-impacting until probed | D41 verified (Default method) |
+| 88 | `Formulas` | yes | behaviours, schema | — | **was config-only — fixed by WS2 (2026-11-15)** (classify checks `Columns[x].Formula`, which 1.5.2 does not record); whether stored values of existing records are recomputed is not known → treat as data-impacting until probed | D41 verified (Default method) |
 | 89 | `FormulasGetErrorDetails` | — | — | — | config-only |  |
 | 90 | `OutputFormulaLogs` | — | — | — | config-only |  |
 | 91 | `ProcessOutputFormulaLogs` | — | — | — | config-only |  |
 | 92 | `Aggregations` | yes | schema | — | config-only |  |
 | | **6 Workflow** | | | | | |
 | 93 | `Processes` | yes | api, behaviours, schema | `Groups/Users/Depts` — mapped (`${principal:x}`, D20); `Notifications[].Address` tokens — mapped | Groups/Users/Depts → permission-impacting | attributes: see table B |
-| 94 | `StatusControls` | yes | behaviours, schema | `Groups/Users/Depts` — **not mapped** (release-plan refuses, pls_scope) | **config-only today** → should be permission-impacting | D42 verified (no principals) |
+| 94 | `StatusControls` | yes | behaviours, schema | `Groups/Users/Depts` — **not mapped** (release-plan refuses, pls_scope) | **was config-only — fixed by WS2 (2026-11-15)** → should be permission-impacting | D42 verified (no principals) |
 | | **7 Notifications and mail** | | | | | |
 | 95 | `Notifications` | yes | api, schema | address tokens `[Group<id>]`… — mapped (`${principal:x}`); `Token` (webhook secret, I7) | config-only | mail type only verified; webhook types not (ADR-0001 known limits) |
 | 96 | `Reminders` | yes | schema | `To` tokens — mapped; `Token` (I7) | config-only |  |
@@ -159,9 +159,9 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | 103 | `CreateColumnAccessControls` | — | — | `Depts/Groups/Users`, `RecordUsers` — **not mapped** | permission-impacting (AccessControl) |  |
 | 104 | `ReadColumnAccessControls` | — | — | same — **not mapped** | permission-impacting |  |
 | 105 | `UpdateColumnAccessControls` | — | — | same — **not mapped** | permission-impacting |  |
-| 106 | `NotInheritPermissionsWhenCreatingSite` | yes | behaviours, skeletons | — | **config-only today** → permission-impacting |  |
+| 106 | `NotInheritPermissionsWhenCreatingSite` | yes | behaviours, skeletons | — | permission-impacting (the key name contains Permission) |  |
 | | **9 Import and export** | | | | | |
-| 107 | `Exports` | — | — | `Depts/Groups/Users`; `Columns[].SiteId` (joined columns) — `*SiteId` int mapped, principals **not mapped** | **config-only today**; access lists → should be permission-impacting |  |
+| 107 | `Exports` | — | — | `Depts/Groups/Users`; `Columns[].SiteId` (joined columns) — `*SiteId` int mapped, principals **not mapped** | **was config-only — fixed by WS2 (2026-11-15)**; access lists → should be permission-impacting |  |
 | 108 | `AllowStandardExport` | — | — | — | config-only |  |
 | 109 | `StandardExportType` | — | — | — | config-only |  |
 | 110 | `ImportEncoding` | — | — | — | config-only |  |
@@ -181,7 +181,7 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | 123 | `ServerScriptsGetErrorDetails` | — | — | — | config-only |  |
 | 124 | `ExtendedHeader` | — | — | HTML text — ids not scanned | config-only |  |
 | | **11 Dashboards** | | | | | |
-| 125 | `DashboardParts` | yes | behaviours, schema | `SiteId` mapped; `QuickAccessSites/TimeLineSites/CalendarSites/KambanSites/IndexSites` text and `*SitesData` — **not mapped**; `Depts/Groups/Users` — **not mapped** | **config-only today**; access lists → should be permission-impacting | types 1, 3, 4 verified; 0 quick access, 5 kanban not |
+| 125 | `DashboardParts` | yes | behaviours, schema | `SiteId` mapped; `QuickAccessSites/TimeLineSites/CalendarSites/KambanSites/IndexSites` text and `*SitesData` — **not mapped**; `Depts/Groups/Users` — **not mapped** | **was config-only — fixed by WS2 (2026-11-15)**; access lists → should be permission-impacting | types 1, 3, 4 verified; 0 quick access, 5 kanban not |
 | 126 | `DashboardPartsAsynchronousLoading` | — | — | — | config-only |  |
 | | **12 Public form** | | | | | |
 | 127 | `FormStartDateTime` | — | — | — | config-only |  |
