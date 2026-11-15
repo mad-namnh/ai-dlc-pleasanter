@@ -1,6 +1,6 @@
 # ADR-0004: Data-impacting changes and a dedicated gate
 
-- **Status:** Accepted (2026-11-05) — Option A; Option B when a customer-side runner exists
+- **Status:** Accepted (2026-11-05) — Option A; Option B when a customer-side runner exists. Amended 2026-11-15 (nothing to convert)
 - **Date:** 2026-11-04
 - **Related:** review-findings A1, D4, ADR-0001, ADR-0002
 
@@ -18,6 +18,7 @@ Spike round 1: omitting a column definition in an `updatesite` payload removes t
 - [ ] Effect of formula / display-type / validation changes on stored values — *later probe, when a slice needs it*
 - [ ] Bulk upsert volume limits and performance — *first real migration*
 - [ ] Does the customer require a DB backup before such changes? — *Customer IT (TD-02)*
+- [ ] Does an administrator / site-manager key see every record of a site through the items API `get` (record permissions, default view filters)? The nothing-to-convert check counts what the key sees — *kb-verify probe (TD-53)*
 
 ## Proposed classification
 
@@ -48,7 +49,9 @@ Probes changed the meaning of "data-impacting": on 1.5.2 configuration changes d
    - `migration.json` — `site`, `keys` (business identifier columns for `bulkupsert`), the conversion (mapping or data), `rollback`; `pls migrate` sends only explicit `data` (the result of a mapping, as checked in the dry run) and, with `--rollback`, only `rollback.data` that a person prepared from `backup/`;
    - `backup/` — every record of the affected site exported **before** the change (`pls backup` over HTTP; needed because of D14);
    - `dry-run.md` — log of the conversion run on a copy of the site with a copy of the data.
-3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup. Enforced by `pls migrate` (HTTP, guarded like `apply`; each run recorded in `plan.json` `migrations_run` before the call, `uncertain` when no answer arrives) and by `apply`, which refuses a release whose migrations have not run. Open question: whether records read back by `get` (with ids, timestamps) can be sent to `bulkupsert` unchanged on 1.5.x is not verified, so pls does not build a rollback from `backup/` itself.
+
+   **Nothing to convert.** When the affected site holds no records, `migration.json` may say `"nothing_to_convert": true` with `"data": []` instead of `keys`, the conversion and `rollback` (an explicit flag; empty data alone is still refused). `backup/` and `dry-run.md` stay required as for any migration. The folder's `site` must be a site of the release with a data-impacting change. It is not allowed for production: `pls package` and a plan for a `role: prod` environment refuse it, because its check runs only through `pls migrate` and `pls apply`. `pls migrate` sends nothing: it reads the site live and records the folder as migrated only when the operator's key sees 0 records there (the API lists only records the key may read — KB D36), otherwise it refuses. `pls apply` reads each such site again after the confirmation, right before the first configuration write, and refuses the whole release, writing nothing, if any record is visible by then; a record created after that read and before `updatesite` is not caught (Pleasanter has no conditional write). `--rollback` skips such a folder (it sent nothing) and rolls back the others.
+3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup. Enforced by `pls migrate` (HTTP, guarded like `apply`; each run recorded in `plan.json` `migrations_run` before the call, `uncertain` when no answer arrives) and by `apply`, which refuses a release whose migrations have not run. Open question: whether records read back by `get` (with ids, timestamps) can be sent to `bulkupsert` unchanged on 1.5.x is not verified, so pls does not build a rollback from `backup/` itself. For a nothing-to-convert folder the conversion step is the live emptiness check, repeated by `apply`.
 4. The slot ledger never re-allocates a slot that held data (D12 makes old values resurface).
 5. Business approver on the customer side signs the migration at G4.
 

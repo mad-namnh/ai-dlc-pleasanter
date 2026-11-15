@@ -556,6 +556,41 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(pls.main(["plan", str(live), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
         self.assertEqual(json.loads((self.r / "releases/R1/plan.json").read_text(encoding="utf-8"))["classification"]["classification"], "config-only")
 
+    def _ntc(self, name, site="a"):
+        d = self._migration(name, files=("backup", "dry-run.md"))
+        (d / "migration.json").write_text(json.dumps({"site": site, "nothing_to_convert": True, "data": []}), encoding="utf-8")
+
+    def test_nothing_to_convert_needs_a_data_impacting_change_on_its_site_and_is_never_for_production(self):
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        self._ntc("ntc")                                                  # the release changes nothing on a
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a",
+                                       "--release", "R1", "--migration", "ntc"]), 1)
+        self.assertIn("no data-impacting change in this release", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self.assertEqual(pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg"), [])
+        self.assertIn("not allowed for production", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "prod")[0])
+        p = self.r / "ntc/migration.json"
+        p.write_text("\ufeff" + p.read_text(encoding="utf-8"), encoding="utf-8")   # a BOM changes nothing
+        self.assertIn("not allowed for production", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "prod")[0])
+        self.assertIn("no data-impacting change", pls.nothing_to_convert_problems(self.r, ["ntc"], set(), "stg")[0])
+        p.write_text(json.dumps({"site": ["a"], "nothing_to_convert": True, "data": []}), encoding="utf-8")
+        self.assertIn("not a name", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg")[0])
+        p.write_text("{not json", encoding="utf-8")                                  # unreadable: a problem, never skipped
+        self.assertIn("not readable JSON", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg")[0])
+
+    def test_release_plan_refuses_a_nothing_to_convert_folder_without_a_data_impacting_change(self):
+        sa, sb = self._two_sites()
+        self._ntc("ntc")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}",
+                                       "--export", f"b={sb}", "--migration", "ntc"]), 1)
+        self.assertIn("nothing-to-convert migration not allowed here", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+
     def test_plan_keeps_a_migration_of_a_change_that_is_not_data_impacting(self):
         # single-site plan: a data load (e.g. a first master load) is checked and kept, never dropped silently
         self.unpack_dev()

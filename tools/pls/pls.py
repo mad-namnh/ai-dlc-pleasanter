@@ -1372,11 +1372,34 @@ def _migration_problems(r: Path, mig: str | None) -> list[str]:
     if (d / "migration.json").exists():
         try:
             m = rj(d / "migration.json")
-            for k in ("site", "keys", "rollback"):
+            # nothing-to-convert (empty site): no keys or rollback data exist; migrate checks emptiness live
+            for k in (("site",) if MI.is_nothing_to_convert(m) else ("site", "keys", "rollback")):
                 if k not in m:
                     out.append(f"{mig}/migration.json lacks '{k}'")
         except json.JSONDecodeError as ex:
             out.append(f"{mig}/migration.json is not JSON: {ex}")
+    return out
+
+
+def nothing_to_convert_problems(r: Path, migs: Any, impacted: set, role: str | None) -> list[str]:
+    """A nothing-to-convert folder (ADR-0004) is allowed only for a site of the release with a data-impacting change,
+    and never for production: there `pls migrate` / `apply` do not run, so its emptiness check would never run."""
+    out = []
+    for mig in MI.dirs({"migration": migs}):
+        try:
+            m = MI.read_nothing_to_convert(r, mig)
+        except MI.MigrateError as ex:
+            out.append(str(ex))
+            continue
+        if m is None:
+            continue
+        if role == "prod":
+            out.append(f"{mig}: a nothing-to-convert migration is not allowed for production (its emptiness check runs only "
+                       "through pls migrate / apply) — prepare a full migration with keys, data and rollback")
+        elif not isinstance(m.get("site"), str):
+            out.append(f"{mig}/migration.json: 'site' (logical site name) is missing or not a name")
+        elif m.get("site") not in impacted:
+            out.append(f"{mig}: nothing to convert names site {m.get('site')!r}, which has no data-impacting change in this release")
     return out
 
 
@@ -1520,6 +1543,13 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                 print(f"MIGRATION {x}")
             print("release plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
             return 1
+    ntc = nothing_to_convert_problems(r, migration, {s for s, res in results.items()
+                                                     if res["classification"]["classification"] == "data-impacting"}, e.get("role"))
+    if ntc:
+        for x in ntc:
+            print(f"MIGRATION {x}")
+        print("release plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
+        return 1
     per_site = {}
     for s in order:
         res = results[s]
@@ -3001,9 +3031,12 @@ def http_cmd(r: Path, a) -> int:
             if probs:
                 raise H.TransportError(f"{a.release}: " + "; ".join(probs) + " (ADR-0004)")
             direction = "rollback" if a.rollback else "forward"
-            todo, skipped = [], []
+            todo, skipped, nothing_sent = [], [], []
             try:
                 for m in migs:
+                    if a.rollback and (MI.last(plan, m, "forward") or {}).get("nothing_to_convert"):
+                        nothing_sent.append(m)           # its run sent no data: nothing of it to roll back; the others still are
+                        continue
                     if (not a.rollback and plan.get("status") == "planned"
                             and (MI.last(plan, m, "forward") or {}).get("status") == "migrated"
                             and not MI.last(plan, m, "rollback")):  # a rolled-back folder is never skipped as done
@@ -3014,12 +3047,16 @@ def http_cmd(r: Path, a) -> int:
                         raise MI.MigrateError(why)
                     mg = MI.load(r, m, a.rollback)
                     todo.append(dict(mg, site_id=MI.target(e, plan["env"], mg["site"])))
+                if not todo and a.rollback:
+                    raise MI.MigrateError("nothing to roll back: every folder of the release is nothing-to-convert (it sent no data)")
                 if not todo:                             # every folder migrated, none rolled back
                     raise MI.MigrateError(MI.state_problem(plan, skipped[0], False) + f" — next: pls apply {a.release}")
             except MI.MigrateError as ex:
                 raise H.TransportError(f"{a.release}: {ex}")
             for m in skipped:
                 print(f"{m}: already migrated by an earlier run — skipped, never sent twice")
+            for m in nothing_sent:
+                print(f"{m}: nothing to convert — it sent no data, so it has nothing to roll back; skipped")
             try:
                 eff = env_effects(r, e)
                 jobs = SE.declared_jobs(r)
@@ -3038,7 +3075,9 @@ def http_cmd(r: Path, a) -> int:
                 raise H.TransportError(refusal)
             if warning:
                 print(warning)
-            what = ", ".join(f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
+            what = ", ".join(f"read-only check that {t['site']} ({t['site_id']}) holds 0 records visible to this key"
+                             if t.get("nothing_to_convert") else
+                             f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
             confirmed = _confirm_write(r, "migrate", plan["env"], a.release, a.yes,
                                        f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}")
             if not confirmed:
@@ -3054,9 +3093,23 @@ def http_cmd(r: Path, a) -> int:
                     return 1
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
                 entry.update(executed_by=LG.actor(r), confirmed=confirmed)    # how this run was confirmed (ADR-0024)
+                if t.get("nothing_to_convert"):          # apply and --rollback read this entry, not the folder
+                    entry.update(nothing_to_convert=True)
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
-                res = H.migrate(c, t["site_id"], t["keys"], t["data"])
-                LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
+                if t.get("nothing_to_convert"):          # read-only: the site must hold no record now; nothing is sent
+                    try:
+                        n = c.backup_records(t["site_id"])["count"]     # the records this key can see (KB D36)
+                        entry.update(records_read=n)
+                        res = ({"status": "migrated", "message": "nothing to convert: 0 records visible to this key (read live); "
+                                                                 "nothing sent"}
+                               if n == 0 else
+                               {"status": "failed", "message": f"nothing-to-convert refused: {n} record(s) visible on the site now — "
+                                                               "prepare a real conversion (data) with its backup and dry run"})
+                    except H.TransportError as ex:
+                        res = {"status": "failed", "message": f"could not read the site to confirm it is empty: {ex}"}
+                else:
+                    res = H.migrate(c, t["site_id"], t["keys"], t["data"])
+                    LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
                 MI.finish(entry, res)
                 wj(rel / "plan.json", plan)
                 print(f"{t['dir']}: {direction} {res['status']} ({res['message']})")
@@ -3126,6 +3179,22 @@ def http_cmd(r: Path, a) -> int:
                                        f"{plan.get('classification')}" + (f"\n{warning}" if warning else ""))
             if not confirmed:
                 return 1
+            # A nothing-to-convert migration holds only while its site stays empty: read each such site again now, after
+            # the confirmation and right before the first write (ADR-0004). A record created after this read and
+            # before updatesite is not caught: Pleasanter has no conditional write.
+            for mig in MI.dirs(plan):
+                run = MI.last(plan, mig, "forward") or {}
+                if not run.get("nothing_to_convert"):
+                    continue
+                sid = (plan["per_site"].get(run.get("site")) or {}).get("site_id")
+                if sid is None:
+                    raise H.TransportError(f"{a.release}: {mig} checked site {run.get('site')!r}, which is not in this release — "
+                                           "nothing written; make a new release plan (ADR-0004)")
+                n = c.backup_records(sid)["count"]
+                if n:
+                    raise H.TransportError(f"{a.release}: {mig} was migrated as nothing to convert, but {n} record(s) are visible "
+                                           f"on {run['site']} now — nothing written; prepare a real conversion (data) with its "
+                                           "backup and dry run in a new release (ADR-0004)")
             # Recorded before the first write: if the process dies mid-way, the release is not "planned" any more,
             # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
             plan.update(status="applying", apply_started_at=_now())
@@ -4272,6 +4341,13 @@ def _main(argv=None) -> int:
                     print(f"MIGRATION {x}")
                 print("plan REFUSED: data-impacting change needs a migration (ADR-0004)" if cls["classification"] == "data-impacting"
                       else "plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
+                return 1
+            ntc = nothing_to_convert_problems(r, a.migration, {a.site} if cls["classification"] == "data-impacting" else set(),
+                                              e.get("role"))
+            if ntc:
+                for x in ntc:
+                    print(f"MIGRATION {x}")
+                print("plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
                 return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)

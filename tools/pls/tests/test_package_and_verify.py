@@ -147,6 +147,28 @@ class PackageTest(unittest.TestCase):
         self.assertFalse([n for n in names if "backup" in n])
         self.assertEqual(self.verify(self.unzip(self.r / "dist" / f"{R}-stg.zip"))[0], 0)
 
+    def test_a_nothing_to_convert_migration_is_never_packaged(self):
+        # its emptiness check runs only through pls migrate / apply, never on the customer side (ADR-0004)
+        doc = json.dumps({"site": "equipment", "nothing_to_convert": True, "data": []})
+        for text, why in ((doc, "nothing-to-convert migration"), ("\ufeff" + doc, "nothing-to-convert migration"),
+                          ("{not json", "not readable JSON")):
+            with self.subTest(why=why, bom=text.startswith("\ufeff")):
+                self.tearDown()
+                self.setUp()
+                self.stg()
+                mig = self.r / "migrations" / "m1"
+                (mig / "backup").mkdir(parents=True)
+                (mig / "backup" / "records.json").write_text('{"records": []}', encoding="utf-8")
+                (mig / "migration.json").write_text(text, encoding="utf-8")
+                (mig / "dry-run.md").write_text("no record: nothing to convert\n", encoding="utf-8")
+                p = self.r / "releases" / R / "plan.json"
+                p.write_text(json.dumps(dict(json.loads(p.read_text(encoding="utf-8")), migration=["migrations/m1"])),
+                             encoding="utf-8")
+                self.g4()
+                with self.assertRaisesRegex(Exception, why):
+                    self.package()
+                self.assertFalse((self.r / "dist" / f"{R}-stg.zip").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

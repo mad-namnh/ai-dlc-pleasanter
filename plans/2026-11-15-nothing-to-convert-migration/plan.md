@@ -1,0 +1,7 @@
+# Plan — nothing-to-convert migration (empty site) and apply re-check
+
+- **Tier:** Critical (ADR-0004 migration gate, data integrity).
+- **Source:** trial `pls-trial-store-promo` M2/M3/M4: data-impacting setting changes (removed choices / statuses) on sites with 0 records; G2 approved the classification amendment (trial DES-003/004).
+- **Decision:** Nam 2026-11-15 — option "Sửa ADR + apply kiểm lại": amend ADR-0004 Decision 2/3 (text in `proposed-adr-0004-decision.md`, needs Nam's approval of the exact text — stop point 1); `apply` reads each nothing-to-convert site again before writing.
+- **Change:** `migration.json` `"nothing_to_convert": true` + `"data": []` (explicit; empty data alone still refused); folder checks need only `site` (+ backup/, dry-run.md); `pls migrate` sends nothing, reads the site live, migrated only at 0 records; `--rollback` skips such folders (decided from the forward run entry) and rolls back the others; refused only when every folder is one; `apply` re-reads and refuses the whole release if records appeared.
+- **Acceptance:** (1) empty site: migrate sends nothing, records migrated, apply runs; (2) site with records: migrate fails, apply refuses, nothing written; (3) records appear between migrate and apply: apply refuses, nothing written, plan stays planned; (4) empty data without the flag still refused; (5) new tests fail on the parent; (6) suites green incl. 3.10; (7) review no open Critical/High; (8) ADR text approved by Nam before commit.

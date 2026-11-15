@@ -22,6 +22,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+import pls_migrate as MI
 import pls_release_digest as RD
 
 FORMAT = "pls-package/1"
@@ -62,6 +63,13 @@ def contents(root: Path, release: str, plan: dict) -> dict[str, bytes]:
         if Path(mig).is_absolute() or ".." in Path(mig).parts:
             raise PackageError(f"migration folder {mig} is not inside the project — plan it with a relative path")
         d = root / mig
+        try:
+            ntc = MI.read_nothing_to_convert(root, mig)
+        except MI.MigrateError as ex:
+            raise PackageError(f"{ex} — nothing packaged")
+        if ntc is not None:
+            raise PackageError(f"{mig} is a nothing-to-convert migration: its emptiness check runs only through pls migrate / "
+                               "apply, never on the customer side — prepare a full migration with keys, data and rollback (ADR-0004)")
         for p in sorted(d.rglob("*")):
             r_ = p.relative_to(d)
             if p.is_file() and r_.parts[0] != RD.BACKUP_FOLDER:
