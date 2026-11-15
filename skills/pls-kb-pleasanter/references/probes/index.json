@@ -470,6 +470,36 @@
           "result": "pass"
         }
       ]
+    },
+    "D43": {
+      "verified_on": [],
+      "probes": [
+        "D43-site-scalars-editor"
+      ]
+    },
+    "D44": {
+      "verified_on": [],
+      "probes": [
+        "D44-site-scalars-grid-filters"
+      ]
+    },
+    "D45": {
+      "verified_on": [],
+      "probes": [
+        "D45-site-scalars-view-modes"
+      ]
+    },
+    "D46": {
+      "verified_on": [],
+      "probes": [
+        "D46-site-scalars-formulas-code"
+      ]
+    },
+    "D47": {
+      "verified_on": [],
+      "probes": [
+        "D47-site-scalars-import-export-form-mail"
+      ]
     }
   }
 }
