@@ -32,6 +32,24 @@ class PureTest(unittest.TestCase):
         self.assertEqual(SC.unverified({"PermissionForCreating": {"Group": 15}, "Formulas": [{"Id": 1, "Target": "NumC"}],
                                         "StatusControls": [{"Id": 1, "ReadOnly": True}]}), [])
 
+    def test_scalar_keys_stored_by_probes_d43_to_d47_have_evidence(self):
+        """KB probes D43-D47 on dev 1.5.2.0 (2026-11-16): every key they expect stored was read back as sent, except
+        DashboardPartsAsynchronousLoading (recorded only when it differs from the server's parameter). The four mail
+        address keys round-trip but stay unverified until they are kept out of git (Nam 2026-11-15); six switches that
+        turn off guards or carry free HTML stay unverified until classify has a rule for them (TD-63)."""
+        probes = Path(__file__).resolve().parents[3] / "skills/pls-kb-pleasanter/references/probes"
+        keys = set()
+        for f in sorted(probes.glob("D4[3-7]-site-scalars-*.json")):
+            keys |= set(json.loads(f.read_text(encoding="utf-8"))["expect_stored"])
+        self.assertEqual(len(keys), 86)
+        held_back = sorted(["AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault",       # kept out of git
+                            "DashboardPartsAsynchronousLoading",                                       # not stored
+                            "ServerScriptsAllDisabled", "ScriptsAllDisabled", "HtmlsAllDisabled",      # guards off,
+                            "AllowPhysicalDeleteHistories", "AllowMigrationMode", "ExtendedHeader"])   # no classify rule
+        self.assertEqual(sorted(keys - SC.VERIFIED_KEYS), held_back)
+        self.assertEqual(SC.unverified({k: "x" for k in held_back}),
+                         [f"{k} (no round-trip evidence)" for k in held_back])
+
     def test_a_status_control_naming_principals_stays_unverified(self):
         """Principal ids differ per environment and pls maps none of them inside status controls."""
         for k in ("Depts", "Groups", "Users"):

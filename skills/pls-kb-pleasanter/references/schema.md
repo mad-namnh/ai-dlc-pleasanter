@@ -2,7 +2,7 @@
 
 Evidence: spike round 1 (`spike/round-trip/report-20261105.md`) and slices #1–#3 (`docs/slices/slice-01-report.md` … `slice-03-report.md`), MADLAB dev 1.5.2, unless a row names its own D-entry, probe or source; rows marked source-derived are not verified on a server.
 
-JSON property names are the UI field ids **without the `Process`/`Column` prefix** (`ProcessDisplayName` → `DisplayName`). Unknown properties are silently dropped on save; default-valued properties are omitted (D8).
+JSON property names are the UI field ids **without the `Process`/`Column` prefix** (`ProcessDisplayName` → `DisplayName`). Unknown properties are silently dropped on save; default-valued properties are omitted (D8). For several top-level switches the default is a value in the server's `App_Data/Parameters`, not a constant (source-derived, `SiteSettings.RecordingData`, tag `Pleasanter_1.5.2.0`): what is dropped can then differ between servers — e.g. `DashboardPartsAsynchronousLoading` `true` was not stored on MADLAB dev 1.5.2 (D46, cause not established). Top-level switches stored as sent with non-default values (stored shape only, 1.5.2): D43, D44, D45, D47, and nine of the ten keys of D46.
 
 ## Columns (`SiteSettings.Columns[]`)
 

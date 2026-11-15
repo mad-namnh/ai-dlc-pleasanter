@@ -20,6 +20,18 @@ Evidence (0 differences after export → updatesite → export, and through pls 
   formula's Target), not the whole item after a second export. A status control that names principals
   (Depts/Groups/Users) is not covered: pls maps those ids (`${principal:x}`, pls.py ACL_LISTS), but no probe has
   round-tripped a status control with principals.
+- KB probes D43–D47 2026-11-16 (`pls kb-verify`, MADLAB dev 1.5.2.0 build 201520, run by a person; evidence
+  `plans/2026-11-16-scalar-keys-verified/evidence-kb-verify-2026-11-16-dev.md`): 85 scalar keys set to non-default
+  values on probe sites and read back as sent (stored shape only, not their effect on the screen). Each key counts on
+  its own: D46 keys read back as sent are here although probe D46 failed for one key.
+  Not here: `DashboardPartsAsynchronousLoading` (D46) was not stored — it is recorded only when it
+  differs from the server parameter Dashboard.AsynchronousLoadingDefault (source-derived); `AddressBook`,
+  `MailToDefault`, `MailCcDefault`, `MailBccDefault` (D47) round-trip, but hold customer addresses and principal ids
+  and are to be kept out of git (Nam 2026-11-15, settings coverage WS1.5) — until then release-plan refuses them (a
+  copy in git by scope, a value only on the live site by L-DEP-01);
+  `ServerScriptsAllDisabled`, `ScriptsAllDisabled`, `HtmlsAllDisabled`, `AllowPhysicalDeleteHistories`,
+  `AllowMigrationMode`, `ExtendedHeader` round-trip, but switch off guards or carry free HTML; classify has no rule
+  for them (a change would be config-only), so a person still accepts them with a decision record (TD-63).
 Add a key here only with such evidence (I9), and record it in the KB and the spike checklist.
 
 Granularity: the evidence is per **top-level key** with the attributes those sites used (columns: label, type,
@@ -45,6 +57,25 @@ VERIFIED_KEYS = frozenset({
     "PermissionForCreating", "Formulas", "StatusControls",
     # dashboards (part types checked separately)
     "DashboardParts",
+    # scalar switches, stored shape (KB D43–D47, ADR-0023)
+    "SwitchRecordWithAjax", "SwitchCommandButtonsAutoPostBack", "AutoVerUpType", "AfterCreateActionType",
+    "AfterUpdateActionType", "AllowEditingComments", "AllowCopy", "AllowReferenceCopy", "CharToAddWhenCopying",
+    "AllowSeparate", "AllowLockTable", "OpenEditInNewTab", "DeleteImageWhenDeleting", "GuideAllowExpand", "GuideExpand",
+    "Responsive", "HideLink", "DisableLinkToEdit", "EnableExpandLinkPath", "GeneralTabLabelText",               # D43
+    "GridPageSize", "GridEditorType", "HistoryOnGrid", "AllowRestoreHistories",
+    "UseFilterButton", "UseFiltersArea", "UseGridHeaderFilters", "UseNegativeFilters", "UseRelatingColumnsOnFilter",
+    "UseIncompleteFilter", "UseOwnFilter", "UseNearCompletionTimeFilter", "UseDelayFilter", "UseOverdueFilter",
+    "UseSearchFilter", "AlwaysRequestSearchCondition", "DisableSiteConditions", "AllowViewReset", "SaveViewType",
+    "SearchType", "FullTextIncludeBreadcrumb", "FullTextIncludeSiteId", "FullTextIncludeSiteTitle",
+    "FullTextNumberOfMails", "LinkPageSize", "LinkTableView",                                                     # D44
+    "EnableCalendar", "EnableCrosstab", "EnableGantt", "EnableBurnDown", "EnableTimeSeries", "EnableAnaly",
+    "EnableKamban", "EnableImageLib", "CalendarType", "NoDisplayCrosstabGraph", "ShowGanttProgressRate",
+    "ImageLibPageSize", "FirstDayOfWeek", "FirstMonth",                                                           # D45
+    "FormulasGetErrorDetails", "OutputFormulaLogs", "ProcessOutputFormulaLogs", "StylesAllDisabled",
+    "ServerScriptsGetErrorDetails",                                                                               # D46
+    "AllowStandardExport", "StandardExportType", "ImportEncoding", "UpdatableImport", "DefaultImportKey",
+    "RejectNullImport", "FormStartDateTime", "FormEndDateTime", "FormThanksMessage",
+    "FormUnavailableMessage",                                                                                     # D47
 })
 VERIFIED_DASHBOARD_TYPES = frozenset({1, 3, 4})
 DASHBOARD_TYPE_NAMES = {0: "quick access", 1: "timeline", 3: "HTML", 4: "calendar", 5: "kanban"}
