@@ -624,6 +624,40 @@ class PlsTest(unittest.TestCase):
                               pls.read_tree(self.r / "config/a"))
         self.assertEqual(pls.classify(diffs)["classification"], "permission-impacting")
 
+    def test_access_lists_of_views_exports_dashboards_status_and_column_controls_are_mapped(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"support": "Group,373", "boss": "User,5", "sales": "Dept,7"}
+        envs["envs"]["stg"]["principals"] = {"support": "Group,9", "boss": "User,50", "sales": "Dept,70"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        acl = {"Groups": [373], "Users": [5], "Depts": [7]}
+        ss.update(Views=[{"Id": 1, "Name": "[Admin] list", **acl}], Exports=[{"Id": 1, "Name": "csv", **acl}],
+                  DashboardParts=[{"Id": 1, "Type": 3, "Title": "news", **acl}],
+                  StatusControls=[{"Id": 1, "Name": "lock", "Status": 900, "ReadOnly": True, **acl}],
+                  ReadColumnAccessControls=[{"ColumnName": "NumA", **acl}])
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        want = {"Groups": ["${principal:support}"], "Users": ["${principal:boss}"], "Depts": ["${principal:sales}"]}
+        for lst in ("Views", "Exports", "DashboardParts", "StatusControls", "ReadColumnAccessControls"):
+            self.assertEqual({k: site[lst][0][k] for k in want}, want, lst)
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual({k: pl["Views"][0][k] for k in want}, {"Groups": [9], "Users": [50], "Depts": [70]})
+        self.assertEqual(pl["ReadColumnAccessControls"][0]["Groups"], [9])
+        site["ReadColumnAccessControls"][0]["Users"] = ["${principal:boss}", -1]   # -1: every authenticated user
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["ReadColumnAccessControls"][0]["Users"], [50, -1])
+        site["Exports"][0]["Users"] = [5]                                         # a raw id: lint and pack refuse
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertTrue(any(i["rule"] == "L-PERM-01" and "export 'csv' Users" in i["msg"] for i in pls.lint(self.r)))
+        with self.assertRaisesRegex(pls.Fail, "export 'csv' Users uses an environment-specific id 5"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+
     def test_process_access_control_refs(self):
         envs = json.loads(json.dumps(ENVS))
         envs["envs"]["dev"]["principals"] = {"support": "Group,373"}

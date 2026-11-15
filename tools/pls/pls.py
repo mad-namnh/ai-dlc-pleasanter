@@ -402,36 +402,64 @@ def logical(export: Any, e: dict) -> dict:
 
 
 ACL_KEYS = (("Groups", "Group"), ("Users", "User"), ("Depts", "Dept"))
+# SiteSettings lists whose items carry Groups / Users / Depts lists of principal ids (Pleasanter_1.5.2.0 classes Process,
+# View, Export, DashboardPart, StatusControl, ColumnAccessControl). A fixed table, never a deep walk: text is not touched.
+ACL_LISTS = (("Processes", "process"), ("Views", "view"), ("Exports", "export"), ("DashboardParts", "dashboard part"),
+             ("StatusControls", "status control"), ("CreateColumnAccessControls", "create column access"),
+             ("ReadColumnAccessControls", "read column access"), ("UpdateColumnAccessControls", "update column access"))
+
+
+# Users -1 means every authenticated user (Pleasanter_1.5.2.0 ColumnAccessControl.cs l.144, source-derived): the same
+# on every environment, so it is kept as it is and is never an environment-specific id.
+ACL_FIXED = {("Users", -1)}
+
+
+def acl_fixed(key: str, x) -> bool:
+    return (key, x) in ACL_FIXED or (key, str(x)) in {(k, str(v)) for k, v in ACL_FIXED}
+
+
+def acl_items(settings: dict):
+    """(label, item) for every item of ACL_LISTS, e.g. ("process 'approve'", {...})."""
+    for lst, what in ACL_LISTS:
+        for it in settings.get(lst) or []:
+            if isinstance(it, dict):
+                yield f"{what} '{it.get('Name') or it.get('ColumnName') or it.get('Title') or it.get('Id')}'", it
 
 
 def acl_to_refs(settings: dict, e: dict) -> None:
-    """Process access control (1.5.2, PR-4): Processes[].Groups/Users/Depts are lists of principal IDs.
-    Replace them with ${principal:x} (environments.json principals); unmapped IDs stay raw (L-PERM-01)."""
+    """Access lists (1.5.2): Groups/Users/Depts of processes (PR-4, D20), views, exports, dashboard parts, status
+    controls and column access controls are lists of principal IDs. Replace them with ${principal:x} (environments.json
+    principals); unmapped IDs stay raw (L-PERM-01)."""
     rev = {v: k for k, v in (e.get("principals") or {}).items()}
-    for proc in settings.get("Processes") or []:
+    for _, it in acl_items(settings):
         for key, typ in ACL_KEYS:
-            if key in proc:
-                proc[key] = ["${principal:%s}" % rev[f"{typ},{i}"] if f"{typ},{i}" in rev else i for i in proc[key]]
+            if isinstance(it.get(key), list):
+                it[key] = ["${principal:%s}" % rev[f"{typ},{i}"] if f"{typ},{i}" in rev else i for i in it[key]]
 
 
 def acl_from_refs(settings: dict, e: dict, site: str) -> None:
-    for proc in settings.get("Processes") or []:
+    for label, it in acl_items(settings):
         for key, typ in ACL_KEYS:
-            if key not in proc:
+            if not isinstance(it.get(key), list):
                 continue
             out = []
-            for x in proc[key]:
+            for x in it[key]:
+                if acl_fixed(key, x):
+                    out.append(int(x))
+                    continue
                 m = REF_RE.fullmatch(str(x))
                 if not m or m.group(1) != "principal":
-                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} uses an environment-specific id {x} (L-PERM-01)")
+                    raise Fail(f"{site}: {label} {key} uses an environment-specific id {x} (L-PERM-01) — write "
+                               "${principal:<name>} for it (pls unpack / harvest does, once environments.json principals "
+                               "maps the name)")
                 val = (e.get("principals") or {}).get(m.group(2))
                 if val is None:
                     raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
                 vtyp, vid = val.split(",")[:2]
                 if vtyp != typ:
-                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
+                    raise Fail(f"{site}: {label} {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
                 out.append(int(vid))
-            proc[key] = out
+            it[key] = out
 
 
 def perms_to_refs(d: dict, e: dict) -> dict:
@@ -821,11 +849,11 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no View object: API execution fails "
                            "(HTTP 500) and opening the site's records fails in the UI (D21) — give it a View with its display "
                            "condition, at least the status it starts from"})
-        for proc in m["settings"].get("Processes") or []:
+        for label, it in acl_items(m["settings"]):
             for key, _ in ACL_KEYS:
-                for x in proc.get(key) or []:
-                    if not str(x).startswith("${principal:"):
-                        issues.append({"rule": "L-PERM-01", "site": site, "msg": f"process '{proc.get('Name')}' {key} uses an environment-specific id {x}; map it in environments.json principals"})
+                for x in (it.get(key) if isinstance(it.get(key), list) else []):
+                    if not str(x).startswith("${principal:") and not acl_fixed(key, x):
+                        issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{label} {key} uses an environment-specific id {x}; map it in environments.json principals, then pls unpack / harvest again (or write ${{principal:<name>}})"})
         for path, tok in AP.raw_tokens(m["settings"]):
             issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{path}: mail address {tok} uses an environment-specific id; "
                            "map the principal in environments.json principals (git holds [${principal:<name>}])"})
@@ -1782,8 +1810,9 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     raw_scripts = {k: ss.get(k) or [] for k in SCRIPT_KINDS}
     perms = model.get("permissions") or {}
     principals = AD.raw_principals(perms) + [
-        f"process '{p.get('Name') or p.get('Id')}' {key}: {x}" for p in model["settings"].get("Processes") or []
-        for key, _ in ACL_KEYS for x in p.get(key) or [] if not str(x).startswith("${principal:")]
+        f"{label} {key}: {x}" for label, p in acl_items(model["settings"])
+        for key, _ in ACL_KEYS for x in (p.get(key) if isinstance(p.get(key), list) else [])
+        if not str(x).startswith("${principal:") and not acl_fixed(key, x)]
     if perms and not str(perms.get("inherit", "")).startswith("${site:"):
         principals.insert(0, f"permissions inherited from site {perms.get('inherit')} (not managed) — L-PERM-01")
     decided = AR.ladder_decided(r)                              # L-LAD-01: a reviewed as-is counts only via its record

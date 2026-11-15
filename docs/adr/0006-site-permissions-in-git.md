@@ -35,3 +35,4 @@ Probe on 1.5.2 (D15): `updatesite` accepts both keys and replaces the permission
 
 - Projects that opt in must keep `principals` complete for every environment, including production (filled by the customer's operator; names only in git).
 - A deploy with a stale principal mapping fails at `pack` time instead of granting wrong access.
+- As built (2026-11-15, settings coverage `plans/2026-11-15-settings-coverage/` WS1.1): the same `${principal:x}` mapping and refusal of raw ids covers the `Groups` / `Users` / `Depts` access lists of processes (D20), views, exports, dashboard parts, status controls and column access controls (`pls.py` `ACL_LISTS`, a fixed table; text is never scanned). A status control with principals still needs round-trip evidence (`pls_scope`).

@@ -18,7 +18,8 @@ Evidence (0 differences after export → updatesite → export, and through pls 
   Formulas (Default method, `NumB × NumA` into NumC) computed on API create and update; StatusControls (whole-record
   ReadOnly, and a ReadOnly column in ColumnHash) applied. These probes read back only the paths they name (e.g. a
   formula's Target), not the whole item after a second export. A status control that names principals
-  (Depts/Groups/Users) is not covered: those ids differ per environment and pls maps none of them there.
+  (Depts/Groups/Users) is not covered: pls maps those ids (`${principal:x}`, pls.py ACL_LISTS), but no probe has
+  round-tripped a status control with principals.
 Add a key here only with such evidence (I9), and record it in the KB and the spike checklist.
 
 Granularity: the evidence is per **top-level key** with the attributes those sites used (columns: label, type,
@@ -57,8 +58,8 @@ def unverified(settings: dict) -> list[str]:
     out = [f"{k} (no round-trip evidence)" for k in sorted(set(settings or {}) - VERIFIED_KEYS)]
     for c in (settings or {}).get("StatusControls") or []:
         if isinstance(c, dict) and any(c.get(k) for k in ("Depts", "Groups", "Users")):
-            out.append(f"StatusControls[{c.get('Id', '?')}] names principals (Depts/Groups/Users): ids differ per "
-                       "environment and are not mapped (no round-trip evidence)")
+            out.append(f"StatusControls[{c.get('Id', '?')}] names principals (Depts/Groups/Users): mapped to "
+                       "${principal:x}, but no round-trip evidence for a status control with principals")
     for p in (settings or {}).get("DashboardParts") or []:
         if not isinstance(p, dict):
             out.append("DashboardParts item is not an object (no round-trip evidence)")
