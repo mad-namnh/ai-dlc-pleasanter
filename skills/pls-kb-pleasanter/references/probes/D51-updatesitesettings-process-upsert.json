@@ -1,0 +1,84 @@
+{
+  "entry": "D51",
+  "title": "updatesitesettings with Processes upserts by Id and keeps the settings it does not name",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "zz-a"
+        }
+      ],
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "zz-p1",
+          "CurrentStatus": 100,
+          "ChangedStatus": 200,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Processes[Id=1].Name": "zz-p1"
+  },
+  "tests": [
+    {
+      "id": "D51",
+      "steps": [
+        {
+          "op": "settings_partial",
+          "body": {
+            "Processes": [
+              {
+                "Id": 1,
+                "Name": "zz-p1-renamed",
+                "CurrentStatus": 100,
+                "ChangedStatus": 200,
+                "View": {
+                  "ColumnFilterHash": {
+                    "Status": "[\"100\"]"
+                  }
+                }
+              },
+              {
+                "Id": 2,
+                "Name": "zz-p2",
+                "CurrentStatus": 100,
+                "ChangedStatus": 300,
+                "View": {
+                  "ColumnFilterHash": {
+                    "Status": "[\"100\"]"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "op": "siteConfig",
+          "expect": {
+            "Processes[Id=1].Name": "zz-p1-renamed",
+            "Processes[Id=2].Name": "zz-p2",
+            "Columns[ColumnName=NumA].LabelText": "zz-a"
+          }
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA"
+        }
+      ]
+    }
+  }
+}

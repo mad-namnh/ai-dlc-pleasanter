@@ -456,11 +456,20 @@ def _subst(v: Any, vars_: dict) -> Any:
     return v
 
 
-def _get_path(o: Any, path: str) -> Any:
+_SELECTOR = re.compile(r"^(\w+)\[(\w+)=([^\]]*)\]$")
+
+
+def _get_path(o: Any, path: str, selectors: bool = False) -> Any:
+    """Dotted path; with selectors (kb-verify) a part `List[Key=value]` picks the item of List whose Key is value. `pls
+    test` specs address list items by position (test-spec.md), so they do not get selectors."""
     for k in path.split("."):
         if o is None:
             return None
-        if isinstance(o, list):
+        m = _SELECTOR.match(k) if selectors else None
+        if m:
+            lst = o.get(m.group(1)) if isinstance(o, dict) else None
+            o = next((x for x in lst or [] if isinstance(x, dict) and str(x.get(m.group(2))) == m.group(3)), None)
+        elif isinstance(o, list):
             o = o[int(k)] if k.isdigit() and int(k) < len(o) else None
         else:
             o = o.get(k) if isinstance(o, dict) else None
@@ -568,10 +577,13 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                             status = status if ok else "fail"
                 elif op == "siteConfig":
                     for path, exp in st["expect"].items():
+                        if site_ops is not None:                  # kb-verify only: $admin_uid / $group_x (ADR-0027)
+                            sub = _subst(exp, vars_)
+                            exp = int(sub) if sub != exp and isinstance(sub, str) and sub.isdigit() else sub
                         if path.split(".")[0].split("[")[0] in LIVE_ONLY_KEYS:
                             raise TransportError(f"siteConfig {path}: customer mail addresses are not checked by tests "
                                                  "(results are committed; ADR-0010)")
-                        act = _get_path(site["SiteSettings"], path)
+                        act = _get_path(site["SiteSettings"], path, selectors=site_ops is not None)
                         ok = (exp.get("contains") in str(act)) if isinstance(exp, dict) and "contains" in exp else _check(act, exp)
                         log.append(f"{'ok ' if ok else 'NG '} SiteSettings.{path} = {json.dumps(act, ensure_ascii=False)} (expected {json.dumps(exp, ensure_ascii=False)})")
                         status = status if ok else "fail"

@@ -46,7 +46,8 @@ class ProbeFileTest(unittest.TestCase):
 
     def test_a_settings_step_on_the_probes_own_sites_is_accepted(self):
         self.ok(probe())
-        self.ok(with_step({"op": "settings_partial", "body": {"SiteSettings": {"GridPageSize": 50}}}))
+        self.ok(with_step({"op": "settings_partial", "body": {"Processes": [{"Id": 1, "Name": "zz"}]}}))
+        self.ok(with_step({"op": "settings_partial", "body": {"StatusControls": [{"Id": 1, "Status": 100}]}}))
         p = with_step({"op": "settings", "site": "line", "SiteSettings": {"GridPageSize": 50}},
                       sites={"line": {"ReferenceType": "Results", "SiteSettings": {}}})
         self.ok(p)
@@ -59,8 +60,8 @@ class ProbeFileTest(unittest.TestCase):
 
     def test_a_settings_step_carries_no_script_and_is_not_empty(self):
         self.refused(with_step({"op": "settings", "SiteSettings": {"ServerScripts": [TG.SCRIPT]}}), "server scripts")
-        self.refused(with_step({"op": "settings_partial", "body": {"SiteSettings": {"ServerScripts": [TG.SCRIPT]}}}),
-                     "server scripts")
+        self.refused(with_step({"op": "settings_partial", "body": {"ServerScripts": [TG.SCRIPT]}}),
+                     "settings_partial body holds only Processes")
         self.refused(with_step({"op": "settings", "SiteSettings": {}}), "non-empty SiteSettings")
         self.refused(with_step({"op": "settings_partial"}), "non-empty body")
 
@@ -121,6 +122,11 @@ class ProbeFileTest(unittest.TestCase):
                      {"SiteSettings": {"GridPageSize": 1}, "Title": "x"}):
             with self.subTest(body=body):
                 self.refused(with_step({"op": "settings_partial", "body": body}), "settings_partial body|ServerScripts")
+        for body in ({"SiteSettings": {"GridPageSize": 50}}, {"Processes": {"Id": 1}}, {"Styles": [{"Id": 1}]},
+                     {"Processes": [{"Id": 1, "Notifications": [{"Id": 1, "Type": 2, "Address": "https://a.test/x",
+                                                                  "Disabled": True}]}]}):
+            with self.subTest(body=body):                                    # only the lists the route upserts
+                self.refused(with_step({"op": "settings_partial", "body": body}), "settings_partial body|a URL")
 
     def test_an_unknown_probe_site_in_a_settings_step_refuses_the_file(self):
         self.refused(with_step({"op": "settings", "SiteSettings": {"Summaries": [{"SiteId": "${probe_site:zz}"}]}}),
@@ -222,18 +228,18 @@ class ProbeRunTest(unittest.TestCase):
         self.assertNotIn("Notifications", last["SiteSettings"])
 
     def test_a_partial_settings_step_calls_updatesitesettings_on_the_probe_site(self):
-        self.use_kb({"D1-partial": with_step({"op": "settings_partial", "body": {"SiteSettings": {"GridPageSize": 50}},
+        self.use_kb({"D1-partial": with_step({"op": "settings_partial", "body": {"Processes": [{"Id": 1, "Name": "zz"}]},
                                               "expectHttp": 200})})
         self.spy()
         self.partial_answers()
         self.assertEqual(self.run_kb(), 0, self.result())
         sid = self.created[-1]
         self.assertIn((f"/api/items/{sid}/updatesitesettings", "admin"), self.fake.calls)
-        self.assertEqual(self.partial, [{"SiteSettings": {"GridPageSize": 50}}])
+        self.assertEqual(self.partial, [{"Processes": [{"Id": 1, "Name": "zz"}]}])
         self.assertIn("ok  settings_partial → HTTP 200", self.result()["D1-partial"][1])
 
     def test_a_refused_settings_step_fails_the_probe(self):
-        self.use_kb({"D1-partial": with_step({"op": "settings_partial", "body": {"SiteSettings": {"X": 1}}})})
+        self.use_kb({"D1-partial": with_step({"op": "settings_partial", "body": {"Processes": [{"Id": 1, "Name": "zz"}]}})})
         self.partial_answers(400)
         self.assertEqual(self.run_kb(), 1)
         status, log = self.result()["D1-partial"]
@@ -272,6 +278,71 @@ class ProbeRunTest(unittest.TestCase):
         self.assertEqual(status, "error")
         self.assertIn("(disabled) notification", log)
         self.assertEqual(self.sent, [])                                      # nothing written for it
+
+
+class ReadBackTest(unittest.TestCase):
+    """A probe reads its site back after a settings step (siteConfig, list selectors) and names the ids it sent in
+    expect_stored ($admin_uid / $group_<role>) — ADR-0027."""
+
+    for _n in ("setUp", "setUp_http", "tearDown", "use_kb", "writes", "key_ref", "set_dev", "run_kb", "result", "spy",
+               "state_sites"):
+        locals()[_n] = getattr(TG.GuardedProbeRunTest, _n)
+
+    def test_site_config_after_a_settings_step_and_ids_in_expectations(self):
+        p = with_step({"op": "siteConfig", "expect": {"Columns[ColumnName=NumA].LabelText": "zz",
+                                                      "Views[Id=1].ColumnFilterHash.Owner": "$admin_uid"}},
+                      roles={"staff": 1}, teardown={"SiteSettings": {}})
+        p["tests"][0]["steps"].insert(1, {"op": "settings", "SiteSettings": {
+            "Columns": [{"ColumnName": "NumA", "LabelText": "zz"}],
+            "Views": [{"Id": 1, "ColumnFilterHash": {"Owner": "$admin_uid"}}]}})
+        p["site"]["SiteSettings"]["Views"] = [{"Id": 2, "Groups": ["$group_staff"]}]
+        p["expect_stored"] = {"Views[Id=2].Groups": ["$group_staff"]}
+        self.use_kb({"D1-read": p})
+        self.assertEqual(self.run_kb(), 0, self.result())
+        status, log = self.result()["D1-read"]
+        self.assertEqual(status, "pass", log)
+        self.assertIn("ok  SiteSettings.Columns[ColumnName=NumA].LabelText", log)
+        self.assertIn("ok stored Views[Id=2].Groups = [374]", log)
+
+
+class ObserveTest(unittest.TestCase):
+    def test_an_observed_probe_never_decides_its_entry(self):
+        rows = [{"entry": "D9", "probe": "a", "status": "observed", "log": []}]
+        self.assertEqual(KV.entry_results(rows), {"D9": "observed"})
+        rows.append({"entry": "D9", "probe": "b", "status": "pass", "log": []})
+        self.assertEqual(KV.entry_results(rows), {"D9": "pass"})
+        rows.append({"entry": "D9", "probe": "c", "status": "fail", "log": []})
+        self.assertEqual(KV.entry_results(rows), {"D9": "fail"})
+        self.assertIn("0/1 entries verified", KV.report("dev", None, rows[:1], [], "2026-11-17"))
+
+
+class ObserveRunTest(unittest.TestCase):
+    for _n in ("setUp", "setUp_http", "tearDown", "use_kb", "writes", "key_ref", "set_dev", "run_kb", "result", "spy",
+               "state_sites"):
+        locals()[_n] = getattr(TG.GuardedProbeRunTest, _n)
+
+    def test_an_observe_probe_with_a_failing_check_ends_observed(self):
+        p = probe(observe=True)
+        p["tests"][0]["steps"][2]["expect"] = {"Title": "something else"}       # the check fails: still recorded
+        self.use_kb({"D1-obs": p})
+        self.run_kb()                                    # exit 1: an observed entry is not a verified one
+        status, log = self.result()["D1-obs"]
+        self.assertEqual(status, "observed")
+        self.assertIn("NG  Title", log)
+
+
+class PlsTestSiteConfigTest(unittest.TestCase):
+    """`pls test` keeps its documented siteConfig behaviour (test-spec.md): positional paths, literal values."""
+
+    def test_no_selector_and_no_variable_outside_kb_verify(self):
+        class Client:
+            def export_site(self, _sid):
+                return {"Response": {"Data": {"SiteSettings": {"Columns": [{"ColumnName": "NumA", "LabelText": "x"}],
+                                                               "Code": "$x"}}}}
+        spec = {"id": "t", "vars": {"x": "12"}, "steps": [{"op": "siteConfig", "expect": {
+            "Columns.0.LabelText": "x", "Code": "$x", "Columns[ColumnName=NumA].LabelText": None}}]}
+        res = H.run_tests(lambda _r: Client(), 1, [spec], "dev")
+        self.assertEqual(res["tests"][0]["status"], "pass", res["tests"][0]["log"])
 
 
 if __name__ == "__main__":

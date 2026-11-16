@@ -27,8 +27,9 @@ addresses only example.invalid and carries no credential field (ADR-0027); never
 the top level of the main site's settings, `as_key` for a declared test-user role, `$group_<role>` (that role's group
 id) and such disabled notifications are allowed only under the guards of pls_kbverify_guarded (ADR-0025, ADR-0026,
 ADR-0027). A `settings` step (`{"op": "settings", "site": "<key>|main", "SiteSettings": {…}}`, updatesite) or
-`settings_partial` step (`"body": {…}`, updatesitesettings) saves one of the probe's own sites, never with a server
-script; `$admin_uid` and `$group_<role>` may be whole values in probe site settings and in those steps.
+`settings_partial` step (`"body": {"Processes": […], "StatusControls": […]}`, updatesitesettings, upsert by Id) saves
+one of the probe's own sites, never with a server script; a `siteConfig` step reads the main site back (list selectors
+such as `Columns[ColumnName=NumA]`, `$admin_uid` / `$group_<role>` in expectations); `$admin_uid` and `$group_<role>` may be whole values in probe site settings and in those steps.
 kb-verify reuses or writes a probe site only when the site is provably its own (parent folder, title, type).
 """
 from __future__ import annotations
@@ -44,7 +45,7 @@ import pls_secret_fields as SF
 import pls_side_effects as SE
 
 SELECTOR = re.compile(r"^(\w+)\[(\w+)=([^\]]*)\]$")
-OPS = ("create", "get", "list", "exec", "update", "settings", "settings_partial")
+OPS = ("create", "get", "list", "exec", "update", "settings", "settings_partial", "siteConfig")   # siteConfig reads the main site
 RECORD_OPS = ("get", "exec", "update")            # act on one record the probe created
 SETTINGS_OPS = ("settings", "settings_partial")   # save settings on one of the probe's own sites (ADR-0027)
 SITE_OPS = ("create", "list") + SETTINGS_OPS      # may name one of the probe's own sites
@@ -223,10 +224,14 @@ def check_probe(p: dict) -> None:
         what = st.get("SiteSettings") if st["op"] == "settings" else st.get("body")
         if not isinstance(what, dict) or not what:
             raise ValueError(f"a {st['op']} step needs a non-empty {'SiteSettings' if st['op'] == 'settings' else 'body'} object")
-        if st["op"] == "settings_partial" and (                 # body shape of updatesitesettings not read (ADR-0027)
-                {str(k).casefold() for k in what} != {"sitesettings"} or not isinstance(next(iter(what.values())), dict)):
-            raise ValueError("a settings_partial body holds only a SiteSettings object (no permissions, parent, title or "
-                             "type: the route's body shape is not read yet, ADR-0027)")
+        if st["op"] == "settings_partial" and (
+                not {str(k).casefold() for k in what} <= {"processes", "statuscontrols"}
+                or not all(isinstance(v, list) for v in what.values())):
+            # updatesitesettings reads the body as SiteSettingsApiModel and upserts by Id only ServerScripts, Scripts,
+            # Styles, Htmls, Processes and StatusControls (Pleasanter_1.5.2.0 SiteUtilities.cs l.2358-2440,
+            # source-derived); a probe step never carries a script or free HTML, so two lists remain
+            raise ValueError("a settings_partial body holds only Processes and / or StatusControls lists — what "
+                             "updatesitesettings upserts besides scripts, styles and HTML (ADR-0027, source-derived)")
         mail += [f"{st['op']} step: {x}" for x in _mail_parts(what, notices=True)]
     if mail:
         raise ValueError(f"probe sites must not send mail (notifications and reminders only disabled, to example.invalid, "
@@ -346,13 +351,17 @@ def is_own_probe_site(site: dict, name: str, rt: str, parent: int, app_ids: set[
 
 
 def entry_results(rows: list[dict]) -> dict[str, str]:
-    """An entry passes only when all its probes pass; error wins over fail, fail over inconclusive."""
+    """An entry passes only when all its judged probes pass; error wins over fail, fail over inconclusive. An observed
+    probe decides nothing: an entry with only observations is `observed` (not verified — read the log)."""
     out: dict[str, str] = {}
     rank = ["pass", "inconclusive", "fail", "error"]
     for r in rows:
+        if r["status"] == "observed":
+            out.setdefault(r["entry"], "observed")
+            continue
         cur = out.get(r["entry"], "pass")
-        st = "pass" if r["status"] == "observed" else r["status"]      # an observation does not decide the entry
-        out[r["entry"]] = max(cur, st, key=rank.index)
+        cur = "pass" if cur == "observed" else cur
+        out[r["entry"]] = max(cur, r["status"], key=rank.index)
     return out
 
 
@@ -380,5 +389,5 @@ def report(env: str, version: dict | None, rows: list[dict], no_probe: list[str]
         out.append(f"| {r['entry']} | {r['probe']} | {r['status']} | {detail.replace('|', '/')} |")
     out += ["", "## Entries without a probe", "", ", ".join(no_probe) or "none", "",
             "A failing entry does not hold on this version: correct or split it by version (I9). "
-            "`error` = the probe could not run (infrastructure), not a verdict on the entry; `inconclusive` = its control failed; `observed` = recorded behaviour without an expected outcome (read the detail)."]
+            "`error` = the probe could not run (infrastructure), not a verdict on the entry; `inconclusive` = its control failed; `observed` = recorded behaviour without an expected outcome, whatever its checks said (read the detail; not a verification)."]
     return "\n".join(out) + "\n"

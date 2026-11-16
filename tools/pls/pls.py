@@ -3728,7 +3728,7 @@ def http_cmd(r: Path, a) -> int:
                         data = c.export_site(sid)["Response"]["Data"]
                         for path, exp in (p.get("expect_stored") or {}).items():
                             act = KV.get_path(data["SiteSettings"], path)
-                            good = H._check(act, KV.substitute_sites(exp, own))
+                            good = H._check(act, KV.substitute_sites(KV.substitute_vars(exp, pvars), own))   # ids as sent (ADR-0027)
                             log.append(f"{'ok' if good else 'NG'} stored {path} = {json.dumps(act, ensure_ascii=False)}")
                             status = status if good else "fail"
                         server_day = None
@@ -3799,7 +3799,7 @@ def http_cmd(r: Path, a) -> int:
                                 wj(state_f, state)
                             else:
                                 status = "error"
-                if p.get("observe") and status == "pass":
+                if p.get("observe") and status in ("pass", "fail"):   # recorded, not judged: read the log
                     status = "observed"
                 row["status"] = status
                 results[name] = status

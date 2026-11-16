@@ -1,0 +1,35 @@
+{
+  "entry": "D50",
+  "title": "A view's Groups holding a declared role's group id is stored as sent",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "数量"
+        }
+      ],
+      "Views": [
+        {
+          "Id": 1,
+          "Name": "zz-grp",
+          "Groups": [
+            "$group_staff"
+          ]
+        }
+      ]
+    }
+  },
+  "roles": {
+    "staff": 1
+  },
+  "expect_stored": {
+    "Views[Id=1].Groups": [
+      "$group_staff"
+    ]
+  },
+  "teardown": {
+    "SiteSettings": {}
+  }
+}
