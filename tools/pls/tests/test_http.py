@@ -46,9 +46,10 @@ class Fake:
             self.groups.append({"GroupId": self.next_id, "GroupName": body["GroupName"]})
             self.group_bodies.append(body)
             return 200, {"Id": self.next_id, "StatusCode": 200, "Message": "created"}
-        if path in ("/api/groups/get", "/api/users/get"):
+        if path in ("/api/groups/get", "/api/users/get", "/api/depts/get"):
             col = (body.get("View") or {}).get("ColumnFilterHash") or {}
-            rows = list(self.groups) if "groups" in path else [{"UserId": 7, "LoginId": "nam"}]
+            rows = (list(self.groups) if "groups" in path else list(getattr(self, "depts", [])) if "depts" in path
+                    else [{"UserId": 7, "LoginId": "nam"}])
             rows = [r_ for r_ in rows if all(str(v) in str(r_.get(k)) for k, v in col.items())]   # like-match, as Pleasanter
             return 200, {"Response": {"Data": rows, "TotalCount": len(rows)}}
         parts = path.strip("/").split("/")          # api items {id} {action}

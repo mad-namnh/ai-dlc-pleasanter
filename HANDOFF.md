@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Departments in `pls principals` (2026-11-16):** a role with `"principal": "Dept"` binds by `dept_code` / `dept_name`, never created; field names not read back on a real server (TD-64). `plans/2026-11-16-departments-in-principals/`.
+
 **Multiple selection classified (2026-11-16):** `Columns[x].MultipleSelections` switched and `ChoicesControlType` changed are data-impacting (source-derived, not probed; WS3b probe open in ADR-0004). `plans/2026-11-16-multiple-selections-classified/`.
 
 **kb-verify of the scalar probes recorded (2026-11-16):** Nam's run on MADLAB dev 1.5.2.0: D43, D44, D45, D47 pass, D46 fails for `DashboardPartsAsynchronousLoading` (not stored; recorded only when it differs from the server parameter, cause on dev not established). KB 0.28; `VERIFIED_KEYS` + 75 keys; held back: the four mail keys (WS1.5) and six guard / free-HTML switches (TD-63). `plans/2026-11-16-scalar-keys-verified/`.

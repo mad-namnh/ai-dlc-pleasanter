@@ -2755,7 +2755,8 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     Returns the groups/users that do not exist yet. A group name that matches more than one group is refused: the
     server does not refuse duplicate names (KB api.md "Users and groups"), so the person removes the extra ones.
     With `create` (ADR-0017): the missing groups are created first — dev environments only (not a sandbox, writes
-    allowed), no update or delete of any group, the operator (`admin`) as the only member, one typed confirmation."""
+    allowed), no update or delete of any group, the operator (`admin`) as the only member, one typed confirmation.
+    A role with `"principal": "Dept"` is bound to a department by `dept_code` (or `dept_name`), never created."""
     import pls_http as H
     rf = r / "design" / "roles.json"
     if not rf.exists():
@@ -2787,6 +2788,27 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
                 missing.append(f"user with login '{spec.get('login')}'")
                 print(f"{role}: MISSING - create the user with login '{spec.get('login')}' in Pleasanter, then run "
                       "pls principals again")
+            continue
+        if spec.get("principal") == "Dept":
+            # departments are the customer's organisation: looked up, never created (ADR-0017 covers groups only).
+            # /api/depts/get (Pleasanter_1.5.2.0 DeptsController, source-derived); field names DeptId / DeptCode /
+            # DeptName are the Depts table columns, not yet read back from a real server
+            col, val = (("DeptCode", str(spec["dept_code"])) if spec.get("dept_code") not in (None, "")
+                        else ("DeptName", str(spec.get("dept_name") or role)))
+            ids = _lookup_all(client, "/api/depts/get", col, val, "DeptId")
+            if ids is None:
+                raise Fail(f"{role}: the lookup of department {col} '{val}' failed — check the connection and run pls "
+                           "principals again")
+            if len(ids) > 1:
+                raise Fail(f"{role}: department {col} '{val}' matches {len(ids)} departments (ids "
+                           f"{', '.join(map(str, ids))}) — name it by dept_code in design/roles.json")
+            if ids:
+                pr[role] = f"Dept,{ids[0]}"
+                print(f"{role}: {pr[role]} (department {col} '{val}')")
+            else:
+                missing.append(f"department {col} '{val}'")
+                print(f"{role}: MISSING - department {col} '{val}' is not in Pleasanter; departments belong to the "
+                      "customer's organisation and are never created by pls")
             continue
         name = spec.get("group_name") or role
         ids = _lookup_all(client, "/api/groups/get", "GroupName", name, "GroupId")

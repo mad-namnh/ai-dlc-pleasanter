@@ -143,7 +143,8 @@ class CreateGroups(unittest.TestCase):
                                 conn={"allow_write": True}, yes=True)
 
     def test_only_groups_with_a_final_name_are_created(self):
-        for spec in ({"principal": "Dept", "group_name": "zz_dept"},           # not a group
+        for spec in ({"principal": "Role", "group_name": "zz_role"},           # not a group (a Dept is looked up, never
+                                                                               # created: test_principals_bind_departments)
                      {"principal": "Group"},                                   # no name: never the role key
                      {"principal": "Group", "group_name": "<group name>"},     # template placeholder
                      {"principal": "Group", "group_name": " zz_pad "}):        # surrounding spaces
