@@ -9,6 +9,8 @@
 
 A `Summaries[]` change (集計) does not recalculate existing destination values (KB D16). `classify` puts it in the data-impacting class with the note "migration: touch one child record per parent after the release" — a workaround that writes business records.
 
+KB D16 records an earlier API call to `synchronizesummaries` that answered HTTP 400 (request shape not recorded in the row): the route below exists in the source, but how to call it is not known.
+
 Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}/SynchronizeSummaries` (`Controllers/Api/ItemsController.cs` l.293–314, read-only clone of tag `Pleasanter_1.5.2.0`, source-derived). The screen calls the same model method (`Controllers/ItemsController.cs` l.1263). The request body (which summary, or all of the site's) and the answer are **not read**: the item model is not in the clone.
 
 ## Options
@@ -38,8 +40,13 @@ Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}
 - With B: ADR-0004 Decision 3 order is amended (configuration → recalculation) by this ADR when accepted; `pls_http` gains one guarded call; `test_write_guards` lists it; the P5 release-manager skill names the step (skill text → eval).
 - Before building: a probe (ADR-0027 option B `settings` step, or a person's run) that adds a summary to a site with existing records, calls `SynchronizeSummaries` and reads the destination values.
 
+## As built
+
+- 2026-11-16, option C until B: `classify`'s note for a `Summaries[]` change names 同期 on the screen, a check of one parent's value (the screen action is source-derived, not verified on 1.5.2) and `pls step`; updating one child per parent is named as the observed fallback (D16). Nothing enforces the step: `pls step` only marks the run log and `apply` does not check it — the drift risk of option C stands until B is built. The P2 impact checklist still names the old migration (TD-66).
+
 ## Open questions
 
-- [ ] Request body and answer of `SynchronizeSummaries` on 1.5.2.0 — *source read of the item model, then a dev probe*
+- [ ] Request body and answer of `SynchronizeSummaries` on 1.5.2.0, and why the earlier call answered 400 (KB D16) — *source read of the item model, then a dev probe*
+- [ ] Whether 同期 on the screen recalculates existing parents on 1.5.2 (option C relies on it) — *a person's screen check on dev*
 - [ ] Whether it recalculates every summary of the site or one — *same*
 - [ ] Running time on many records — *first real release with a summary change (TD-27)*

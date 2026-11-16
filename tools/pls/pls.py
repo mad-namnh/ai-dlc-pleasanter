@@ -731,7 +731,10 @@ def classify(diffs: list[dict]) -> dict:
                         "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
             data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
-                        "migration: touch one child record per parent after the release")
+                        "after the release run 同期 (SynchronizeSummaries) on the screen for this summary in each "
+                        "environment, check that a parent's value was recalculated (source-derived, not verified on "
+                        "1.5.2) and record it with pls step (ADR-0028; pls summaries sync is not built); updating one "
+                        "child per parent also recalculates (observed, D16) but rewrites business records")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
         # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
