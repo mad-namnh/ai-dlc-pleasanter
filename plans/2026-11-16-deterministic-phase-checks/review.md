@@ -29,3 +29,22 @@
 - R2-1 Medium: as-is records (DES-000-as-is-<site>.md) read as designs → left out of p2 (they are reviewed through `pls review as-is`); test.
 - R2-2 Low: a G1-approved REQ whose file is gone escaped G2 coverage → candidates are files ∪ G1-approved items; test.
 - R2-3 Low: misnamed-file rule matched any REQ… / DES… name → only `REQ-` / `DES-` prefixes; test.
+
+## Part C, round 1 (pls-x-reviewer, opus, high) — accept with fixes; F1, F2 High
+- **F1 High:** the hook command exited 2 when python could not open the launcher (missing file, variable not set) → command ends in `|| true`; test runs the installed command through Git Bash with the launcher missing and the variable unset.
+- **F2 High:** stdin read in the console code page: a non-ASCII project path failed open → stdin / stdout as UTF-8 bytes; test with a Japanese project path.
+- **F3 Medium:** `--y`, `--ye`, `"--yes"`, `./pls.py`, `py`, `python -u` → matched; tests.
+- **F4 Medium:** denying every `pls … --yes` contradicted the template CLAUDE.md and skills ("they tell you to add --yes") → the hook answers `ask`, so the person confirms at Claude Code's prompt; no protected-file change needed.
+- **F5 Medium:** recorded inputs with common fields, bytes, a shell run; smoke test on a `pls-demo-inquiry` copy (log.md).
+- **F6 Low:** BOM, wrong shapes, rewrite with nothing added → handled; tests.
+- **F7 Low:** edits of `.claude/settings*.json` / `pls.py` and Read of `.pls/` → denied; tests.
+- **F8 Low:** dead `server-scripts/` branch removed.
+- **F9 Low:** ADR-0013 amendment note (hooks not logged).
+- Found by the smoke test: older projects' REQ / DES have no front matter → TD-68.
+
+## Part C, round 2 (same reviewer) — accept with fixes; Low only
+- R2-1: protected paths compared with case → casefold; test (`.claude/Settings.Local.json`, `.PLS/…`, `Gates/…`, `PLS.py`).
+- R2-2: shell indirection around `--yes` → documented limit (ADR As built); the typed confirmation inside pls stays the control.
+- R2-3: `ask` under bypassed permissions not verified → `deny` when `permission_mode` is `bypassPermissions` / `dontAsk`; test.
+- R2-4: malformed settings on `hook install` → `Fail` (exit 1), not an internal error; test.
+- R2-5: stale docstrings fixed; ADR-0013 amendment line named to Nam in the report; install never upgrades an entry → TD-69.

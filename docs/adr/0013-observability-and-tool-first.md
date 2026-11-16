@@ -44,3 +44,4 @@ Working rules in the skills: as-is specifications only for sites a change reques
 - Quality checks are not reduced: gates, drift, round trip, independent review of framework changes stay.
 - Token usage depends on the transcript format of Claude Code; `pls usage` reads only documented-by-observation fields (`requestId`, `timestamp`, `message.model`, `message.usage`) and ignores everything else. If the format changes, `collect` reports 0 sessions rather than wrong numbers.
 - Logs and usage files are committed with the phase commits; they contain no secrets and no business data.
+- Amended (2026-11-17) by ADR-0029 C: `pls hook pre|post|stop` (run by Claude Code on every tool call and stop) are not logged in `ops/log/`; `pls hook install` is.

@@ -22,6 +22,8 @@ Commands:
                                                 migrate on a dev environment, ADR-0024) as the person stated it;
                                                 recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
+  hook install                                  add the project's Claude Code hooks to .claude/settings.json (pre / post / stop
+                                                run from there; ADR-0029)
   check p1|p2|p3                                REQ / DES front matter and body complete (p1, p2); p3 = lint, scope and
                                                 traceability config paths; exit 1 on findings (ADR-0029)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
@@ -60,7 +62,9 @@ if sys.version_info < (3, 10):       # before the other imports: an older Python
 import argparse
 import copy
 import hashlib
+import io
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -82,6 +86,7 @@ import pls_kbverify as KV                                   # noqa: E402 — exe
 import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
+import pls_hooks as HK                                      # noqa: E402 — Claude Code hooks of a project (ADR-0029 C)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
@@ -2717,6 +2722,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
+    HK.install(target / ".claude" / "settings.json")      # guardrails applied by Claude Code itself (ADR-0029 C)
     sync_skills(target, fw)
 
 
@@ -3906,9 +3912,38 @@ def http_cmd(r: Path, a) -> int:
 # ---------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
-    """Every command is logged (ops/log/, ADR-0013); the work is done by _main."""
+    """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
+    tool call of Claude Code and is not logged (the run log would hold every edit)."""
     args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"]):
+        return hook(args[1])
     return LG.run(root, args, lambda: _main(args))
+
+
+def hook(event_name: str, stdin=None, stdout=None) -> int:
+    """One Claude Code hook (ADR-0029 C1): the event's JSON on stdin, the answer as JSON on stdout, exit 0. A hook that
+    cannot decide stays silent and allows: these are guardrails; pls enforces writes, gates and secrets itself."""
+    stdin, stdout = stdin or sys.stdin.buffer, stdout or sys.stdout.buffer   # UTF-8 bytes, not the console code page
+    try:
+        raw = stdin.read()
+        event = json.loads((raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw) or "{}")
+        proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or "") if os.environ.get("CLAUDE_PROJECT_DIR") else root()
+        if not (proj / "environments.json").exists():
+            return 0                                   # not a pls project: nothing to say
+        if event_name == "pre":
+            out = HK.pre(proj, event)
+        elif event_name == "post":
+            site = HK.edited_site(proj, event)
+            out = HK.post(lint(proj), site) if site else None
+        else:
+            out = HK.stop(event, PC.p1(proj) + PC.p2(proj)) if not event.get("stop_hook_active") else None
+    except Exception:                                  # noqa: BLE001 — a guardrail never breaks the session
+        return 0
+    if out:
+        text = json.dumps(out, ensure_ascii=False) + "\n"
+        stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
+        stdout.flush()
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -4075,6 +4110,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sp.add_parser("scope", help="components of config/<site> without round-trip evidence (ADR-0001), read from git: "
                                      "what release-plan would refuse; exit 1 while any is found")
     s.add_argument("--site", help="one site (default: every site in config/)")
+    s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
+                      "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
+    s.add_argument("action", choices=["pre", "post", "stop", "install"])
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
     s = sp.add_parser("lint")
@@ -4517,6 +4555,14 @@ def _main(argv=None) -> int:
             print("release-plan refuses these until a probe proves them (pls kb-verify, ADR-0023) or a person accepts "
                   "them with a decision record (--accept-unverified)")
         return 1 if found else 0
+
+    if a.cmd == "hook":                                 # pre / post / stop never reach here (main)
+        try:
+            added = HK.install(r / ".claude" / "settings.json")
+        except ValueError as ex:
+            raise Fail(str(ex))
+        print(f".claude/settings.json: {'added ' + ', '.join(added) if added else 'hooks already there'} (ADR-0029)")
+        return 0
 
     if a.cmd == "check":
         if a.phase == "p3":

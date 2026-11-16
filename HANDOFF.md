@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Project hooks (2026-11-17, ADR-0029 C):** `pls init` writes `.claude/settings.json` hooks (`pls hook pre|post|stop`): file edits under `releases/`, `gates/`, `ops/log/`, `.pls/` (and the hooks' own settings) denied, the person asked before `pls … --yes`, lint after a config edit, check findings shown at stop. Older projects' REQ / DES need front matter (TD-68). Existing projects: `python pls.py hook install`. `plans/2026-11-16-deterministic-phase-checks/`.
+
 **Phase checks (2026-11-16, ADR-0029 B):** `pls check p1|p2|p3`; REQ / DES front matter (templates); `pls gate G1` / `G2` refuse while a finding names an approved item, unless `--accept-findings "<reason>"`. Not yet: agreement of a DES with the built change (TD-67). Evals of P1 / P2 / P3 / lifecycle pending (approved by Nam). `plans/2026-11-16-deterministic-phase-checks/`.
 
 **KB probes change their own settings (2026-11-16, ADR-0027 built):** probe steps `settings` / `settings_partial` on the probe's own sites, `$admin_uid` / `$group_<role>` in probe site settings, disabled notifications and reminders (example.invalid only, no credentials; guarded). No probe uses them yet — WS3c / notification probes next, run on dev by a person. `plans/2026-11-16-probe-settings-steps/`.
