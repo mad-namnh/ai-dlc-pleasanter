@@ -91,6 +91,7 @@ import pls_usage as US                                      # noqa: E402 — LLM
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
 import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
+import pls_secret_fields as SF                              # noqa: E402 — credential fields of notifications (I7)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -112,9 +113,10 @@ SECRET_RES = {
 
 
 def secrets_in(obj: Any) -> list[str]:
-    """Names of the secret-like patterns (L-SEC-01) found in obj, read as its JSON text."""
+    """Names of the secret-like patterns (L-SEC-01) found in obj, read as its JSON text, and of the notification and
+    reminder fields that hold a credential whatever it looks like (pls_secret_fields)."""
     blob = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
-    return [n for n, rx in SECRET_RES.items() if rx.search(blob)]
+    return [n for n, rx in SECRET_RES.items() if rx.search(blob)] + SF.secret_fields(obj)
 
 
 def refuse_secrets(obj: Any, what: str, then: str) -> None:
@@ -122,8 +124,9 @@ def refuse_secrets(obj: Any, what: str, then: str) -> None:
     so a secret-like literal from a live export never lands in config/ or releases/ (I7, ADR-0005)."""
     found = secrets_in(obj)
     if found:
+        hint = f". {SF.HINT}" if set(found) & SF.NAMES else ""
         raise Fail(f"{what}: secret-like values in the configuration ({', '.join(found)}) — nothing written. Secrets must "
-                   f"not reach git (I7, ADR-0005): {then}")
+                   f"not reach git (I7, ADR-0005): {then}{hint}")
 
 
 # Output is UTF-8 on every console: a Windows console with cp932 cannot encode "—" and labels in other
@@ -474,9 +477,12 @@ def acl_from_refs(settings: dict, e: dict, site: str) -> None:
                 val = (e.get("principals") or {}).get(m.group(2))
                 if val is None:
                     raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
-                vtyp, vid = val.split(",")[:2]
+                vtyp, _, vid = str(val).partition(",")
                 if vtyp != typ:
                     raise Fail(f"{site}: {label} {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
+                vid = vid.split(",")[0]
+                if not vid.isdigit():                    # a setup placeholder such as "Group,<id>" (L-ENV-01 names it)
+                    raise Fail(f"{site}: {label} {key}: principal '{m.group(2)}' has no id yet ({val})")
                 out.append(int(vid))
             it[key] = out
 
@@ -870,6 +876,18 @@ def lint(r: Path) -> list[dict]:
             if k in m["settings"]:
                 issues.append({"rule": "L-SEC-01", "site": site, "msg": f"{k} holds customer mail addresses and is kept out "
                                "of git — remove it from site.json; every write keeps the value the site holds"})
+        for env_name in sorted(e_all["envs"]):                   # the same, after environment values are resolved
+            if site not in ((e_all["envs"][env_name] or {}).get("sites") or {}):
+                continue                                         # not deployed to this environment: no payload for it
+            try:
+                resolved = payload(m, env_conf(r, env_name), site)
+            except (Fail, KeyError, ValueError) as ex:           # unresolved references, raw ids, conflicts: other rules
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"not checked for env '{env_name}' after its values "
+                               f"are resolved: {ex}"})
+                continue
+            for name in sorted(set(secrets_in(resolved)) - set(secrets_in(blob))):
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in the payload for "
+                               f"env '{env_name}': an environments.json value holds it"})
         for kind, items in m["scripts"].items():
             for it in items:
                 body, nm = it.get("Body", ""), it.get("Name")
@@ -1531,7 +1549,8 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     if any(found.values()):
         return False, [f"{site}: REFUSED — L-SEC-01 secret-like values in the " + "; ".join(
             f"{part}: {', '.join(n)}" for part, n in found.items() if n) + " — nothing written to releases/. Secrets must "
-            "not reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"], {}
+            "not reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"
+            + (f". {SF.HINT}" if {n for v in found.values() for n in v} & SF.NAMES else "")], {}
     diffs = flat_diff(same_meta(live, git), git)
     snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
     return True, msgs, {
@@ -2252,7 +2271,9 @@ def sandbox_drop(r: Path, name: str) -> int:
 
 def unpack(r: Path, env: str, export: Path, site: str) -> None:
     """Write the export of a site into config/<site> (its whole tree is replaced)."""
-    model = logical(rj(export), env_conf(r, env))
+    raw = rj(export)
+    refuse_secrets(raw, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
+    model = logical(raw, env_conf(r, env))
     refuse_secrets(model, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
     write_tree(model, r / "config" / site)
 
@@ -2289,6 +2310,7 @@ def harvest(r: Path, env: str, site: str) -> int:
     exp = c.export_site(e["sites"][site]["id"])
     out = r / ".pls" / "exports" / f"{env}-{site}-harvest-{_stamp()}.json"
     wj(out, exp)
+    refuse_secrets(exp, f"harvest {site} from {env}", f"move them out of the site configuration on {env}, then harvest")
     model = logical(exp, e)
     model["settings"] = canonicalize(model["settings"])
     pf = r / "config" / site / "permissions.json"
@@ -4370,6 +4392,7 @@ def _main(argv=None) -> int:
     if a.cmd == "pack":
         e = env_conf(r, a.env)
         p = payload(read_tree(r / "config" / a.site), e, a.site)
+        refuse_secrets(p, f"pack {a.site} for {a.env}", "an environment value or config/ holds them — remove them, then pack")
         print(f"note: the payload leaves out {', '.join(HTTP.LIVE_ONLY_KEYS)} (kept out of git, ADR-0010): pls apply adds "
               "the site's values; any other updatesite of this file erases them on the site", file=sys.stderr)
         text = json.dumps(p, ensure_ascii=False, indent=2)
@@ -4500,6 +4523,18 @@ def _main(argv=None) -> int:
         new = payload(git, e, a.site)
         missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}
                          - set(HTTP.LIVE_ONLY_KEYS))
+        rollback = {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
+                    for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site}
+        # raw-diff.md is built from the whole live export and config/ (meta included), so those are checked too
+        found = {part: secrets_in(obj) for part, obj in (("payload (config/)", new), ("rollback (live)", rollback),
+                                                         ("live export", export), ("config/", git))}
+        if any(found.values()):                  # L-SEC-01 before anything reaches releases/ (I7, ADR-0005)
+            names = sorted({n for v in found.values() for n in v})
+            print("plan REFUSED: L-SEC-01 secret-like values in the " + "; ".join(
+                f"{part}: {', '.join(n)}" for part, n in found.items() if n) + " — no files written. Secrets must not "
+                "reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"
+                + (f". {SF.HINT}" if set(names) & SF.NAMES else ""))
+            return 1
         rel = r / "releases" / a.release
         snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
         plan = {
@@ -4515,8 +4550,7 @@ def _main(argv=None) -> int:
         }
         wj(rel / "plan.json", plan)
         wj(rel / "payload.json", new)
-        wj(rel / "rollback.json", {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
-                                   for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site})
+        wj(rel / "rollback.json", rollback)
         (rel / "raw-diff.md").write_text(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live (before) vs git (after)"), encoding="utf-8", newline="\n")
         print(f"plan written to releases/{a.release}/ — {len(diffs)} change(s), {plan['classification']['classification']}"
               + ("" if not missing else f"; L-DEP-01 FAILED: {missing}"))

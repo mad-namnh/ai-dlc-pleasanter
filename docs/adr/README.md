@@ -8,7 +8,7 @@
 | [0002](0002-column-slot-allocation.md) | Column-slot ranges per ownership zone | Proposed — customer input deferred (TD-01) | yes: slot ledger, L-SLOT-01, plan check |
 | [0003](0003-production-deploy.md) | Production deployment (on-prem) | Proposed — customer IT input deferred (TD-02) | partly: `pls package` + stdlib `verify.py` for the customer's operator; the customer-side apply method is open |
 | [0004](0004-data-impacting-changes.md) | Data-impacting changes & dedicated gate | Accepted (2026-11-05) | yes: migration folder required by `release-plan`; `pls migrate` over HTTP, before apply |
-| [0005](0005-config-storage-and-secrets.md) | Configuration storage & secrets policy | Partially accepted (runtime secrets); storage deferred (TD-03) | yes: L-SEC-01 refusals in `unpack`, `harvest`, `release-plan` |
+| [0005](0005-config-storage-and-secrets.md) | Configuration storage & secrets policy | Partially accepted (runtime secrets); storage deferred (TD-03) | yes: L-SEC-01 refusals in `unpack`, `harvest`, `adopt`, `plan`, `release-plan`, `pack`; credential fields of notifications and reminders by path |
 | [0006](0006-site-permissions-in-git.md) | Site permissions in git (opt-in, logical principals) | Accepted (2026-11-05) | yes |
 | [0007](0007-creating-new-sites.md) | Creating new sites: skeleton bootstrap, then the normal release | Proposed (2026-11-05) | yes: `bootstrap-plan`, `bootstrap`, bind |
 | [0008](0008-http-transport.md) | HTTP transport with local connections (no browser in the loop) | Proposed (2026-11-05) | yes: the default transport; write guard `assert_writable` |

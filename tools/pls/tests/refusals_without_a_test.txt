@@ -18,7 +18,6 @@ pls.py | _main | raise Fail(f"{out} exists — it may hold reviewed text; use --
 pls.py | _record_reference | raise Fail(f"--ref {a.ref!r}: {why}")
 pls.py | _record_reference | raise Fail(f"context {a.ref!r} not found as written in config/{a.site} scripts (copy it from `pls refs`)")
 pls.py | _record_reference | raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
-pls.py | acl_from_refs | raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
 pls.py | adopt | raise Fail(f"'{name}' is already in this project — adopt never overwrites; choose another name")
 pls.py | adopt | raise Fail(f"design/slot-ledger.json already has '{name}'")
 pls.py | adopt | raise Fail(f"environment '{env}' is not in environments.json")

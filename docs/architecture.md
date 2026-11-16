@@ -27,7 +27,7 @@ These rules hold in every phase. Each one is enforced by a deterministic check o
 | I4 | **Humans approve at gates G1–G4; AI never approves its own work** | Gate records in `gates/`, written by `pls gate` with the approver's words and required by `release-plan` (G3) and `apply` / `bootstrap` / `migrate` (G4) outside dev, and `package` (G4) always (ADR-0020); P4 reviewer agents, when built, are read-only |
 | I5 | **Standard features before code.** Standard settings → formulas/プロセス (process)/ステータス制御 (status control) → server script → extended SQL → external integration. Climbing a rung requires a written reason | Design review (P2), over-coding reviewer (P4) |
 | I6 | **Deterministic checks decide; AI explains.** Diffs, classifications and coverage are computed by code; AI only rewrites them into business language (B3) | `pls diff`, `pls classify`, `pls coverage` |
-| I7 | **No secrets and no customer business data in git.** Configuration holds references only (`${secret:…}`, `${env:…}`) | Lint L-SEC-01, and a refusal before writing in `unpack`, `harvest`, `adopt` and `release-plan` (D5, ADR-0005); no CI yet |
+| I7 | **No secrets and no customer business data in git.** Configuration holds references only (`${secret:…}`, `${env:…}`) | Lint L-SEC-01, and a refusal before writing in `unpack`, `harvest`, `adopt`, `plan`, `release-plan` and `pack` (D5, ADR-0005); no CI yet |
 | I8 | **Every requirement is traceable to configuration and tests, and back** | Traceability ledger; coverage check at G3 |
 | I9 | **Every escaped defect becomes a rule, check, skill change or eval** | Operate phase feedback loop (P6 → framework) |
 
@@ -372,7 +372,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 
 | Rule | Source | Checks |
 |---|---|---|
-| L-SEC-01 | D5 | No secret-like values in configuration or scripts, and no mail address settings in `site.json` (`AddressBook`, `Mail*Default` — kept out of git, ADR-0010; payloads leave them out even when site.json has them). Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
+| L-SEC-01 | D5 | No secret-like values in configuration or scripts, and no credential in the notification and reminder fields that hold one whatever it looks like: `Token`, the webhook URL (`Address` / `To` of Slack, Teams, RocketChat, LINE WORKS), credential `Headers`, and credential query parameters or a known webhook host of an HttpClient `Address` (`pls_secret_fields`); no mail address settings in `site.json` (`AddressBook`, `Mail*Default` — kept out of git, ADR-0010; payloads leave them out even when site.json has them); lint checks the payload of each environment too, so a credential kept as an `environments.json` value is found. Also a refusal before writing: `unpack`, `harvest` (the raw export and the mapped model), `adopt` (config/), `plan` and `release-plan` (payload from config/, rollback from the live site) and `pack` write nothing when one is found |
 | L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
 | L-REF-02 | S5, B2 | Every `${site:x}`, `${env:x}` and `${principal:x}` in the configuration is defined for every environment; scheduled scripts resolve for every environment that can receive them |
 | L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |

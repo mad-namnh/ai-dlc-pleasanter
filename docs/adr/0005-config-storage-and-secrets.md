@@ -14,7 +14,7 @@ Spike round 1 found a real external-service API key in plain text inside a share
 
 - [ ] May configuration (without data) live in git managed by MADLAB? Where (MADLAB GitHub org / customer Git server)? — *Contract/customer (TD-03)*
 - [ ] How much configuration may members in Vietnam see? — *Contract/customer (TD-03)*
-- [ ] Which SiteSettings fields on 1.5.x can hold secrets — *Spike (round 1: `ServerScripts[].Body`; notifications to be checked with webhooks)*
+- [ ] Which SiteSettings fields on 1.5.x can hold secrets — *Spike (round 1: `ServerScripts[].Body`; notifications to be checked with webhooks)* — partly answered from the source (2026-11-16, Pleasanter_1.5.2.0 `Notification.cs`, `Reminder.cs`, not probed): `Token` of notifications and reminders, the webhook URL in `Address` / `To` of Slack, Teams, RocketChat, LINE WORKS, HttpClient `Headers` and `Address`; L-SEC-01 checks them by path (`tools/pls/pls_secret_fields.py`), and `pack` refuses them too
 
 ## Options (storage)
 
