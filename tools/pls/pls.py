@@ -22,6 +22,8 @@ Commands:
                                                 migrate on a dev environment, ADR-0024) as the person stated it;
                                                 recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
+  check p1|p2|p3                                REQ / DES front matter and body complete (p1, p2); p3 = lint, scope and
+                                                traceability config paths; exit 1 on findings (ADR-0029)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
@@ -79,6 +81,7 @@ import pls_merge as MG                                      # noqa: E402 — sem
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
 import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
+import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
@@ -4032,6 +4035,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--approver", required=True, help="name as listed in the profile row Approvers")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
+    s.add_argument("--accept-findings", metavar="REASON", help="G1/G2: approve although pls check p1/p2 reports findings "
+                   "for these items; the findings and the reason are kept in the gate record (ADR-0029)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
     s = sp.add_parser("package", help="zip a G4-approved release for the customer's operator, with a stdlib verify.py (ADR-0003)")
     s.add_argument("release")
@@ -4070,6 +4075,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sp.add_parser("scope", help="components of config/<site> without round-trip evidence (ADR-0001), read from git: "
                                      "what release-plan would refuse; exit 1 while any is found")
     s.add_argument("--site", help="one site (default: every site in config/)")
+    s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
+    s.add_argument("phase", choices=["p1", "p2", "p3"])
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
@@ -4308,9 +4315,26 @@ def _main(argv=None) -> int:
 
     if a.cmd == "gate":
         need_onboarding(r, f"gate {a.gate}")
+        extra = None
+        if a.accept_findings is not None and a.gate not in ("G1", "G2"):
+            raise Fail("--accept-findings belongs to G1 / G2 (pls check p1 / p2, ADR-0029)")
+        if a.gate in ("G1", "G2") and a.decision == "approved":      # completeness decided by pls check (ADR-0029)
+            try:
+                GT.validate(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release)   # who decides comes first
+                mine = PC.for_gate(r, a.gate, a.item)
+            except GT.GateError as ex:
+                raise Fail(str(ex))
+            if mine and not (a.accept_findings or "").strip():
+                for x in mine:
+                    print(f"{x['phase'].upper()} {x['item']}: {x['msg']}")
+                raise Fail(f"{a.gate} REFUSED: pls check {'p1' if a.gate == 'G1' else 'p2'} reports {len(mine)} finding(s) "
+                           "for these items — fix them, or let the approver accept them: --accept-findings \"<reason>\"")
+            if mine:
+                extra = {"accepted_findings": [f"{x['item']}: {x['msg']}" for x in mine],
+                         "accept_reason": a.accept_findings.strip()}
         try:
             out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
-                            datetime.now().astimezone().date().isoformat())
+                            datetime.now().astimezone().date().isoformat(), extra=extra)
         except GT.GateError as ex:
             raise Fail(str(ex))
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
@@ -4492,6 +4516,29 @@ def _main(argv=None) -> int:
         if found:
             print("release-plan refuses these until a probe proves them (pls kb-verify, ADR-0023) or a person accepts "
                   "them with a decision record (--accept-unverified)")
+        return 1 if found else 0
+
+    if a.cmd == "check":
+        if a.phase == "p3":
+            found = [{"phase": "p3", "item": i["site"], "msg": f"{i['rule']} {i['msg']}"} for i in lint(r)]
+            cfg = r / "config"
+            for d in sorted(cfg.iterdir() if cfg.is_dir() else []):
+                if (d / "site.json").exists():
+                    m = read_tree(d)
+                    found += [{"phase": "p3", "item": d.name, "msg": f"SCOPE {x}"} for x in SC.unverified(m["settings"] | m["scripts"])]
+            tr = rj(r / "traceability.json") if (r / "traceability.json").exists() else {}
+            for req, links in sorted((tr or {}).items()):
+                for ref in (links or {}).get("config") or []:
+                    if not config_path_exists(r, ref):
+                        found.append({"phase": "p3", "item": req, "msg": f"traceability config path {ref} does not exist"})
+        else:
+            try:
+                found = PC.CHECKS[a.phase](r)
+            except GT.GateError as ex:
+                raise Fail(str(ex))
+        for x in found:
+            print(f"{x['phase'].upper()} {x['item']}: {x['msg']}")
+        print(f"{len(found)} finding(s)")
         return 1 if found else 0
 
     if a.cmd == "lint":

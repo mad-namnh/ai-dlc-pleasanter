@@ -1008,7 +1008,9 @@ class PlsTest(unittest.TestCase):
             (proj / "ops/onboarding/2026-11-09-summary.md").write_text("# Onboarding\n", encoding="utf-8")
             self.assertNotIn("L-ONB-01", {i["rule"] for i in pls.lint(proj)})
             self.assertEqual(pls.main(["step", "P1", "analyse the request"]), 0)
-            self.assertEqual(pls.main(["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok"]), 0)
+            # the fixture REQ has no front matter: G1 needs the approver's acceptance of that finding (ADR-0029)
+            self.assertEqual(pls.main(["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok",
+                                       "--accept-findings", "fixture without front matter"]), 0)
         finally:
             os.chdir(self.r)
         new = self.r / "fresh"

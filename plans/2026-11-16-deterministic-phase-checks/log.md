@@ -6,3 +6,7 @@
 - P2 eval (approved by Nam) deferred to one run after Part B (B5 changes P1 / P2 / lifecycle again): one eval batch instead of two. P2 0.12 marked "evaluation pending".
 - Review round 1 (opus, high; subagent 1/6): accept with fixes (F1–F3 Medium, F4–F8 Low) → all fixed in worktree wt-r2 on 09de5d2 (review.md). Round 2 next.
 - Review round 2: accept with fixes, Low only → fixed. Commit.
+- 2026-11-16 Part B built in worktree wt-B: pls_front_matter.py, pls_phase_check.py, `pls check`, gate coupling, templates, P1 / P2 / P3 / lifecycle skill text, TD-67.
+- Part B review round 1 (opus, high; subagent 3/6): accept with fixes, F1 High → all fixed (review.md). Round 2 next.
+- Fixes broke tests that approved G1 for REQ ids without documents (test_gate: now writes complete REQs) and the approver-first refusal (profile test: `GT.validate` runs before the checks); layout test expects `sources` (now joined by pls); refusal list: two gate refusals moved to `validate`.
+- Part B review round 2: accept with fixes (R2-1 Medium, R2-2/3 Low) → fixed. Commit after suites.

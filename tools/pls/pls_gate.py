@@ -200,8 +200,9 @@ def load(root: Path) -> list[dict]:
     return out
 
 
-def record(root: Path, gate: str, decision: str, approver: str, quote: str, items: list[str], releases: list[str],
-           today: str) -> Path:
+def validate(root: Path, gate: str, decision: str, approver: str, quote: str, items: list[str],
+             releases: list[str]) -> str:
+    """The checks of a gate record that do not depend on the documents; returns the approver's name as listed."""
     gate = gate.upper()
     if gate not in GATES:
         raise GateError(f"gate must be one of {', '.join(GATES)}")
@@ -213,7 +214,13 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
         raise GateError(f"{gate} needs --item for every {'REQ' if gate == 'G1' else 'DES'} id it decides")
     if gate in ("G3", "G4") and not releases:
         raise GateError(f"{gate} needs --release (G4 also names a bootstrap id when the release creates sites)")
-    who = _approver_for(root, approver, gate)
+    return _approver_for(root, approver, gate)
+
+
+def record(root: Path, gate: str, decision: str, approver: str, quote: str, items: list[str], releases: list[str],
+           today: str, extra: dict | None = None) -> Path:
+    gate = gate.upper()
+    who = validate(root, gate, decision, approver, quote, items, releases)
     d = root / "gates"
     d.mkdir(exist_ok=True)
     now = datetime.now().astimezone()
@@ -225,6 +232,8 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
     at = now.isoformat(timespec="microseconds")
     rec = {"gate": gate, "decision": decision, "approver": who, "date": today, "at": at,
            "quote": quote.strip(), "items": items, "releases": releases, "recorded_by": "pls gate"}
+    if extra:                    # G1 / G2 findings of pls check the approver accepted, with the reason (ADR-0029)
+        rec.update({k: v for k, v in extra.items() if k in ("accepted_findings", "accept_reason")})
     if gate == "G4" and decision == "approved":
         # what the person approved: the content of each planned release (unplanned ids stay unbound → apply refuses)
         bound = {}

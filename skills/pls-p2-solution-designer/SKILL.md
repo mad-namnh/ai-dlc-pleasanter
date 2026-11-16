@@ -33,7 +33,7 @@ description: Phase P2 of AI-DLC for Pleasanter. Designs how G1-approved requirem
 6. **Classify the change** (ADR-0004): config-only / data-impacting / permission-impacting, with reasons. Data-impacting changes need a migration plan in the design.
 7. **Write `design/decisions/DES-NNN-<slug>.md`** (`references/des-template.md`): design table (element → setting → REQ), ladder rungs, rejected alternatives, impact table, classification, open points.
 8. **Update `traceability.json`**: REQ → design ids and the config paths that P3 will create (`config/<site>/site.json#Processes[<name>]`, `#Columns[<slot>]`, `#Views[<id>]`, script files).
-9. **Self-check**, run `pls lint` (L-SLOT-01 is expected to report ledger slots not yet in config — that is the P3 to-do list), hand over for **G2**. Never approve yourself (I4).
+9. **Self-check**, run `pls check p2` until it reports 0 findings (DES front matter: reqs, elements with rungs and reasons, classification, impact rows by rule id; every G1-approved REQ in a DES; G2 refuses on findings unless the approver accepts them in their own words — never write that reason yourself), run `pls lint` (L-SLOT-01 is expected to report ledger slots not yet in config — that is the P3 to-do list), hand over for **G2**. Never approve yourself (I4).
 
 ## Outputs (project repository)
 

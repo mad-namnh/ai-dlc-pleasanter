@@ -194,7 +194,7 @@ class ProjectLayoutTest(unittest.TestCase):
         self.assertEqual(missing_from_layout(without("├─ pls.py ")),
                          {"created by pls init": ["pls.py"], "joined into a path by pls": ["pls.py"]})
         self.assertEqual(missing_from_layout(without("│  ├─ sources/ ")),
-                         {"created by pls init": ["requirements/sources"], "joined into a path by pls": []})
+                         {"created by pls init": ["requirements/sources"], "joined into a path by pls": ["sources"]})
         self.assertEqual(missing_from_layout(without("│     ├─ apply-log.json ")),
                          {"created by pls init": [], "joined into a path by pls": ["apply-log.json"]})
         self.assertEqual(missing_from_layout(without("│     ├─ payload-<site>.json ")),

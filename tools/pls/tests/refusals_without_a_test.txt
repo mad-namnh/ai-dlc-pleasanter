@@ -70,8 +70,8 @@ pls.py | setup_profile | raise Fail(f"folder {parent}: HTTP {st} - check the URL
 pls.py | site_data | raise Fail("export does not look like a getsite response")
 pls.py | sub | raise Fail(f"unresolved reference ${{principal:{name}}} — add it to environments.json principals")
 pls.py | sub | raise Fail(f"unresolved reference ${{site:{name}}}")
-pls_gate.py | record | raise GateError(f"decision must be one of {', '.join(DECISIONS)}")
-pls_gate.py | record | raise GateError(f"gate must be one of {', '.join(GATES)}")
+pls_gate.py | validate | raise GateError(f"decision must be one of {', '.join(DECISIONS)}")
+pls_gate.py | validate | raise GateError(f"gate must be one of {', '.join(GATES)}")
 pls_http.py | backup_records | raise TransportError(f"get {site_id} offset {offset}: HTTP {st}")
 pls_http.py | load_connection | raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL " "(keys go in environment
 pls_http.py | load_connection | raise TransportError(f"{f}: no url for environment '{env}'")
