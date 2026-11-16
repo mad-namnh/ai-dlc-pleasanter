@@ -37,15 +37,15 @@ class PureTest(unittest.TestCase):
     def test_scalar_keys_stored_by_probes_d43_to_d47_have_evidence(self):
         """KB probes D43-D47 on dev 1.5.2.0 (2026-11-16): every key they expect stored was read back as sent, except
         DashboardPartsAsynchronousLoading (recorded only when it differs from the server's parameter). The four mail
-        address keys round-trip but stay unverified until they are kept out of git (Nam 2026-11-15); six switches that
-        turn off guards or carry free HTML stay unverified until classify has a rule for them (TD-63)."""
+        address keys round-trip and, since they are kept out of git (ADR-0010, 2026-11-16), are verified too; six
+        switches that turn off guards or carry free HTML stay unverified until classify has a rule for them (TD-63)."""
         probes = Path(__file__).resolve().parents[3] / "skills/pls-kb-pleasanter/references/probes"
         keys = set()
         for f in sorted(probes.glob("D4[3-7]-site-scalars-*.json")):
             keys |= set(json.loads(f.read_text(encoding="utf-8"))["expect_stored"])
         self.assertEqual(len(keys), 86)
-        held_back = sorted(["AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault",       # kept out of git
-                            "DashboardPartsAsynchronousLoading",                                       # not stored
+        self.assertLessEqual({"AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault"}, SC.VERIFIED_KEYS)
+        held_back = sorted(["DashboardPartsAsynchronousLoading",                                       # not stored
                             "ServerScriptsAllDisabled", "ScriptsAllDisabled", "HtmlsAllDisabled",      # guards off,
                             "AllowPhysicalDeleteHistories", "AllowMigrationMode", "ExtendedHeader"])   # no classify rule
         self.assertEqual(sorted(keys - SC.VERIFIED_KEYS), held_back)

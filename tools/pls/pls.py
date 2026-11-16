@@ -1512,16 +1512,37 @@ def nothing_to_convert_problems(r: Path, migs: Any, impacted: set, role: str | N
     return out
 
 
+def live_only_in_git_refusal(site: str, git: dict) -> str | None:
+    """L-SEC-01 before anything reaches releases/: the payload drops the mail address settings (ADR-0010), but the
+    raw diff is built from config/, so a hand-typed copy would land in a committed release file and show as a change
+    that is never deployed."""
+    found = [k for k in HTTP.LIVE_ONLY_KEYS if k in (git.get("settings") or {})]
+    if not found:
+        return None
+    return (f"{site}: REFUSED — L-SEC-01 config/{site}/site.json holds {', '.join(found)} (customer mail addresses, kept "
+            "out of git, ADR-0010) — nothing written to releases/. Remove them from site.json; every pls apply keeps the "
+            "values the site holds")
+
+
 def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None,
               accept_unverified: str | None = None) -> tuple[bool, list, dict]:
     """All pre-deploy checks for one site. Returns (ok, messages, result)."""
     msgs = []
     live = logical(export, e)
     git = read_tree(r / "config" / site)
+    refusal = live_only_in_git_refusal(site, git)
+    if refusal:
+        return False, [refusal], {}
     scope = SC.site_findings(live["settings"] | live["scripts"], git["settings"] | git["scripts"])
     raw_live = site_data(export).get("SiteSettings") or {}       # logical() drops the live-only keys; pls still sends them
+    # all live-only keys are verified today (KB D47); the guard stays for a key added to LIVE_ONLY_KEYS later
     scope = sorted(set(scope) | {f"{k} (no round-trip evidence; kept from the live site on every write)"
                                  for k in HTTP.LIVE_ONLY_KEYS if k in raw_live and k not in SC.VERIFIED_KEYS})
+    held = [k for k in HTTP.LIVE_ONLY_KEYS if k in raw_live]
+    if held:
+        msgs.append(f"NOTE {site}: the site holds {', '.join(held)} (kept out of git, ADR-0010): pls apply keeps them; a "
+                    "browser-runner or hand-applied payload file erases them (TD-59); a production package's checklist "
+                    "copies them (TD-60)")
     if scope and not accept_unverified:
         return False, [f"SCOPE {site}: {x}" for x in scope] + [
             f"{site}: REFUSED — components without round-trip evidence (ADR-0001); updatesite could change or drop them (D4). "
@@ -4522,6 +4543,10 @@ def _main(argv=None) -> int:
                     print(f"MIGRATION {x}")
                 print("plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
                 return 1
+        refusal = live_only_in_git_refusal(a.site, git)
+        if refusal:
+            print(refusal)
+            return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
         missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}

@@ -698,18 +698,29 @@ class PlsTest(unittest.TestCase):
         site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
         self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]), 0)
         rp = ["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):                                   # still no round-trip evidence (ADR-0001)
-            self.assertEqual(pls.main(rp), 1)
-        self.assertIn("SCOPE a: AddressBook (no round-trip evidence", out.getvalue())
-        self.assertNotIn("L-DEP-01", out.getvalue())
-        rec = self.r / "design/accept-mail-settings.md"
-        rec.write_text("accepted by Nam", encoding="utf-8")
-        site_hand = dict(site, MailToDefault="hand@example.com")               # a hand edit never reaches a payload
+        site_hand = dict(site, MailToDefault="hand@example.com")   # a hand-typed copy would reach the raw diff
         (self.r / "config/a/site.json").write_text(json.dumps(site_hand), encoding="utf-8")
-        self.assertEqual(pls.main(rp + ["--accept-unverified", str(rec)]), 0)
-        for f in (self.r / "releases/R1").glob("*.json"):
-            self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(rp), 1)
+        self.assertIn("L-SEC-01 config/a/site.json holds MailToDefault", out.getvalue())
+        self.assertNotIn("hand@example.com", out.getvalue())
+        self.assertFalse((self.r / "releases/R1").exists())
+        rec = self.r / "design/accept.md"
+        rec.write_text("accepted", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):          # a decision record does not get past it
+            self.assertEqual(pls.main(rp + ["--accept-unverified", str(rec)]), 1)
+        self.assertFalse((self.r / "releases/R1").exists())
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):     # round trip proven (KB D47), kept out of git: no decision record needed
+            self.assertEqual(pls.main(rp), 0)
+        self.assertNotIn("SCOPE a:", out.getvalue())
+        self.assertNotIn("L-DEP-01", out.getvalue())
+        self.assertIn("NOTE a: the site holds AddressBook, MailBccDefault", out.getvalue())
+        for f in (self.r / "releases/R1").rglob("*"):                 # every release file, raw diffs included
+            if f.is_file():
+                self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
         site["AddressBook"] = "typed@example.com"                               # a hand edit is reported
         (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
         self.assertTrue(any(i["rule"] == "L-SEC-01" and "AddressBook" in i["msg"] for i in pls.lint(self.r)))
@@ -723,9 +734,18 @@ class PlsTest(unittest.TestCase):
         p.write_text(json.dumps(live), encoding="utf-8")
         self.assertEqual(pls.main(["plan", str(p), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
         rel = self.r / "releases/R1"
-        for f in rel.glob("*.json"):
-            self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        for f in rel.rglob("*"):                                          # every release file, raw diff included
+            if f.is_file():
+                self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
         self.assertEqual(json.loads((rel / "plan.json").read_text(encoding="utf-8"))["checks"]["keys_missing_from_payload"], [])
+        f = self.r / "config/a/site.json"                               # a hand-typed copy in git is refused
+        site = json.loads(f.read_text(encoding="utf-8"))
+        f.write_text(json.dumps(dict(site, MailCcDefault="hand@example.com")), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as o:
+            self.assertEqual(pls.main(["plan", str(p), "--env", "stg", "--site", "a", "--release", "R2"]), 1)
+        self.assertIn("L-SEC-01 config/a/site.json holds MailCcDefault", o.getvalue())
+        self.assertFalse((self.r / "releases/R2").exists())
+        f.write_text(json.dumps(site), encoding="utf-8")
         out = io.StringIO()
         with contextlib.redirect_stderr(out):
             pls.main(["pack", "--env", "stg", "--site", "a", "--out", str(self.r / "pk.json")])
