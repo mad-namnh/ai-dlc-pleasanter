@@ -214,7 +214,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Example of the safe branch: process access control instead of assuming that read-only users cannot see buttons.
   - Origin: slice #2 T-015, eval case 002.
 - **New sites (ADR-0007):** choose the site type and relations, run a skeleton probe, and allocate slots in zone A.
-- **Checks:** every in-scope REQ has a design element; slot ledger consistent; ladder reasons present for rungs ≥ server script.
+- **Checks:** every in-scope REQ has a design element; slot ledger consistent; ladder reasons present for rungs ≥ server script. Impact rows follow `skills/pls-p2-solution-designer/references/impact-rules.md`, generated from `pls classify` rules, design conditions and the KB (`tools/pls/pls_impact_rules.py`; a test fails when it is stale, ADR-0029 A).
 - **Gate:** G2.
 - **Status:** **used in slices #1–#3.** Skill 0.5 (0.4 passed eval case 002; 0.5 adds new sites, not yet evaluated). KB `pls-kb-pleasanter` 0.7, entries D7–D27.
 

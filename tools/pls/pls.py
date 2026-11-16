@@ -689,67 +689,76 @@ def _names_principals(d: dict) -> bool:
 
 def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
+    rules: list[dict] = []   # rule ids of tools/pls/pls_impact_rules.py (ADR-0029)
+    DATA, PERM, CFG = "data-impacting", "permission-impacting", "config-only"
+
+    def hit(rule: str, bucket: list, msg: str) -> None:
+        bucket.append(msg)
+        # "id", not "rule": the architecture test reads every "rule" key in tools/pls as a lint rule code
+        rules.append({"id": rule, "path": d["path"],
+                      "class": DATA if bucket is data else PERM if bucket is perm else CFG})
     for d in diffs:
         p = d["path"]
         if re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p) and bool(d["before"]) != bool(d["after"]):
             # stored values of a multi-select column are read as a JSON array of choices, of a single-select one as the
             # value itself (Pleasanter_1.5.2.0 ToExportExtensions.cs l.23-39, ToDisplayExtensions.cs l.35; source-derived,
             # not probed): switching it changes how every existing value of the column is read
-            data.append(f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
+            hit("CL-MULTISELECT-SWITCH", data, f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
                         "one value when it is off (source-derived, not verified); migration: convert the stored values, or "
                         "nothing to convert only on an empty site and never for production")
         elif re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p):
-            cfg.append(p)                               # an explicit false added or removed: Pleasanter records only true
+            hit("CL-MULTISELECT-EXPLICIT-FALSE", cfg, p)                               # an explicit false added or removed: Pleasanter records only true
         elif re.fullmatch(r"settings\.Columns\[\w+\]\.ChoicesControlType", p):
             # radio buttons ignore MultipleSelections and tick a choice only when the stored value equals its key
             # (HtmlFields.cs l.573-592, HtmlControls.cs l.589): a stored JSON array shows as nothing selected, and a
             # save may replace it (save path not read, not probed)
-            data.append(f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
+            hit("CL-CHOICE-CONTROL", data, f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
                         "stored values as empty and a save may overwrite them (source-derived, not verified); migration: "
                         "check the column's stored values, or nothing to convert when the column is single-select or empty")
         elif p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
-            data.append(f"{p}: column definition removed")
+            hit("CL-COLUMN-REMOVED", data, f"{p}: column definition removed")
         elif re.match(r"settings\.Columns\[\w+\]\.ChoicesText", p) and d["kind"] in ("changed", "removed"):
             before = set(str(d["before"] or "").splitlines())
             after = set(str(d["after"] or "").splitlines())
             jb, ja = _lookup_json(d["before"]), _lookup_json(d["after"])
             if jb is not None and ja is not None:       # a lookup / link definition, not a list of choices
                 if jb == ja:
-                    cfg.append(p)
+                    hit("CL-LOOKUP-UNCHANGED", cfg, p)
                 else:
-                    data.append(f"{p}: lookup / link definition changed")
+                    hit("CL-LOOKUP-CHANGED", data, f"{p}: lookup / link definition changed")
             elif before - after:
-                data.append(f"{p}: choices removed {sorted(before - after)}")
+                hit("CL-CHOICES-REMOVED", data, f"{p}: choices removed {sorted(before - after)}")
             else:
-                cfg.append(p)
+                hit("CL-CHOICES-ADDED", cfg, p)
         elif re.match(r"settings\.Columns\[\w+\]\.DefaultInput", p):
-            data.append(f"{p}: formula/default changed")
+            hit("CL-DEFAULT-INPUT", data, f"{p}: formula/default changed")
         elif re.match(r"settings\.Formulas(\[|$)", p):  # 1.5.2 keeps calculations in SiteSettings.Formulas, not in a column
-            data.append(f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
+            hit("CL-FORMULAS", data, f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
                         "records are not known to be recomputed (the screen has 同期 / SynchronizeFormulas, no API route: "
                         "source-derived, Pleasanter_1.5.2.0 SiteUtilities.cs); migration: the recomputed values as data, "
                         "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
-            data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
+            hit("CL-SUMMARIES", data, f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
                         "after the release run 同期 (SynchronizeSummaries) on the screen for this summary in each "
                         "environment, check that a parent's value was recalculated (source-derived, not verified on "
                         "1.5.2) and record it with pls step (ADR-0028; pls summaries sync is not built); updating one "
                         "child per parent also recalculates (observed, D16) but rewrites business records")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
-            perm.append(p)
+            hit("CL-PERMISSIONS", perm, p)
         # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
         elif re.fullmatch(r"settings\.Processes\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
                 re.fullmatch(r"settings\.Processes(\[.+\])?", p) and _names_principals(d)):
-            perm.append(f"{p}: process access control (D20)")
+            hit("CL-PROCESS-ACCESS", perm, f"{p}: process access control (D20)")
         elif re.match(r"settings\.StatusControls(\[|$)", p):   # who may change a record in a status (D42)
-            perm.append(f"{p}: status control")
+            hit("CL-STATUS-CONTROL", perm, f"{p}: status control")
         elif re.fullmatch(r"settings\.(Views|Exports|DashboardParts)\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
                 re.fullmatch(r"settings\.(Views|Exports|DashboardParts)(\[.+\])?", p) and _names_principals(d)):
-            perm.append(f"{p}: access list of a view / export / dashboard part")
+            hit("CL-ACCESS-LIST", perm, f"{p}: access list of a view / export / dashboard part")
         else:
-            cfg.append(p)
+            hit("CL-OTHER", cfg, p)
     cls = "data-impacting" if data else "permission-impacting" if perm else "config-only"
-    return {"classification": cls, "data_impacting": data, "permission_impacting": perm, "config_only": cfg}
+    return {"classification": cls, "data_impacting": data, "permission_impacting": perm, "config_only": cfg,
+            "rules": rules}
 
 
 # ---------------------------------------------------------------- lint (architecture §7.2)
@@ -1512,6 +1521,15 @@ def nothing_to_convert_problems(r: Path, migs: Any, impacted: set, role: str | N
     return out
 
 
+def first_release_of_new_site(c: dict) -> None:
+    """A classification on the first release of a new site: its data-impacting items become notes, and so do their
+    rule ids (ADR-0007; ADR-0029 rules)."""
+    c["new_site_notes"] = [f"{x} — not applicable: first release of a new site (ADR-0007)" for x in c["data_impacting"]]
+    c["data_impacting"] = []
+    c["rules"] = [x for x in c.get("rules", []) if x["class"] != "data-impacting"]
+    c["classification"] = "permission-impacting" if c["permission_impacting"] else "config-only"
+
+
 def live_only_in_git_refusal(site: str, git: dict) -> str | None:
     """L-SEC-01 before anything reaches releases/: the payload drops the mail address settings (ADR-0010), but the
     raw diff is built from config/, so a hand-typed copy would land in a committed release file and show as a change
@@ -1657,9 +1675,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         # First release of a site created by a bootstrap (ADR-0007): no records can predate it, and a summary
         # whose destination is also new has no existing values to recalculate (D16). Kept as notes, not gates.
         if s_ in fresh and c["data_impacting"] and all(d in fresh for d in res["deps"]):
-            c["new_site_notes"] = [f"{x} — not applicable: first release of a new site (ADR-0007)" for x in c["data_impacting"]]
-            c["data_impacting"] = []
-            c["classification"] = "permission-impacting" if c["permission_impacting"] else "config-only"
+            first_release_of_new_site(c)
     order, cyc = order_sites({s: res["deps"] for s, res in results.items()})
     rel = r / "releases" / release
     worst = max((res["classification"]["classification"] for res in results.values()), key=SEVERITY.index)

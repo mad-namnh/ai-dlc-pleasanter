@@ -22,9 +22,9 @@ A server script gets its own row that names the site and the script exactly as i
 
 ## Impact analysis
 
-| Existing element | Impact | Action |
-|---|---|---|
-| … | … | … |
+| Rule (`impact-rules.md`) | Existing element | Impact | Action |
+|---|---|---|---|
+| … | … | … | … |
 
 ## Migration (only if data-impacting)
 

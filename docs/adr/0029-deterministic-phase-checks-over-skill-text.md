@@ -1,6 +1,6 @@
 # ADR-0029: Deterministic phase checks over skill text — knowledge from one source, phase outputs with a schema, project hooks
 
-- **Status:** Accepted (Nam: A2, B1 blocking, C1 on 2026-11-16) — not built yet
+- **Status:** Accepted (Nam: A2, B1 blocking, C1 on 2026-11-16) — Part A built, B and C not yet
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I4, I6, I8, I9 (`docs/architecture.md` §2); §5 P1–P3 "Checks", §7.3 (hooks listed, not built); ADR-0004 (classification), ADR-0016 (agent team), ADR-0020 (gate records), ADR-0023 (KB shapes); TD-21 (no PreToolUse hook yet), TD-51, TD-64, TD-65, TD-66 (skill text behind code); plan `plans/2026-11-16-deterministic-phase-checks/plan.md`
@@ -76,6 +76,10 @@ Built only after the hook contract is read in the official Claude Code documenta
 - Architecture §5 "Checks" of P1–P3 and §7.3 "Hooks" become built rows; I6 gains "phase completeness is computed by `pls check`".
 - TD-51, TD-65, TD-66 close with Part A (generated rows); TD-64 with the P2 skill change of Part B.
 - What stays with the model: understanding the customer and choosing among designs. The checks make missing pieces visible; they do not judge whether a design is good — G1 / G2 approvers still do.
+
+## As built
+
+- Part A (2026-11-16): `tools/pls/pls_impact_rules.py` holds the rules (26: 16 decided by `classify`, which now returns their ids under `rules`, and 10 design conditions); `python tools/pls/pls_impact_rules.py --write` generates `skills/pls-p2-solution-designer/references/impact-rules.md` with the KB "Do this" text of every cited row; `tools/pls/tests/test_impact_rules.py` fails when a `classify` branch has no rule or no sample, a cited KB row is missing, or the generated file is stale. `impact-checklist.md` keeps only the walk procedure; the DES impact table gains a rule column; P2 step 5 / 1b name the generated file, `pls scope` and department roles (TD-64 P2 part, TD-65 P2 part, TD-66 closed). The uncommitted D40 KB rows (TD-51) reach the designer when they are committed, through the same staleness test. **Deviation from the option text:** the 10 design conditions are written in `pls_impact_rules.py`, not as `design_condition` fields of `probes/index.json` — several name `pls` commands (`pls scope`, `pls principals`) rather than Pleasanter behaviour, and the probe index is about probes; each condition only restates its cited KB rows or the code (no pending KB observation), and the KB "Do this" text is still copied from the KB itself. `classify` also returns each rule's class, so the first release of a new site drops data rules with data items.
 
 ## Open questions
 
