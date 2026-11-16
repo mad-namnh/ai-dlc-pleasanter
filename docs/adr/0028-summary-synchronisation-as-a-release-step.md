@@ -1,6 +1,6 @@
 # ADR-0028: Summary synchronisation as a release step (`pls summaries sync`)
 
-- **Status:** Proposed (2026-11-16)
+- **Status:** Accepted (Nam: option B on 2026-11-16) — not built yet; option C until it is
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I2, I4 (`docs/architecture.md` §2); ADR-0004 (data-impacting changes — Decision 3 order), ADR-0008 (HTTP transport, write guard), ADR-0013 (run log); KB D16; settings coverage plan `plans/2026-11-15-settings-coverage/plan.md` WS4.1
@@ -31,7 +31,7 @@ Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}
 
 ## Decision
 
-*(not decided — Nam)* Recommendation: option B, built only after a probe on dev shows the request body and that the route recalculates (option C until then).
+**Option B**, accepted by Nam on 2026-11-16 (Nam's message 2026-11-16, verbatim "1a, 2 duyệt, 3B, 4B, 5 đồng ý"; "4B" answers this ADR): `pls summaries sync` is built only after a probe on dev shows the request body and that the route recalculates. Until then option C: a person runs 同期 on the screen for each added or changed summary and records it with `pls step`; `classify`'s note for a `Summaries[]` change says so instead of touching child records.
 
 ## Consequences
 

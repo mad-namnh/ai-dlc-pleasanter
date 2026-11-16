@@ -1,6 +1,6 @@
 # ADR-0027: KB probes that change their own site's settings, name principals in them, and hold disabled notifications
 
-- **Status:** Proposed (2026-11-16)
+- **Status:** Accepted (Nam: option B on 2026-11-16) — not built yet
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I5, I9 (`docs/architecture.md` §2); ADR-0009 (`kb-verify` safety), ADR-0010 (mail and jobs outside production), ADR-0023 (shapes the KB does not cover), ADR-0025 and ADR-0026 (guarded probes, several sites, `update`, group variables — this ADR amends both); settings coverage plan `plans/2026-11-15-settings-coverage/plan.md` WS3b, WS3c
@@ -36,7 +36,7 @@ Source of the routes: `Controllers/Api/ItemsController.cs` l.293 (`SynchronizeSu
 
 ## Decision
 
-*(not decided — Nam)* Recommendation: option B.
+**Option B**, accepted by Nam on 2026-11-16 (Nam's message 2026-11-16, verbatim "1a, 2 duyệt, 3B, 4B, 5 đồng ý"; "3B" answers this ADR). It amends ADR-0009's safety list, ADR-0025 (no notification or reminder at any depth → disabled ones under the rules of item 4) and ADR-0026 option B item 2 (`$group_<role>` also in probe site settings).
 
 ## Consequences
 
