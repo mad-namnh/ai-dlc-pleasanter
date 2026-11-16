@@ -89,7 +89,7 @@
 - A `fix` commit that changes `tools/pls/` carries its regression test in the same commit (`python tools/dev/check_fix_commits.py`; the suite runs the same check). A new refusal in `pls` gets a test in the same commit: `tools/pls/tests/refusals_without_a_test.txt` only gets shorter. A test for a guard that already exists cannot fail on the parent: show instead that it fails with the guard switched off in a copy under `../_agent-scratch/`.
 - Every behaviour change updates the docs it touches in the same commit: the ADR, `docs/architecture.md`, the skill text (and its version in `skills/README.md`), the project template, and the progress block below.
 - A design choice that is Nam's (architecture, scope, a reversal of an Accepted ADR) is asked with options and a recommendation before building; everything else is decided and reported.
-- Evals: one fresh subagent per case, rubric unseen (inputs never point to `expected.md` or to the standard), dry run without `pls`/network; results in `evals/results/<skill>/<date>.md` with model and skill versions.
+- Evals: one fresh subagent per run, rubric unseen (inputs never point to `expected.md` or to the standard), dry run without `pls`/network; results in `evals/results/<skill>/<date>.md` with model and skill versions. ADR-0030: k = 3 runs per case for P1, P2 and lifecycle (pass = k / k; runs do not see each other), a no-skill baseline arm only when triggered, baseline and selection runs asked of Nam per batch (and only after Nam applies the runner / brief patches), cost per run, results advisory and labelled provisional below 10 cases or without a negative scope case (`evals/README.md`).
 
 ## Design review in progress — 2026-11-09 (read this first if you resume the review)
 

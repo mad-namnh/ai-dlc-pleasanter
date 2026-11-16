@@ -7,8 +7,8 @@
 ## Steps (one commit each, each reviewed)
 
 1. **Test** (Standard): `tools/pls/tests/test_skills_hold_no_eval_data.py` fails when `skills/` holds an eval dataset, rubric or expected output (ADR-0030 Part 6). Shown failing against a planted file. Review: sonnet, medium.
-2. **Eval contract** (Critical): `evals/README.md` (repeats and run separation, baseline arm, scope / selection cases, cost, Part 5 rule, provisional label, result template); HANDOFF "How we work" evals line; ADR-0030 Status "partly built" and its README row. Review: opus, high.
-3. **Patches for protected paths** (Critical): `proposed-eval-case-brief.patch`, `proposed-eval-case-runner.patch`, `proposed-agent-rules.patch` in this folder, each with its reason at the top; Nam applies them. Review: opus, high.
+2. **Eval contract** (Critical): `evals/README.md` (repeats and run separation, baseline arm, scope / selection cases, cost, Part 5 rule, provisional label, result template); HANDOFF "How we work" evals line. Review: opus, high.
+3. **Patches for protected paths** (Critical): `proposed-eval-case-brief.patch`, `proposed-eval-case-runner.patch`, `proposed-agent-rules.patch` (§3 holding place, §4 / §5 one call per run), `proposed-dev-orchestrator-skill.patch` (step 9: one runner per run, k runs) in this folder, each with its reason at the top; Nam applies them; ADR-0030 Status "partly built" (Nam's choice) and its README row. Review: opus, high.
 
 ## Acceptance criteria
 
