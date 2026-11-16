@@ -1,6 +1,6 @@
 ---
 name: pls-p3-config-builder
-description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design into the unpacked configuration in git (config/<site>/ site.json, scripts, permissions), keeps it canonical and lint-clean, and deploys it to dev as a dev release until the round trip shows 0 differences. Use after G2, and whenever P4 sends a build defect back.
+description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design into the unpacked configuration in git (site.json, scripts and permissions of each site under config/), keeps it canonical and lint-clean, and deploys it to dev as a dev release until the round trip shows 0 differences. Use after G2, and whenever P4 sends a build defect back.
 ---
 
 # pls-p3-config-builder
