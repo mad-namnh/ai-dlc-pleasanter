@@ -1,0 +1,48 @@
+{
+  "entry": "D39",
+  "title": "Crosstab view settings (group by X/Y, aggregate type, value, time period) are stored as given on a Results site",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "NumA",
+          "NumB",
+          "DateA",
+          "ClassA"
+        ]
+      },
+      "Views": [
+        {
+          "Id": 1,
+          "Name": "crosstab monthly total",
+          "CrosstabGroupByX": "DateA",
+          "CrosstabGroupByY": "ClassA",
+          "CrosstabAggregateType": "Total",
+          "CrosstabValue": "NumA",
+          "CrosstabTimePeriod": "Monthly"
+        },
+        {
+          "Id": 2,
+          "Name": "crosstab yearly average",
+          "CrosstabGroupByX": "DateA",
+          "CrosstabGroupByY": "ClassA",
+          "CrosstabAggregateType": "Average",
+          "CrosstabValue": "NumB",
+          "CrosstabTimePeriod": "Yearly"
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Views[Id=1].CrosstabGroupByX": "DateA",
+    "Views[Id=1].CrosstabGroupByY": "ClassA",
+    "Views[Id=2].CrosstabGroupByX": "DateA",
+    "Views[Id=2].CrosstabGroupByY": "ClassA",
+    "Views[Id=2].CrosstabAggregateType": "Average",
+    "Views[Id=2].CrosstabValue": "NumB",
+    "Views[Id=2].CrosstabTimePeriod": "Yearly"
+  }
+}

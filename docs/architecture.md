@@ -96,7 +96,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 │     └─ <env>-<role>.key         # its API key (connections.json keys.<role> = file:test-users/<env>-<role>.key)
 ├─ migrations/
 │  └─ <migration>/
-│     ├─ migration.json           # site, keys, data, rollback (ADR-0004)
+│     ├─ migration.json           # site, keys, data, rollback — or nothing_to_convert + data [] (ADR-0004)
 │     ├─ dry-run.md               # log of the dry run on a copy
 │     └─ backup/                  # gitignored (I7): records exported before the conversion
 ├─ tests/
@@ -274,7 +274,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
 - **Outputs:** `releases/R-*/` (plan, diff report, checks, approvals). After an apply the folder also says who ran it and how it was confirmed (`apply-log.json`: `executed_by`, `confirmed`; the name is the run-log actor, self-asserted), what the read-back found (`plan.json` `readback_evidence`: per site the state and the sha256 of the live content and of the payload; `apply-log.json` `final_status` = the plan's status). Undoing an applied release is a new release until ADR-0015 (Proposed) is decided.
 - **Checks:** drift clean; plan contains complete SiteSettings only (I2); data-impacting changes have migration + dry-run; post-deploy smoke + round-trip export equals git.
 - **Gate:** G4.
-- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run).
+- **Data-impacting changes (ADR-0004):** a migration folder has a backup, a dry run on dev and a rollback. It runs before the configuration change, in the same release window (ADR-0004 order: backup → conversion → configuration), with `pls migrate` over HTTP (one `bulkupsert` with keys per folder; `apply` refuses until it has run). A nothing-to-convert folder (empty site, dev/stg only) has no keys, data or rollback: `pls migrate` sends nothing and checks that the key sees 0 records, and `apply` checks again. A data load (e.g. a first master load) travels the same way in a release that is not data-impacting; it goes in a release of its own, after the release that defines the site's columns (ADR-0004 Consequences).
 - **Status:** **proven on stg in slices #1–#3.** The release sequence:
   1. `release-plan` checks drift, slots and the migration gate, and orders multi-site releases by dependency.
   2. `applyRelease` / `pls apply` runs a preflight on `UpdatedTime`, applies in order and restores automatically on failure.
@@ -338,6 +338,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls principals` | P3 (after G2) | Bind the roles of `design/roles.json` to group / user ids of an environment by exact name; a name that matches several groups is refused; exit 1 while a role has no id. `--create` (dev only, not a sandbox, typed confirmation): creates the missing groups with the operator as member first (ADR-0017) | built (2026-11-05); `--create` 2026-11-11 |
 | `pls test-users` | P3 (after `pls principals`), before P4 role tests | Dev only (not a sandbox, writes allowed, typed confirmation): for each Group role of `design/roles.json`, a test user `zz_test_<project>_<role>` (random password in `.pls/test-users/`), its API key issued through the screens only on a version where KB D32 is verified (else a person issues it, exit 1), `keys.<role>` added to `.pls/connections.json` when absent (never replaced), and the user added to the role's group by read, add, write, check (ADR-0018 option C, ADR-0019 option B). `--remove` (2026-11-13, TD-24): deletes only the test users this machine proves `pls` created there (password file and a key file whose key the API accepts now — a key dies with its user), checks the lookup no longer finds them, then removes their key and password files and their own `keys.<role>`; any other user with the LoginId, and password files of roles no longer designed, are person steps. An existing user joins its group only once proven the same way. Rotation: TD-24 | built (2026-11-11; removal 2026-11-13) |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references; `unpack` refuses a `config/<site>` with uncommitted edits or new files (like `harvest`) | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
+| `pls scope [--site S]` | P2, P3 | Components of `config/<site>` without round-trip evidence (ADR-0001), read from git — what `release-plan` would refuse; exit 1 while any is found | built (2026-11-16) |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | built — the rules it reports are listed in §7.2 only |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
 | `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting | **0.4** |
@@ -348,7 +349,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 | `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package; names the KB entries not verified on that version, as `release-plan` does in its `VERSION` lines (ADR-0009) | branch `brownfield-adr` |
-| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). A probe may carry a server script or steps under a role's test-user key only with mail to a sink or disabled, the role bound to a group and its own test-user key file; afterwards, also after a failure, the site loses its script and a roles probe's grant, then is deleted — a delete is believed only when `getsite` answers 404 afterwards (ADR-0025). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
+| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). A probe may carry a server script or steps under a role's test-user key only with mail to a sink or disabled, the role bound to a group and its own test-user key file; afterwards, also after a failure, the site loses its script and a roles probe's grant, then is deleted — a delete is believed only when `getsite` answers 404 afterwards (ADR-0025). A probe may own further probe sites, update the records it created and use the group id of a declared role (ADR-0026). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
 | `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
 | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
 | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
@@ -357,7 +358,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls spec-skeleton` | onboarding, P1 | As-is 画面設計書 tables from the configuration; the LLM writes only marked places | branch |
 | `pls step` / `pls usage` | all (ADR-0013) | Step markers in the run log; LLM tokens per step from Claude Code transcripts; `usage report` warns about a session that did P1–P4 work after a G4 (one session per change request) | branch |
 | `pls jobs-verified` | P5 (ADR-0012, ADR-0020) | Record that an operator of the release's env (profile row `Operators`) or a G4 approver deployed and checked its scheduled scripts by hand; until then the next release lists them again | branch |
-| `pls profile set` | I4 (ADR-0020, ADR-0024) | Set profile rows Approvers / Operators / Origin, an environment `role`, or the standing permission `dev-writes on|off` for one dev environment (it confirms `apply` / `bootstrap` / `migrate` there instead of a typed release id) as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing; a `dev-writes` record counts only while its approver is an approver of the profile, L-PRF-01) | branch |
+| `pls profile set` | I4 (ADR-0020, ADR-0024) | Set profile rows Approvers / Operators / Origin / Role tests, an environment `role`, or the standing permission `dev-writes on|off` for one dev environment (it confirms `apply` / `bootstrap` / `migrate` there instead of a typed release id) as the person stated it; recorded under `gates/profile/`; once recorded, the recorded value is what `pls` reads (a hand edit changes nothing; a `dev-writes` record counts only while its approver is an approver of the profile, L-PRF-01) | branch |
 | `pls review as-is` | onboarding (I4, I5) | Record that a G2 approver reviewed `design/as-is/<site>.md`, bound to its sha256; only then does `DES-000-as-is-<site>.md` clear L-LAD-01 | branch |
 | `pls gate` | G1–G4 (I4) | Record a gate decision by a named approver; `apply` to stg/prod refuses without G4. A G4 approval stores the digest of each planned release (`pls_release_digest`); a release changed after G4 is refused | branch |
 
@@ -380,7 +381,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 | L-SLOT-01 | A2 | Column slots in git match the slot ledger |
 | L-LAD-01 | I5 | Server scripts / extended SQL have a design decision with a ladder reason: a `design/decisions/DES-*.md` that names the script **and** its site as whole names (a name inside a longer word, a decision about another site, or any other file under `design/` does not count). Shared server scripts are not checked (open: decide in an ADR). `design/as-is/` documents decide nothing; `DES-000-as-is-<site>.md` counts only for scripts named in a reviewed, unchanged as-is document (`pls review as-is`) |
 | L-CAN-01 | D8 | Configuration is in Pleasanter's canonical form |
-| L-PERM-01 | D15, ADR-0006, ADR-0023 | `permissions.json`, process access control and mail addresses of notifications / reminders (`[${principal:x}]`) use only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
+| L-PERM-01 | D15, ADR-0006, ADR-0023 | `permissions.json`, the access lists (`Groups` / `Users` / `Depts`) of processes, views, exports, dashboard parts, status controls and column access controls, the site lists (`MoveTargets`, `IntegratedSites`, dashboard `*Sites` — a site name is kept), and mail addresses of notifications / reminders (`[${principal:x}]`) use only `${site:x}` / `${principal:x}` — no environment-specific IDs (also refused by `pack`) |
 | L-SCR-02 | BR7 | Server and client scripts compile (node, nothing is run) |
 | L-MAIL-01 | ADR-0010 | No literal mail address in notifications or reminders |
 | L-ENV-01 | `docs/setup.md` | Environment setup is finished: no principal id left as a `<…>` placeholder, no `parent_id` of 0 |
@@ -390,7 +391,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 | L-MRG-01 | ADR-0011 | No unresolved semantic-merge conflict in `site.json` |
 | L-PRC-01 | D21 | Every process has a `View` object (none → API 500, record screen fails) |
 | L-GATE-01 | I4 | A gate status written in a REQ, DES or G3 record has a matching `pls gate` record by an approver of the profile; a damaged gate record is reported here |
-| L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
+| L-PRF-01 | I4 | Profile rows Approvers / Operators / Origin / Role tests and environment roles (`stg`, `prod`) have a `pls profile set` record, and the files still show the recorded value |
 
 **Checks made by other commands — never in the output of `pls lint`** (not checked by the test):
 
@@ -398,7 +399,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 |---|---|---|
 | L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
-| P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`) |
+| P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`); a folder given for any other release (a data load) gets the same checks and is kept in the plan |
 
 ### 7.3 AI assets (framework templates, installed into project repos)
 

@@ -27,7 +27,7 @@ Every entry here was **observed on a real environment** (version and evidence gi
 ## Facts to remember
 
 1. `updatesite` **replaces SiteSettings entirely**. Anything missing from the payload is deleted. Always send the complete configuration. *(1.5.2, D4)*
-2. Pleasanter **canonicalises configuration on save**: it adds default fields and drops default-valued ones. Git must hold the canonical form (`pls canon`, or deploy to dev → export → unpack). *(1.5.2, D8)*
+2. Pleasanter **canonicalises configuration on save**: it adds default fields and drops default-valued ones. Git must hold the canonical form (`pls canon`, or deploy to dev → export → unpack). `pls canon` applies default rules only to `Processes[]` and `Views[]` items (`tools/pls/canonical-defaults.json`), so never write a default-valued top-level switch into git by hand — Pleasanter drops it on save and the next export differs from git. *(1.5.2, D8, D43–D47)*
 3. Site packages (`copysitepackage`) remap SiteIds in structured fields (`ChoicesText [[id]]`, `Links`, `Summaries`) but **not inside script bodies**. *(1.5.2, D3, D6)*
 4. Never hard-code SiteIds in scripts — use `${site:<logical-name>}` and let `pls pack` resolve them per environment. *(D3)*
 5. A **shared** server script must not declare top-level `const`/`let`; use `var`. Otherwise every record save fails with `ServerScriptExecutionFailed`. *(1.5.2, D7)*

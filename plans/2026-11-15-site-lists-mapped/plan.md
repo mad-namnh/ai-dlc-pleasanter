@@ -1,0 +1,6 @@
+# Plan — site ids in site lists (settings coverage WS1.2–1.4)
+
+- **Tier:** Critical (environment mapping, pack refusal).
+- **Source:** plans/2026-11-15-settings-coverage/ inventory A; source Pleasanter_1.5.2.0: SiteSettings.MoveTargets (List<long>), IntegratedSites (List<string>, ids or SiteName / SiteGroupName — GetIntegratedSites), DashboardPart TimeLineSites / CalendarSites / IndexSites / KambanSites (comma text, ids or names — GetDashboardPartSites), *SitesData, QuickAccessSites (JSON [{Id}] or comma / line text — SetQuickAccessSitesData). WS1.2: RecordUsers holds column names (ColumnAccessControl.cs l.109) — no mapping.
+- **Change:** new module tools/pls/pls_site_lists.py (to_refs / from_refs / raw_ids); pls.py calls it in logical(), payload() (before the generic from_refs; MoveTargets back to integers) and lint (L-PERM-01). A whole all-digit element is a site id; a name is kept; an unknown id stays raw → lint + pack refusal.
+- **Acceptance:** (1) ids → ${site:x}, names and layout kept; (2) payload resolves per environment, MoveTargets as integers; (3) unknown id → L-PERM-01 and pack refusal; (4) new test fails on the parent; (5) suites green incl. 3.10; (6) review no open Critical/High.

@@ -1,0 +1,46 @@
+{
+  "entry": "D47",
+  "title": "Import, export, public-form and mail-default settings of SiteSettings are stored as sent (stored-shape probe; behaviour on the screen is not checked)",
+  "source": "Pleasanter_1.5.2.0 SiteSettings.RecordingData (Libraries/Settings/SiteSettings.cs l.762-1908) and the shipped App_Data/Parameters (General.json, Search.json, Mobile.json, Dashboard.json), read 2026-11-16",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "AllowStandardExport": false,
+      "StandardExportType": 2,
+      "ImportEncoding": "UTF-8",
+      "UpdatableImport": true,
+      "DefaultImportKey": "Title",
+      "RejectNullImport": true,
+      "AllowMigrationMode": true,
+      "FormStartDateTime": "2030-01-01T00:00:00",
+      "FormEndDateTime": "2030-12-31T00:00:00",
+      "FormUnavailableMessage": "zz受付期間外",
+      "FormThanksMessage": "zz送信しました",
+      "AddressBook": "zz-probe@example.invalid",
+      "MailToDefault": "zz-to@example.invalid",
+      "MailCcDefault": "zz-cc@example.invalid",
+      "MailBccDefault": "zz-bcc@example.invalid"
+    }
+  },
+  "expect_save": 200,
+  "expect_stored": {
+    "AllowStandardExport": false,
+    "StandardExportType": 2,
+    "ImportEncoding": "UTF-8",
+    "UpdatableImport": true,
+    "DefaultImportKey": "Title",
+    "RejectNullImport": true,
+    "AllowMigrationMode": true,
+    "FormStartDateTime": "2030-01-01T00:00:00",
+    "FormEndDateTime": "2030-12-31T00:00:00",
+    "FormUnavailableMessage": "zz受付期間外",
+    "FormThanksMessage": "zz送信しました",
+    "AddressBook": "zz-probe@example.invalid",
+    "MailToDefault": "zz-to@example.invalid",
+    "MailCcDefault": "zz-cc@example.invalid",
+    "MailBccDefault": "zz-bcc@example.invalid"
+  },
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

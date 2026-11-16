@@ -1,6 +1,6 @@
 # ADR-0004: Data-impacting changes and a dedicated gate
 
-- **Status:** Accepted (2026-11-05) — Option A; Option B when a customer-side runner exists
+- **Status:** Accepted (2026-11-05) — Option A; Option B when a customer-side runner exists. Amended 2026-11-15 (nothing to convert)
 - **Date:** 2026-11-04
 - **Related:** review-findings A1, D4, ADR-0001, ADR-0002
 
@@ -16,8 +16,10 @@ Spike round 1: omitting a column definition in an `updatesite` payload removes t
 - [x] Removing a choice / status in use — value stays on the record; the edit screen offers it as an orphan option (D12).
 - [x] Bulk upsert — works with `Keys` (update matched, create others, D13). API updates create **no record versions** (D14) → a backup is the only way back.
 - [ ] Effect of formula / display-type / validation changes on stored values — *later probe, when a slice needs it*
+- [ ] Multiple selection and choice control (settings coverage WS3b): is a multi-select value stored as a JSON array, and what does a save through radio buttons store on a multi-select column? `classify` treats both changes as data-impacting until a probe shows it (source-derived, 2026-11-16)
 - [ ] Bulk upsert volume limits and performance — *first real migration*
 - [ ] Does the customer require a DB backup before such changes? — *Customer IT (TD-02)*
+- [ ] Does an administrator / site-manager key see every record of a site through the items API `get` (record permissions, default view filters)? The nothing-to-convert check counts what the key sees — *kb-verify probe (TD-53)*
 
 ## Proposed classification
 
@@ -48,7 +50,9 @@ Probes changed the meaning of "data-impacting": on 1.5.2 configuration changes d
    - `migration.json` — `site`, `keys` (business identifier columns for `bulkupsert`), the conversion (mapping or data), `rollback`; `pls migrate` sends only explicit `data` (the result of a mapping, as checked in the dry run) and, with `--rollback`, only `rollback.data` that a person prepared from `backup/`;
    - `backup/` — every record of the affected site exported **before** the change (`pls backup` over HTTP; needed because of D14);
    - `dry-run.md` — log of the conversion run on a copy of the site with a copy of the data.
-3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup. Enforced by `pls migrate` (HTTP, guarded like `apply`; each run recorded in `plan.json` `migrations_run` before the call, `uncertain` when no answer arrives) and by `apply`, which refuses a release whose migrations have not run. Open question: whether records read back by `get` (with ids, timestamps) can be sent to `bulkupsert` unchanged on 1.5.x is not verified, so pls does not build a rollback from `backup/` itself.
+
+   **Nothing to convert.** When the affected site holds no records, `migration.json` may say `"nothing_to_convert": true` with `"data": []` instead of `keys`, the conversion and `rollback` (an explicit flag; empty data alone is still refused). `backup/` and `dry-run.md` stay required as for any migration. The folder's `site` must be a site of the release with a data-impacting change. It is not allowed for production: `pls package` and a plan for a `role: prod` environment refuse it, because its check runs only through `pls migrate` and `pls apply`. `pls migrate` sends nothing: it reads the site live and records the folder as migrated only when the operator's key sees 0 records there (the API lists only records the key may read — KB D36), otherwise it refuses. `pls apply` reads each such site again after the confirmation, right before the first configuration write, and refuses the whole release, writing nothing, if any record is visible by then; a record created after that read and before `updatesite` is not caught (Pleasanter has no conditional write). `--rollback` skips such a folder (it sent nothing) and rolls back the others.
+3. Order at release time: backup → conversion (`bulkupsert`) → configuration change → verification; rollback = configuration rollback + `bulkupsert` of the backup. Enforced by `pls migrate` (HTTP, guarded like `apply`; each run recorded in `plan.json` `migrations_run` before the call, `uncertain` when no answer arrives) and by `apply`, which refuses a release whose migrations have not run. Open question: whether records read back by `get` (with ids, timestamps) can be sent to `bulkupsert` unchanged on 1.5.x is not verified, so pls does not build a rollback from `backup/` itself. For a nothing-to-convert folder the conversion step is the live emptiness check, repeated by `apply`.
 4. The slot ledger never re-allocates a slot that held data (D12 makes old values resurface).
 5. Business approver on the customer side signs the migration at G4.
 
@@ -56,3 +60,6 @@ Probes changed the meaning of "data-impacting": on 1.5.2 configuration changes d
 
 - The CLI needs a change-classification command, run in CI, with the result shown in the diff report.
 - Each data-impacting change has a migration folder: script, dry-run log, rollback.
+- As built (2026-11-15, settings coverage `plans/2026-11-15-settings-coverage/`): Pleasanter 1.5.2 records calculations in `SiteSettings.Formulas[]`, not in a column, so Decision 1's "formula changed" covers `Formulas[]` added / changed / removed (data-impacting; whether existing records are recomputed is source-derived only — the screen has 同期 / `SynchronizeFormulas`, no API route). Permission-impacting also covers `StatusControls[]` and the `Groups` / `Users` / `Depts` access lists of views, exports and dashboard parts.
+- As built (2026-11-16, settings coverage WS2.3): `Columns[x].MultipleSelections` switched on, off, added or removed is data-impacting — a multi-select column's stored values are read as a JSON array of choices and a single-select one's as the value itself (Pleasanter_1.5.2.0 `ToExportExtensions.cs`, `ToDisplayExtensions.cs`; source-derived, not probed). An explicit `false` added or removed changes nothing (Pleasanter records only `true`) and stays config-only. `ChoicesControlType` (drop-down or radio buttons) changed is data-impacting too, not verified: radio buttons ignore multiple selection and show a stored JSON array as nothing selected (`HtmlFields.cs`, `HtmlControls.cs`), and the save path was not read. A whole column definition added is classified like any added column; reuse of a slot that already holds data is the slot ledger's concern, not `classify`'s.
+- As built (2026-11-15, from the store-promo trial: a first master load was dropped from a config-only plan): a `--migration` folder given for a release that is **not** data-impacting — a data load such as a first master load — gets the same folder checks, is kept in `plan.json` and gets the same order (`pls migrate` before `apply`, `apply` refuses until it has run). Because the load runs before the configuration, it goes in a release of its own, **after** the release that defines the site's columns and keys: how `bulkupsert` behaves on columns or keys the site does not define yet is not verified on 1.5.x. The P5 skill text does not say this yet (tech debt).

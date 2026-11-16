@@ -46,9 +46,10 @@ class Fake:
             self.groups.append({"GroupId": self.next_id, "GroupName": body["GroupName"]})
             self.group_bodies.append(body)
             return 200, {"Id": self.next_id, "StatusCode": 200, "Message": "created"}
-        if path in ("/api/groups/get", "/api/users/get"):
+        if path in ("/api/groups/get", "/api/users/get", "/api/depts/get"):
             col = (body.get("View") or {}).get("ColumnFilterHash") or {}
-            rows = list(self.groups) if "groups" in path else [{"UserId": 7, "LoginId": "nam"}]
+            rows = (list(self.groups) if "groups" in path else list(getattr(self, "depts", [])) if "depts" in path
+                    else [{"UserId": 7, "LoginId": "nam"}])
             rows = [r_ for r_ in rows if all(str(v) in str(r_.get(k)) for k, v in col.items())]   # like-match, as Pleasanter
             return 200, {"Response": {"Data": rows, "TotalCount": len(rows)}}
         parts = path.strip("/").split("/")          # api items {id} {action}
@@ -99,6 +100,8 @@ class Fake:
                                         "ParentId": iid, "UpdatedTime": "t0", "SiteSettings": {}}
             return 200, {"Id": self.next_id}
         if act == "create":
+            if getattr(self, "create_answer", None):       # e.g. a server script refusing the create
+                return self.create_answer(iid)
             if who == "staff":
                 return (404 if iid == LO else 403), {"Message": "この操作を行うための権限がありません。"}
             self.next_id += 1
@@ -113,6 +116,8 @@ class Fake:
             rec = self.records.get(iid)
             if not rec or (who == "staff" and rec["site"] == LO):
                 return 404, {}
+            if getattr(self, "empty_get", False):           # HTTP 200 with an empty Data list
+                return 200, {"Response": {"Data": []}}
             return 200, {"Response": {"Data": [rec]}}
         if act == "delete":
             rec = self.records.get(iid)
@@ -333,6 +338,32 @@ class HttpTest(unittest.TestCase):
         (self.r / "s.json").write_text(json.dumps([{"id": "T-1", "steps": [{"op": "create", "site": "${site:equipment}", "save": "e", "data": {}}]}]), encoding="utf-8")
         self.assertEqual(pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "x.json"]), 2)
         self.assertEqual(self.fake.records, {})
+
+    def test_get_without_a_record_is_a_step_error_not_a_crash(self):
+        # 1.5.2.0 answered a get with HTTP 200 and an empty Data list; the run must still write its result file
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-G", "steps": [
+            {"op": "create", "site": "${site:equipment}", "save": "e", "data": {}},
+            {"op": "get", "record": "$e", "expect": {"Status": 100}}]}]), encoding="utf-8")
+        self.fake.empty_get = True
+        pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "g.json"])
+        res = json.loads((self.r / "g.json").read_text(encoding="utf-8"))
+        self.assertEqual(res["tests"][0]["status"], "error", res)
+        self.assertTrue(any("no record returned" in line for line in res["tests"][0]["log"]), res)
+
+    def test_a_refused_create_is_never_saved_as_a_record(self):
+        # a refused create answered with the site's own id (or without HTTP 200) fails; nothing later acts on that id
+        for answer in (lambda iid: (200, {"Id": iid}), lambda iid: (500, {"Id": 99, "Message": "refused"})):
+            with self.subTest(answer=answer):
+                (self.r / "s.json").write_text(json.dumps([{"id": "T-C", "steps": [
+                    {"op": "create", "site": "${site:equipment}", "save": "e", "data": {}},
+                    {"op": "delete", "record": "$e"}]}]), encoding="utf-8")
+                self.fake.create_answer = answer
+                n = len(self.fake.calls)
+                pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "c.json"])
+                res = json.loads((self.r / "c.json").read_text(encoding="utf-8"))
+                self.assertEqual(res["tests"][0]["status"], "error", res)
+                self.assertTrue(any("create failed" in line for line in res["tests"][0]["log"]), res)
+                self.assertFalse([p for p, _ in self.fake.calls[n:] if p.endswith("/delete")])
 
     def test_unfilled_fixture_is_refused_before_sending(self):          # TD-14c
         (self.r / "s.json").write_text(json.dumps([{"id": "T-2", "vars": {"e": "<item>"}, "steps": [

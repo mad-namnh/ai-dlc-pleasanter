@@ -1,0 +1,56 @@
+{
+  "entry": "D43",
+  "title": "Editor and record-screen switches of SiteSettings are stored as sent (stored-shape probe; behaviour on the screen is not checked)",
+  "source": "Pleasanter_1.5.2.0 SiteSettings.RecordingData (Libraries/Settings/SiteSettings.cs l.762-1908) and the shipped App_Data/Parameters (General.json, Search.json, Mobile.json, Dashboard.json), read 2026-11-16",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "SwitchRecordWithAjax": true,
+      "SwitchCommandButtonsAutoPostBack": true,
+      "AutoVerUpType": 2,
+      "AfterCreateActionType": 1,
+      "AfterUpdateActionType": 2,
+      "AllowEditingComments": true,
+      "AllowCopy": false,
+      "AllowReferenceCopy": true,
+      "CharToAddWhenCopying": " (zz copy)",
+      "AllowSeparate": true,
+      "AllowLockTable": true,
+      "OpenEditInNewTab": true,
+      "DeleteImageWhenDeleting": false,
+      "GuideAllowExpand": true,
+      "GuideExpand": "0",
+      "Responsive": false,
+      "HideLink": true,
+      "DisableLinkToEdit": true,
+      "EnableExpandLinkPath": true,
+      "GeneralTabLabelText": "zz基本"
+    }
+  },
+  "expect_save": 200,
+  "expect_stored": {
+    "SwitchRecordWithAjax": true,
+    "SwitchCommandButtonsAutoPostBack": true,
+    "AutoVerUpType": 2,
+    "AfterCreateActionType": 1,
+    "AfterUpdateActionType": 2,
+    "AllowEditingComments": true,
+    "AllowCopy": false,
+    "AllowReferenceCopy": true,
+    "CharToAddWhenCopying": " (zz copy)",
+    "AllowSeparate": true,
+    "AllowLockTable": true,
+    "OpenEditInNewTab": true,
+    "DeleteImageWhenDeleting": false,
+    "GuideAllowExpand": true,
+    "GuideExpand": "0",
+    "Responsive": false,
+    "HideLink": true,
+    "DisableLinkToEdit": true,
+    "EnableExpandLinkPath": true,
+    "GeneralTabLabelText": "zz基本"
+  },
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

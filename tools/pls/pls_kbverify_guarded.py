@@ -25,6 +25,9 @@ Guards, all checked by pls (Nam's decision of 2026-11-12, "Both, guarded"):
   Pleasanter_1.5.2.0 — not yet observed on a server) and believes it only when `getsite` no longer finds the site.
   It deletes only a site that `getsite` shows to be this probe's own just before (folder, title, type, not an app
   site). A site that is not gone stays harmless (previous point) and the probe is `error`; the next run reuses it.
+- a guarded probe with further probe sites (`sites`, ADR-0026) declares a teardown for each; every one of its sites
+  gets the roles' grant while it runs and the same end (teardown without script, grant removed, deleted);
+  `$group_<role>` in step data is the group id of a declared, bound role.
 """
 from __future__ import annotations
 
@@ -85,6 +88,12 @@ def check(p: dict) -> None:
             raise ValueError("a probe with a server script or roles needs a teardown that leaves the site harmless")
         if "ServerScripts" in td:
             raise ValueError("the teardown must not contain ServerScripts")
+        for key, s in (p.get("sites") or {}).items():          # every further site ends like the main one (ADR-0026)
+            td = ((s.get("teardown") if isinstance(s, dict) else None) or {}).get("SiteSettings")
+            if not isinstance(td, dict):
+                raise ValueError(f"sites.{key}: a probe with a server script or roles needs a teardown for every site")
+            if "ServerScripts" in td:
+                raise ValueError(f"sites.{key}: the teardown must not contain ServerScripts")
 
 
 def not_runnable(p: dict, env: str, env_conf: dict, conn: dict, conn_dir: Path) -> str | None:

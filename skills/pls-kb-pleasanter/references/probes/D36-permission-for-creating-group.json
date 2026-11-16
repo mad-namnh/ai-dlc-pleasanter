@@ -1,0 +1,119 @@
+{
+  "entry": "D36",
+  "title": "PermissionForCreating Group 15: a user with site permission Create (2) lists and updates the record it created and does not list another Create-only role's record; Read + Update (5) and Read (1) list both, Read's update is refused (one test user per role: per creator, not group-wide)",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "PermissionForCreating": {
+        "Group": 15
+      }
+    }
+  },
+  "roles": {
+    "store_a01": 2,
+    "store_a02": 2,
+    "promo": 5,
+    "accounting": 1
+  },
+  "expect_stored": {
+    "PermissionForCreating.Group": 15
+  },
+  "tests": [
+    {
+      "id": "D36",
+      "steps": [
+        {
+          "op": "create",
+          "as_key": "store_a01",
+          "save": "rA",
+          "data": {
+            "Title": "kbprobe D36 rA",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "create",
+          "as_key": "store_a02",
+          "save": "rB",
+          "data": {
+            "Title": "kbprobe D36 rB",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "list",
+          "as_key": "store_a01",
+          "contains": [
+            "$rA"
+          ],
+          "excludes": [
+            "$rB"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "store_a02",
+          "contains": [
+            "$rB"
+          ],
+          "excludes": [
+            "$rA"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "promo",
+          "contains": [
+            "$rA",
+            "$rB"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "accounting",
+          "contains": [
+            "$rA",
+            "$rB"
+          ]
+        },
+        {
+          "op": "update",
+          "as_key": "store_a01",
+          "record": "$rA",
+          "data": {
+            "Title": "kbprobe D36 rA edited"
+          }
+        },
+        {
+          "op": "update",
+          "as_key": "accounting",
+          "record": "$rA",
+          "data": {
+            "Title": "kbprobe D36 rA edit refused"
+          },
+          "expectHttp": 403
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

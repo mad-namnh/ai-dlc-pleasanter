@@ -1,0 +1,111 @@
+{
+  "entry": "D36",
+  "title": "PermissionForCreating with a group column key (ClassD [[Groups*]]) gives the record permission to the group stored in that column: a Create-only user lists and updates a record the administrator created naming its group, not the record naming another group",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n900,完了,完,status-closed"
+        },
+        {
+          "ColumnName": "ClassD",
+          "ChoicesText": "[[Groups*]]"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime",
+          "ClassD"
+        ]
+      },
+      "PermissionForCreating": {
+        "ClassD": 15
+      }
+    }
+  },
+  "roles": {
+    "store_a01": 2,
+    "store_a02": 2,
+    "accounting": 1
+  },
+  "expect_stored": {
+    "PermissionForCreating.ClassD": 15,
+    "Columns[ColumnName=ClassD].ChoicesText": "[[Groups*]]"
+  },
+  "tests": [
+    {
+      "id": "D36-column",
+      "steps": [
+        {
+          "op": "create",
+          "save": "rA",
+          "data": {
+            "Title": "kbprobe D36 col rA",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow",
+            "ClassHash": {
+              "ClassD": "$group_store_a01"
+            }
+          }
+        },
+        {
+          "op": "create",
+          "save": "rB",
+          "data": {
+            "Title": "kbprobe D36 col rB",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow",
+            "ClassHash": {
+              "ClassD": "$group_store_a02"
+            }
+          }
+        },
+        {
+          "op": "list",
+          "as_key": "store_a01",
+          "contains": [
+            "$rA"
+          ],
+          "excludes": [
+            "$rB"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "store_a02",
+          "contains": [
+            "$rB"
+          ],
+          "excludes": [
+            "$rA"
+          ]
+        },
+        {
+          "op": "list",
+          "as_key": "accounting",
+          "contains": [
+            "$rA",
+            "$rB"
+          ]
+        },
+        {
+          "op": "update",
+          "as_key": "store_a01",
+          "record": "$rA",
+          "data": {
+            "Title": "kbprobe D36 col rA edited"
+          }
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

@@ -44,6 +44,18 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -70,6 +82,18 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -155,6 +179,18 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -187,6 +223,18 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -223,6 +271,18 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -243,6 +303,18 @@
         {
           "version": "1.5.2",
           "date": "2026-11-12",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
           "env": "MADLAB dev",
           "result": "pass"
         }
@@ -274,6 +346,18 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
     },
@@ -302,8 +386,263 @@
           "date": "2026-11-12",
           "env": "MADLAB dev",
           "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
         }
       ]
+    },
+    "D36": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D36-permission-for-creating-child-site",
+        "D36-permission-for-creating-group",
+        "D36-permission-for-creating-group-column"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ]
+    },
+    "D37": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D37-process-validate-inputs-required-api"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ]
+    },
+    "D38": {
+      "verified_on": [],
+      "probes": []
+    },
+    "D39": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D39-crosstab-view-settings"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ]
+    },
+    "D40": {
+      "verified_on": [],
+      "probes": [
+        "D40-link-lookup-copy"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "fail"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "fail"
+        }
+      ],
+      "note": "The probe (API create) failed on 1.5.2: the lookup did not copy (NumB 0, expected 1000); cause open (H1 in the entry, not told apart). The screen part of the entry was observed on the screen by a person on 1.5.2 (2026-11-14/15, administrator account (stated by the person, 2026-11-15); not a probe run; not verified in the sense of ADR-0023): with the link typed and saved on the screen and AutoPostBack on the link column the lookup filled the field; the stored value after save was not observed; no screen lookup was observed on settings written through updatesite, and AutoPostBack written through updatesite was not tried. verified_on stays empty: the probed API behaviour fails and the screen part is a person's observation, not a probe run."
+    },
+    "D41": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D41-formula-multiply"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ],
+      "note": "The kb-verify report of 2026-11-14 lists D41 as fail because it filed probe D41-formula-after-lookup under D41 then; that probe now belongs to D41a (entry split). D41's own probe, D41-formula-multiply, passed."
+    },
+    "D41a": {
+      "verified_on": [],
+      "probes": [
+        "D41-formula-after-lookup"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "fail"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "fail"
+        }
+      ],
+      "note": "Failed because the lookup (D40) did not copy (NumB 0, so NumC 0): not established, not shown wrong."
+    },
+    "D42": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D42-status-control-column-readonly-api",
+        "D42-status-control-readonly-record"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-14",
+          "env": "MADLAB dev",
+          "result": "pass"
+        },
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ]
+    },
+    "D43": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D43-site-scalars-editor"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ],
+      "note": "Stored shape only: the 20 keys were read back as sent after updatesite; their effect on the screen was not checked."
+    },
+    "D44": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D44-site-scalars-grid-filters"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ],
+      "note": "Stored shape only: the 27 keys were read back as sent after updatesite; their effect on the screen was not checked."
+    },
+    "D45": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D45-site-scalars-view-modes"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ],
+      "note": "Stored shape only: the 14 keys were read back as sent after updatesite; their effect on the screen was not checked."
+    },
+    "D46": {
+      "verified_on": [],
+      "probes": [
+        "D46-site-scalars-formulas-code"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "fail"
+        }
+      ],
+      "note": "The probe failed on 1.5.2 for one key: DashboardPartsAsynchronousLoading sent true was read back null (not stored); cause not established (source: recorded only when it differs from the server parameter Dashboard.AsynchronousLoadingDefault; the dev server's value was not read). The other 9 keys were read back as sent (stored shape only). verified_on stays empty, as for D40 and D41a: an entry whose probe run failed is not listed as verified on that version; the 9 keys are verified only as stated in the entry."
+    },
+    "D47": {
+      "verified_on": [
+        "1.5.2"
+      ],
+      "probes": [
+        "D47-site-scalars-import-export-form-mail"
+      ],
+      "probe_runs": [
+        {
+          "version": "1.5.2",
+          "date": "2026-11-16",
+          "env": "MADLAB dev",
+          "result": "pass"
+        }
+      ],
+      "note": "Stored shape only: the 15 keys were read back as sent after updatesite; their effect on the screen and on mail was not checked."
     }
   }
 }

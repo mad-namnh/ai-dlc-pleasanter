@@ -2,9 +2,12 @@
 ADR-0014 TB-7) — write guard, G4 bound to the migration folder on non-dev, mail / job checks, typed confirmation,
 a record before the call, no re-run of a migrated or uncertain folder, and apply only after the migration.
 Fake Pleasanter on 127.0.0.1 only."""
+import contextlib
+import io
 import json
 import re
 import unittest
+from unittest import mock
 
 import pls
 import pls_gate as GT
@@ -129,6 +132,143 @@ class MigrateTest(unittest.TestCase):
         GT.record(self.r, "G4", "approved", "Nam", "G4 approved again after seeing the new data", [], [R], "2026-11-08")
         self.assertEqual(pls.main(["migrate", R, "--yes"]), 0)
         self.assertEqual(len(self.bulk(n)), 1)
+
+    def test_nothing_to_convert_on_an_empty_site_sends_nothing_and_lets_apply_run(self):
+        # a data-impacting setting change (e.g. a renamed status) on a site that holds no record yet
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        self.assertEqual(pls.migration_problems(self.r, [MIG]), [])
+        self.fake.records.clear()                                                  # the site is empty
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 0)
+        self.assertEqual(self.writes(n), [])                                       # read only
+        self.assertEqual(pls.main(["migrate", "R-1", "--rollback", "--yes"]), 2)   # nothing sent → nothing to roll back
+        run = self.plan_json()["migrations_run"]
+        self.assertEqual([(x["status"], x["records"]) for x in run], [("migrated", 0)])
+        self.assertEqual((run[0]["nothing_to_convert"], run[0]["records_read"]), (True, 0))   # apply re-reads from this
+        pls.main(["apply", "R-1", "--yes"])
+        self.assertTrue([p for p in self.writes(n) if p.endswith("/updatesite")])
+
+    def test_apply_refuses_when_a_record_appeared_after_a_nothing_to_convert_migration(self):
+        # the emptiness read by migrate can go stale before apply: apply reads the site again and writes nothing
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        self.fake.records.clear()
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 0)
+        self.fake.records[2] = {"site": TH.EQ, "ResultId": 2, "ClassA": "E-2", "ClassB": "new"}   # created in between
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 2)
+        self.assertEqual(self.writes(n), [])
+        self.assertEqual(self.plan_json()["status"], "planned")
+
+    def ntc_migrated(self):
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        self.fake.records.clear()
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 0)
+
+    def test_apply_refuses_when_the_checked_site_is_not_in_the_release(self):
+        self.ntc_migrated()
+        p = self.r / "releases/R-1/plan.json"
+        plan = self.plan_json()
+        plan["migrations_run"][-1]["site"] = "elsewhere"
+        p.write_text(json.dumps(plan), encoding="utf-8")
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 2)
+        self.assertEqual(self.writes(n), [])
+
+    def test_apply_refuses_when_the_re_check_cannot_read_the_site(self):
+        self.ntc_migrated()
+        n = len(self.fake.calls)
+        with mock.patch.object(H.Client, "backup_records", side_effect=H.TransportError("HTTP 500")):
+            self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 2)
+        self.assertEqual(self.writes(n), [])
+        self.assertEqual(self.plan_json()["status"], "planned")
+
+    def test_a_failed_or_unfinished_emptiness_read_may_run_again(self):
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        self.fake.records.clear()
+        with mock.patch.object(H.Client, "backup_records", side_effect=H.TransportError("HTTP 500")):
+            self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 1)
+        self.assertEqual(self.plan_json()["migrations_run"][-1]["status"], "failed")
+        p = self.r / "releases/R-1/plan.json"                                     # a crash after the record, before the read
+        plan = self.plan_json()
+        plan["migrations_run"][-1].update(status="migrating")
+        p.write_text(json.dumps(plan), encoding="utf-8")
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 0)                 # nothing was sent: no dead end
+        self.assertEqual(self.plan_json()["migrations_run"][-1]["status"], "migrated")
+
+    def two_folders(self, bom=False):
+        self.plan()
+        self.migration()                                                           # m1 sends data to equipment
+        d2 = self.r / "migrations/m2"
+        (d2 / "backup").mkdir(parents=True)
+        (d2 / "backup/records.json").write_text(json.dumps({"records": []}), encoding="utf-8")
+        (d2 / "dry-run.md").write_text("loans holds no record: nothing to convert\n", encoding="utf-8")
+        (d2 / "migration.json").write_text(("\ufeff" if bom else "") + json.dumps({"site": "loans", "nothing_to_convert": True,
+                                                                                    "data": []}), encoding="utf-8")
+        p = self.r / "releases/R-1/plan.json"
+        plan = self.plan_json()
+        plan["migration"] = [MIG, "migrations/m2"]
+        p.write_text(json.dumps(plan), encoding="utf-8")
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 0)
+
+    def test_rollback_skips_a_nothing_to_convert_folder_and_rolls_back_the_others(self):
+        for bom in (False, True):
+            with self.subTest(bom=bom):
+                self.tearDown()
+                self.setUp()
+                self.two_folders(bom)
+                n = len(self.fake.calls)
+                self.assertEqual(pls.main(["migrate", "R-1", "--rollback", "--yes"]), 0)
+                self.assertEqual(len(self.bulk(n)), 1)                            # m1's rollback data only
+                self.assertEqual([(x["dir"], x["direction"]) for x in self.plan_json()["migrations_run"]][-1], (MIG, "rollback"))
+
+    def test_rollback_follows_what_the_forward_run_did_not_the_folder_today(self):
+        self.two_folders()
+        (self.r / MIG / "migration.json").write_text(json.dumps({"site": "equipment", "nothing_to_convert": True, "data": []}),
+                                                     encoding="utf-8")            # m1 sent data, then was edited
+        n = len(self.fake.calls)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(pls.main(["migrate", "R-1", "--rollback", "--yes"]), 2)  # never skipped silently
+        self.assertIn(f"{MIG}: a nothing-to-convert migration sent no data", err.getvalue())
+        self.assertEqual(self.bulk(n), [])
+
+    def test_loading_a_nothing_to_convert_folder_for_rollback_is_refused(self):
+        # migrate --rollback skips such folders before loading them; load itself still refuses (defence in depth)
+        import pls_migrate as MI
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        with self.assertRaisesRegex(MI.MigrateError, "nothing to roll back"):
+            MI.load(self.r, MIG, True)
+
+    def test_a_nothing_to_convert_folder_still_needs_its_backup_and_dry_run(self):
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])
+        (self.r / MIG / "migration.json").write_text(json.dumps({"site": "equipment", "nothing_to_convert": True, "data": []}),
+                                                     encoding="utf-8")                    # no keys, no rollback
+        self.assertEqual(pls.migration_problems(self.r, [MIG]), [])
+        (self.r / MIG / "dry-run.md").unlink()
+        self.assertEqual(pls.migration_problems(self.r, [MIG]), [f"{MIG}/dry-run.md is missing"])
+
+    def test_nothing_to_convert_is_refused_when_the_site_holds_records(self):
+        self.plan()
+        self.migration(nothing_to_convert=True, data=[])                          # the fake site holds one record
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 1)
+        self.assertEqual(self.writes(n), [])
+        self.assertEqual(self.plan_json()["migrations_run"][-1]["status"], "failed")
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 2)                  # ADR-0004 order still holds
+        self.assertEqual(self.writes(n), [])
+
+    def test_empty_data_without_the_explicit_flag_is_still_refused(self):
+        self.plan()
+        self.migration(data=[])
+        n = len(self.fake.calls)
+        self.assertEqual(pls.main(["migrate", "R-1", "--yes"]), 2)
+        self.assertEqual(self.writes(n), [])
 
 
 class OutcomeTest(unittest.TestCase):

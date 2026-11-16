@@ -1,0 +1,78 @@
+{
+  "entry": "D37",
+  "title": "API process execution ignores ValidateInputs Required: the process runs (HTTP 200) with the required column empty",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n150,差戻し,差,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime",
+          "DescriptionB"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "sendback",
+          "DisplayName": "差戻し",
+          "CurrentStatus": 100,
+          "ChangedStatus": 150,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          },
+          "ValidateInputs": [
+            {
+              "Id": 1,
+              "ColumnName": "DescriptionB",
+              "Required": true
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Processes[Id=1].ValidateInputs.0.Required": true
+  },
+  "tests": [
+    {
+      "id": "D37",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D37",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "sendback",
+          "expectHttp": 200
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 150
+          }
+        }
+      ]
+    }
+  ]
+}

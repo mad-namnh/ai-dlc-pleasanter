@@ -17,7 +17,7 @@ Commands:
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
-                                                set Approvers / Operators / Origin (CLAUDE.md), role (environments.json)
+                                                set Approvers / Operators / Origin / Role tests (CLAUDE.md), role (environments.json)
                                                 or dev-writes on|off (standing permission for apply / bootstrap /
                                                 migrate on a dev environment, ADR-0024) as the person stated it;
                                                 recorded under gates/profile/ (I4)
@@ -38,7 +38,7 @@ Commands:
                                                 (${site:x} references, referenced sites first), snapshot + rollback per
                                                 site, reverse-order rollback; nothing is written if any site fails
   bootstrap-plan --env E --release R            new sites (ADR-0007): createsite plan for managed sites without an id in E
-  migrate <release> [--rollback] [--yes]        data migrations of a data-impacting release over HTTP, before apply (ADR-0004)
+  migrate <release> [--rollback] [--yes]        data migrations or data loads of a release over HTTP, before apply (ADR-0004)
   package <release>                             G4-approved release → dist/<R>-<env>.zip with manifest, CHECKLIST and verify.py (ADR-0003)
   bind --env E --release R --created S=ID …     record the ids returned by createsite in environments.json
   mark-applied <release> <export.json>          verify live == release payload, then record the release as applied
@@ -70,6 +70,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
+import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists (settings coverage)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
@@ -313,6 +314,15 @@ def embedded_env_refs(obj: Any) -> set:
     return set()
 
 
+def site_id_of(e: dict, name: str) -> int:
+    """This environment's id of a logical site (the same refusals as ${site:x} in from_refs)."""
+    if name not in e["sites"]:
+        raise Fail(f"unresolved reference ${{site:{name}}}")
+    if not e["sites"][name].get("id"):
+        raise Fail(f"site '{name}' is not created in this environment yet — pls bootstrap-plan, then pls bind (ADR-0007)")
+    return int(e["sites"][name]["id"])
+
+
 def from_refs(obj: Any, e: dict, key: str = "") -> Any:
     if isinstance(obj, dict):
         return {k: from_refs(v, e, k) for k, v in obj.items()}
@@ -393,6 +403,7 @@ def logical(export: Any, e: dict) -> dict:
                            reference=SX.references_for(ids.get(str(d.get("SiteId"))), ids)),
     }
     acl_to_refs(model["settings"], e)
+    SL.to_refs(model["settings"], ids)          # MoveTargets, IntegratedSites, dashboard site lists
     AP.to_refs(model["settings"], e.get("principals") or {})
     if "Permissions" in d or "InheritPermission" in d:
         model["permissions"] = perms_to_refs(d, e)
@@ -402,36 +413,64 @@ def logical(export: Any, e: dict) -> dict:
 
 
 ACL_KEYS = (("Groups", "Group"), ("Users", "User"), ("Depts", "Dept"))
+# SiteSettings lists whose items carry Groups / Users / Depts lists of principal ids (Pleasanter_1.5.2.0 classes Process,
+# View, Export, DashboardPart, StatusControl, ColumnAccessControl). A fixed table, never a deep walk: text is not touched.
+ACL_LISTS = (("Processes", "process"), ("Views", "view"), ("Exports", "export"), ("DashboardParts", "dashboard part"),
+             ("StatusControls", "status control"), ("CreateColumnAccessControls", "create column access"),
+             ("ReadColumnAccessControls", "read column access"), ("UpdateColumnAccessControls", "update column access"))
+
+
+# Users -1 means every authenticated user (Pleasanter_1.5.2.0 ColumnAccessControl.cs l.144, source-derived): the same
+# on every environment, so it is kept as it is and is never an environment-specific id.
+ACL_FIXED = {("Users", -1)}
+
+
+def acl_fixed(key: str, x) -> bool:
+    return (key, x) in ACL_FIXED or (key, str(x)) in {(k, str(v)) for k, v in ACL_FIXED}
+
+
+def acl_items(settings: dict):
+    """(label, item) for every item of ACL_LISTS, e.g. ("process 'approve'", {...})."""
+    for lst, what in ACL_LISTS:
+        for it in settings.get(lst) or []:
+            if isinstance(it, dict):
+                yield f"{what} '{it.get('Name') or it.get('ColumnName') or it.get('Title') or it.get('Id')}'", it
 
 
 def acl_to_refs(settings: dict, e: dict) -> None:
-    """Process access control (1.5.2, PR-4): Processes[].Groups/Users/Depts are lists of principal IDs.
-    Replace them with ${principal:x} (environments.json principals); unmapped IDs stay raw (L-PERM-01)."""
+    """Access lists (1.5.2): Groups/Users/Depts of processes (PR-4, D20), views, exports, dashboard parts, status
+    controls and column access controls are lists of principal IDs. Replace them with ${principal:x} (environments.json
+    principals); unmapped IDs stay raw (L-PERM-01)."""
     rev = {v: k for k, v in (e.get("principals") or {}).items()}
-    for proc in settings.get("Processes") or []:
+    for _, it in acl_items(settings):
         for key, typ in ACL_KEYS:
-            if key in proc:
-                proc[key] = ["${principal:%s}" % rev[f"{typ},{i}"] if f"{typ},{i}" in rev else i for i in proc[key]]
+            if isinstance(it.get(key), list):
+                it[key] = ["${principal:%s}" % rev[f"{typ},{i}"] if f"{typ},{i}" in rev else i for i in it[key]]
 
 
 def acl_from_refs(settings: dict, e: dict, site: str) -> None:
-    for proc in settings.get("Processes") or []:
+    for label, it in acl_items(settings):
         for key, typ in ACL_KEYS:
-            if key not in proc:
+            if not isinstance(it.get(key), list):
                 continue
             out = []
-            for x in proc[key]:
+            for x in it[key]:
+                if acl_fixed(key, x):
+                    out.append(int(x))
+                    continue
                 m = REF_RE.fullmatch(str(x))
                 if not m or m.group(1) != "principal":
-                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} uses an environment-specific id {x} (L-PERM-01)")
+                    raise Fail(f"{site}: {label} {key} uses an environment-specific id {x} (L-PERM-01) — write "
+                               "${principal:<name>} for it (pls unpack / harvest does, once environments.json principals "
+                               "maps the name)")
                 val = (e.get("principals") or {}).get(m.group(2))
                 if val is None:
                     raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
                 vtyp, vid = val.split(",")[:2]
                 if vtyp != typ:
-                    raise Fail(f"{site}: process '{proc.get('Name')}' {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
+                    raise Fail(f"{site}: {label} {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
                 out.append(int(vid))
-            proc[key] = out
+            it[key] = out
 
 
 def perms_to_refs(d: dict, e: dict) -> dict:
@@ -509,6 +548,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
+    SL.from_refs(m0["settings"], lambda name: site_id_of(e, name), site, Fail)   # site lists (MoveTargets as integers)
     AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
     m = from_refs(m0, e)
     ss = m["settings"]
@@ -626,11 +666,33 @@ def _lookup_json(text: Any) -> Any:
     return norm(doc)
 
 
+def _names_principals(d: dict) -> bool:
+    """A whole item (or list) added, removed or changed whose before or after names Groups / Users / Depts."""
+    return any(isinstance(y, dict) and (y.get("Groups") or y.get("Users") or y.get("Depts"))
+               for x in (d["before"], d["after"]) for y in (x if isinstance(x, list) else [x]))
+
+
 def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
     for d in diffs:
         p = d["path"]
-        if p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
+        if re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p) and bool(d["before"]) != bool(d["after"]):
+            # stored values of a multi-select column are read as a JSON array of choices, of a single-select one as the
+            # value itself (Pleasanter_1.5.2.0 ToExportExtensions.cs l.23-39, ToDisplayExtensions.cs l.35; source-derived,
+            # not probed): switching it changes how every existing value of the column is read
+            data.append(f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
+                        "one value when it is off (source-derived, not verified); migration: convert the stored values, or "
+                        "nothing to convert only on an empty site and never for production")
+        elif re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p):
+            cfg.append(p)                               # an explicit false added or removed: Pleasanter records only true
+        elif re.fullmatch(r"settings\.Columns\[\w+\]\.ChoicesControlType", p):
+            # radio buttons ignore MultipleSelections and tick a choice only when the stored value equals its key
+            # (HtmlFields.cs l.573-592, HtmlControls.cs l.589): a stored JSON array shows as nothing selected, and a
+            # save may replace it (save path not read, not probed)
+            data.append(f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
+                        "stored values as empty and a save may overwrite them (source-derived, not verified); migration: "
+                        "check the column's stored values, or nothing to convert when the column is single-select or empty")
+        elif p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
             data.append(f"{p}: column definition removed")
         elif re.match(r"settings\.Columns\[\w+\]\.ChoicesText", p) and d["kind"] in ("changed", "removed"):
             before = set(str(d["before"] or "").splitlines())
@@ -645,18 +707,27 @@ def classify(diffs: list[dict]) -> dict:
                 data.append(f"{p}: choices removed {sorted(before - after)}")
             else:
                 cfg.append(p)
-        elif re.match(r"settings\.Columns\[\w+\]\.(Formula|DefaultInput)", p):
+        elif re.match(r"settings\.Columns\[\w+\]\.DefaultInput", p):
             data.append(f"{p}: formula/default changed")
+        elif re.match(r"settings\.Formulas(\[|$)", p):  # 1.5.2 keeps calculations in SiteSettings.Formulas, not in a column
+            data.append(f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
+                        "records are not known to be recomputed (the screen has 同期 / SynchronizeFormulas, no API route: "
+                        "source-derived, Pleasanter_1.5.2.0 SiteUtilities.cs); migration: the recomputed values as data, "
+                        "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
             data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
                         "migration: touch one child record per parent after the release")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             perm.append(p)
-        elif re.match(r"settings\.Processes\[[^\]]+\]\.(Groups|Users|Depts)\b", p) or (
-                re.fullmatch(r"settings\.Processes(\[[^\]]+\])?", p)
-                and any(isinstance(y, dict) and (y.get("Groups") or y.get("Users") or y.get("Depts"))
-                        for x in (d["before"], d["after"]) for y in (x if isinstance(x, list) else [x]))):
+        # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
+        elif re.fullmatch(r"settings\.Processes\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
+                re.fullmatch(r"settings\.Processes(\[.+\])?", p) and _names_principals(d)):
             perm.append(f"{p}: process access control (D20)")
+        elif re.match(r"settings\.StatusControls(\[|$)", p):   # who may change a record in a status (D42)
+            perm.append(f"{p}: status control")
+        elif re.fullmatch(r"settings\.(Views|Exports|DashboardParts)\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
+                re.fullmatch(r"settings\.(Views|Exports|DashboardParts)(\[.+\])?", p) and _names_principals(d)):
+            perm.append(f"{p}: access list of a view / export / dashboard part")
         else:
             cfg.append(p)
     cls = "data-impacting" if data else "permission-impacting" if perm else "config-only"
@@ -806,11 +877,15 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-PRC-01", "site": site, "msg": f"process '{name}' has no View object: API execution fails "
                            "(HTTP 500) and opening the site's records fails in the UI (D21) — give it a View with its display "
                            "condition, at least the status it starts from"})
-        for proc in m["settings"].get("Processes") or []:
+        for label, it in acl_items(m["settings"]):
             for key, _ in ACL_KEYS:
-                for x in proc.get(key) or []:
-                    if not str(x).startswith("${principal:"):
-                        issues.append({"rule": "L-PERM-01", "site": site, "msg": f"process '{proc.get('Name')}' {key} uses an environment-specific id {x}; map it in environments.json principals"})
+                for x in (it.get(key) if isinstance(it.get(key), list) else []):
+                    if not str(x).startswith("${principal:") and not acl_fixed(key, x):
+                        issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{label} {key} uses an environment-specific id {x}; map it in environments.json principals, then pls unpack / harvest again (or write ${{principal:<name>}})"})
+        for x in SL.raw_ids(m["settings"]):
+            issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{x} — an environment-specific site id (or text whose "
+                           "site ids cannot be read); name the site in environments.json and unpack / harvest again, or "
+                           "write ${site:<name>}"})
         for path, tok in AP.raw_tokens(m["settings"]):
             issues.append({"rule": "L-PERM-01", "site": site, "msg": f"{path}: mail address {tok} uses an environment-specific id; "
                            "map the principal in environments.json principals (git holds [${principal:<name>}])"})
@@ -1361,8 +1436,10 @@ def _migration_problems(r: Path, mig: str | None) -> list[str]:
     """Data-impacting gate (ADR-0004): a migration folder with the conversion (migration.json: site, keys,
     bulkupsert data or mapping), the backup of the affected records taken before (folder `backup/`,
     exported with the runner's backupRecords) and the log of a dry run on a copy (dry-run.md)."""
-    if not mig:
+    if mig is None:
         return ["data-impacting change without --migration DIR (ADR-0004)"]
+    if not mig:
+        return ["--migration names no folder (empty value)"]
     d = (r / mig) if not Path(mig).is_absolute() else Path(mig)
     out = [f"{mig}/{f} is missing" for f in MIGRATION_FILES if not (d / f).exists()]
     if (d / "backup").is_dir() and not any(f for f in (d / "backup").iterdir() if not f.name.startswith(".")):
@@ -1370,11 +1447,34 @@ def _migration_problems(r: Path, mig: str | None) -> list[str]:
     if (d / "migration.json").exists():
         try:
             m = rj(d / "migration.json")
-            for k in ("site", "keys", "rollback"):
+            # nothing-to-convert (empty site): no keys or rollback data exist; migrate checks emptiness live
+            for k in (("site",) if MI.is_nothing_to_convert(m) else ("site", "keys", "rollback")):
                 if k not in m:
                     out.append(f"{mig}/migration.json lacks '{k}'")
         except json.JSONDecodeError as ex:
             out.append(f"{mig}/migration.json is not JSON: {ex}")
+    return out
+
+
+def nothing_to_convert_problems(r: Path, migs: Any, impacted: set, role: str | None) -> list[str]:
+    """A nothing-to-convert folder (ADR-0004) is allowed only for a site of the release with a data-impacting change,
+    and never for production: there `pls migrate` / `apply` do not run, so its emptiness check would never run."""
+    out = []
+    for mig in MI.dirs({"migration": migs}):
+        try:
+            m = MI.read_nothing_to_convert(r, mig)
+        except MI.MigrateError as ex:
+            out.append(str(ex))
+            continue
+        if m is None:
+            continue
+        if role == "prod":
+            out.append(f"{mig}: a nothing-to-convert migration is not allowed for production (its emptiness check runs only "
+                       "through pls migrate / apply) — prepare a full migration with keys, data and rollback")
+        elif not isinstance(m.get("site"), str):
+            out.append(f"{mig}/migration.json: 'site' (logical site name) is missing or not a name")
+        elif m.get("site") not in impacted:
+            out.append(f"{mig}: nothing to convert names site {m.get('site')!r}, which has no data-impacting change in this release")
     return out
 
 
@@ -1511,6 +1611,20 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                 print(f"MIGRATION {x}")
             print("release plan REFUSED: data-impacting change needs a migration (ADR-0004); no files written")
             return 1
+    elif migration:                                    # a data load without a data-impacting config change (e.g. the first
+        probs = migration_problems(r, migration)       # master load into a new site): same folder checks, and the folder is
+        if probs:                                      # kept in the plan, never dropped silently
+            for x in probs:
+                print(f"MIGRATION {x}")
+            print("release plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
+            return 1
+    ntc = nothing_to_convert_problems(r, migration, {s for s, res in results.items()
+                                                     if res["classification"]["classification"] == "data-impacting"}, e.get("role"))
+    if ntc:
+        for x in ntc:
+            print(f"MIGRATION {x}")
+        print("release plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
+        return 1
     per_site = {}
     for s in order:
         res = results[s]
@@ -1531,7 +1645,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
                      for s in reversed(order)],
         "on_failure": "stop; restore every site already touched (including the failing one) from its rollback payload, in reverse order",
         "preflight": "every site's UpdatedTime must equal expect_updated_time, otherwise nothing is applied",
-        "migration": migration if worst == "data-impacting" else None,
+        "migration": migration or None,
         "version_check": version_check(r, env),
     }
     if e.get("sandbox_of"):                            # the tenant is the base env's: a sandbox never deploys jobs (ADR-0011)
@@ -1728,8 +1842,9 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     raw_scripts = {k: ss.get(k) or [] for k in SCRIPT_KINDS}
     perms = model.get("permissions") or {}
     principals = AD.raw_principals(perms) + [
-        f"process '{p.get('Name') or p.get('Id')}' {key}: {x}" for p in model["settings"].get("Processes") or []
-        for key, _ in ACL_KEYS for x in p.get(key) or [] if not str(x).startswith("${principal:")]
+        f"{label} {key}: {x}" for label, p in acl_items(model["settings"])
+        for key, _ in ACL_KEYS for x in (p.get(key) if isinstance(p.get(key), list) else [])
+        if not str(x).startswith("${principal:") and not acl_fixed(key, x)]
     if perms and not str(perms.get("inherit", "")).startswith("${site:"):
         principals.insert(0, f"permissions inherited from site {perms.get('inherit')} (not managed) — L-PERM-01")
     decided = AR.ladder_decided(r)                              # L-LAD-01: a reviewed as-is counts only via its record
@@ -1974,9 +2089,11 @@ def _git(r: Path, *args: str) -> str:
 
 def _writes_to(model: dict, dep: str) -> list[str]:
     """Places where a site's configuration may WRITE to site `dep` when records are saved: summaries aggregate into
-    the parent, scripts may call items.Update/Create on it (a reference in a script counts, read or write)."""
+    the parent, records may be moved into a move target, scripts may call items.Update/Create on it (a reference in
+    a script counts, read or write)."""
     ref = "${site:%s}" % dep
     out = [f"Summaries[{x.get('Id')}]" for x in model["settings"].get("Summaries") or [] if str(x.get("SiteId")) == ref]
+    out += ["MoveTargets"] if ref in (model["settings"].get("MoveTargets") or []) else []   # records moved into dep
     out += [f"{k}/{it.get('Name') or it.get('Title') or it.get('Id')}" for k in ("ServerScripts",)
             for it in model["scripts"].get(k) or [] if ref in (it.get("Body") or "")]
     return out
@@ -2509,8 +2626,8 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
     text = re.sub(r"\| Role tests \|.*\|", "| Role tests | `deferred` |" if stage == "demo" else "| Role tests | `per-role keys` |", text, count=1)
     cm.write_text(text, encoding="utf-8", newline="\n")
     if approver:          # the person running init states these values: recorded so a later hand edit is visible (L-PRF-01)
-        said = f"pls init {target.name} --approver {approver} --origin {origin}"
-        for field in ("Approvers", "Operators", "Origin"):
+        said = f"pls init {target.name} --approver {approver} --origin {origin} --stage {stage}"
+        for field in ("Approvers", "Operators", "Origin", "Role tests"):
             m = re.search(rf"^\|\s*{field}\s*\|(.*)\|\s*$", text, re.M)
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
     (target / ".claude").mkdir(exist_ok=True)
@@ -2638,7 +2755,8 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     Returns the groups/users that do not exist yet. A group name that matches more than one group is refused: the
     server does not refuse duplicate names (KB api.md "Users and groups"), so the person removes the extra ones.
     With `create` (ADR-0017): the missing groups are created first — dev environments only (not a sandbox, writes
-    allowed), no update or delete of any group, the operator (`admin`) as the only member, one typed confirmation."""
+    allowed), no update or delete of any group, the operator (`admin`) as the only member, one typed confirmation.
+    A role with `"principal": "Dept"` is bound to a department by `dept_code` (or `dept_name`), never created."""
     import pls_http as H
     rf = r / "design" / "roles.json"
     if not rf.exists():
@@ -2670,6 +2788,27 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
                 missing.append(f"user with login '{spec.get('login')}'")
                 print(f"{role}: MISSING - create the user with login '{spec.get('login')}' in Pleasanter, then run "
                       "pls principals again")
+            continue
+        if spec.get("principal") == "Dept":
+            # departments are the customer's organisation: looked up, never created (ADR-0017 covers groups only).
+            # /api/depts/get (Pleasanter_1.5.2.0 DeptsController, source-derived); field names DeptId / DeptCode /
+            # DeptName are the Depts table columns, not yet read back from a real server
+            col, val = (("DeptCode", str(spec["dept_code"])) if spec.get("dept_code") not in (None, "")
+                        else ("DeptName", str(spec.get("dept_name") or role)))
+            ids = _lookup_all(client, "/api/depts/get", col, val, "DeptId")
+            if ids is None:
+                raise Fail(f"{role}: the lookup of department {col} '{val}' failed — check the connection and run pls "
+                           "principals again")
+            if len(ids) > 1:
+                raise Fail(f"{role}: department {col} '{val}' matches {len(ids)} departments (ids "
+                           f"{', '.join(map(str, ids))}) — name it by dept_code in design/roles.json")
+            if ids:
+                pr[role] = f"Dept,{ids[0]}"
+                print(f"{role}: {pr[role]} (department {col} '{val}')")
+            else:
+                missing.append(f"department {col} '{val}'")
+                print(f"{role}: MISSING - department {col} '{val}' is not in Pleasanter; departments belong to the "
+                      "customer's organisation and are never created by pls")
             continue
         name = spec.get("group_name") or role
         ids = _lookup_all(client, "/api/groups/get", "GroupName", name, "GroupId")
@@ -2992,9 +3131,12 @@ def http_cmd(r: Path, a) -> int:
             if probs:
                 raise H.TransportError(f"{a.release}: " + "; ".join(probs) + " (ADR-0004)")
             direction = "rollback" if a.rollback else "forward"
-            todo, skipped = [], []
+            todo, skipped, nothing_sent = [], [], []
             try:
                 for m in migs:
+                    if a.rollback and (MI.last(plan, m, "forward") or {}).get("nothing_to_convert"):
+                        nothing_sent.append(m)           # its run sent no data: nothing of it to roll back; the others still are
+                        continue
                     if (not a.rollback and plan.get("status") == "planned"
                             and (MI.last(plan, m, "forward") or {}).get("status") == "migrated"
                             and not MI.last(plan, m, "rollback")):  # a rolled-back folder is never skipped as done
@@ -3005,12 +3147,16 @@ def http_cmd(r: Path, a) -> int:
                         raise MI.MigrateError(why)
                     mg = MI.load(r, m, a.rollback)
                     todo.append(dict(mg, site_id=MI.target(e, plan["env"], mg["site"])))
+                if not todo and a.rollback:
+                    raise MI.MigrateError("nothing to roll back: every folder of the release is nothing-to-convert (it sent no data)")
                 if not todo:                             # every folder migrated, none rolled back
                     raise MI.MigrateError(MI.state_problem(plan, skipped[0], False) + f" — next: pls apply {a.release}")
             except MI.MigrateError as ex:
                 raise H.TransportError(f"{a.release}: {ex}")
             for m in skipped:
                 print(f"{m}: already migrated by an earlier run — skipped, never sent twice")
+            for m in nothing_sent:
+                print(f"{m}: nothing to convert — it sent no data, so it has nothing to roll back; skipped")
             try:
                 eff = env_effects(r, e)
                 jobs = SE.declared_jobs(r)
@@ -3029,7 +3175,9 @@ def http_cmd(r: Path, a) -> int:
                 raise H.TransportError(refusal)
             if warning:
                 print(warning)
-            what = ", ".join(f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
+            what = ", ".join(f"read-only check that {t['site']} ({t['site_id']}) holds 0 records visible to this key"
+                             if t.get("nothing_to_convert") else
+                             f"{len(t['data'])} record(s) → {t['site']} ({t['site_id']}) keyed by {t['keys']}" for t in todo)
             confirmed = _confirm_write(r, "migrate", plan["env"], a.release, a.yes,
                                        f"{direction} migration of {a.release} in {plan['env']} ({conn['url']}): {what}")
             if not confirmed:
@@ -3045,9 +3193,23 @@ def http_cmd(r: Path, a) -> int:
                     return 1
                 entry = MI.start(plan, t["dir"], direction, t["site"], len(t["data"]))
                 entry.update(executed_by=LG.actor(r), confirmed=confirmed)    # how this run was confirmed (ADR-0024)
+                if t.get("nothing_to_convert"):          # apply and --rollback read this entry, not the folder
+                    entry.update(nothing_to_convert=True)
                 wj(rel / "plan.json", plan)              # recorded before the call: a crash never looks like "not run"
-                res = H.migrate(c, t["site_id"], t["keys"], t["data"])
-                LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
+                if t.get("nothing_to_convert"):          # read-only: the site must hold no record now; nothing is sent
+                    try:
+                        n = c.backup_records(t["site_id"])["count"]     # the records this key can see (KB D36)
+                        entry.update(records_read=n)
+                        res = ({"status": "migrated", "message": "nothing to convert: 0 records visible to this key (read live); "
+                                                                 "nothing sent"}
+                               if n == 0 else
+                               {"status": "failed", "message": f"nothing-to-convert refused: {n} record(s) visible on the site now — "
+                                                               "prepare a real conversion (data) with its backup and dry run"})
+                    except H.TransportError as ex:
+                        res = {"status": "failed", "message": f"could not read the site to confirm it is empty: {ex}"}
+                else:
+                    res = H.migrate(c, t["site_id"], t["keys"], t["data"])
+                    LG.record_target(env=plan["env"], release=a.release, written=[t["site_id"]])
                 MI.finish(entry, res)
                 wj(rel / "plan.json", plan)
                 print(f"{t['dir']}: {direction} {res['status']} ({res['message']})")
@@ -3117,6 +3279,22 @@ def http_cmd(r: Path, a) -> int:
                                        f"{plan.get('classification')}" + (f"\n{warning}" if warning else ""))
             if not confirmed:
                 return 1
+            # A nothing-to-convert migration holds only while its site stays empty: read each such site again now, after
+            # the confirmation and right before the first write (ADR-0004). A record created after this read and
+            # before updatesite is not caught: Pleasanter has no conditional write.
+            for mig in MI.dirs(plan):
+                run = MI.last(plan, mig, "forward") or {}
+                if not run.get("nothing_to_convert"):
+                    continue
+                sid = (plan["per_site"].get(run.get("site")) or {}).get("site_id")
+                if sid is None:
+                    raise H.TransportError(f"{a.release}: {mig} checked site {run.get('site')!r}, which is not in this release — "
+                                           "nothing written; make a new release plan (ADR-0004)")
+                n = c.backup_records(sid)["count"]
+                if n:
+                    raise H.TransportError(f"{a.release}: {mig} was migrated as nothing to convert, but {n} record(s) are visible "
+                                           f"on {run['site']} now — nothing written; prepare a real conversion (data) with its "
+                                           "backup and dry run in a new release (ADR-0004)")
             # Recorded before the first write: if the process dies mid-way, the release is not "planned" any more,
             # so it cannot be applied again blindly; `pls mark-applied` reads the sites back and records the state.
             plan.update(status="applying", apply_started_at=_now())
@@ -3350,10 +3528,11 @@ def http_cmd(r: Path, a) -> int:
             except (OSError, ValueError, KeyError) as ex:
                 raise H.TransportError(f"probes: {ex}")
             guarded = [p["_name"] for p in probes if KG.is_guarded(p)]
-            if not _confirm("kb-verify", a.yes, f"kb-verify writes {len(probes)} probe site(s) and test records under folder "
+            if not _confirm("kb-verify", a.yes, f"kb-verify writes {sum(len(KV.probe_sites(p)) for p in probes)} probe site(s) "
+                                                f"({len(probes)} probes) and test records under folder "
                                                 f"{parent_i} in {a.env} ({conn['url']})" +
                                                 (f"; with a server script or a test user's key (ADR-0025): {', '.join(guarded)}"
-                                                 if guarded else "")):
+                                                 if guarded else ""), token="the command name"):
                 return 1
             role_clients: dict = {}
 
@@ -3379,40 +3558,56 @@ def http_cmd(r: Path, a) -> int:
                     log.append(f"not run: {why}")
                     rows.append(row)
                     continue
+                psites = KV.probe_sites(p)               # main first, then the probe's further sites (ADR-0026)
+                own: dict = {}                           # key → id, only for sites created or proven this probe's
+
+                def is_own(ps):
+                    return lambda site: KV.is_own_probe_site(site, ps["state"], ps["rt"], parent_i, app_ids)
                 try:
-                    sid = state["sites"].get(name)
-                    if sid:
-                        code, sjs, _ = c.call(f"/api/items/{sid}/getsite")
-                        if code == 404:
-                            sid = None
-                        elif code != 200:
-                            raise H.TransportError(f"getsite {sid} → HTTP {code}")
-                        elif not KV.is_own_probe_site(sjs["Response"]["Data"], name, rt, parent_i, app_ids):
-                            raise H.TransportError(f"site {sid} in the state file is not this probe's site (folder, title or type "
-                                                   f"differ) — nothing written; check .pls/kb-probes-{a.env}.json")
-                    if not sid:
-                        code, cjs, text = c.call(f"/api/items/{parent_i}/createsite",
-                                                 {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": {}})
-                        if code != 200 or not (cjs or {}).get("Id"):
-                            raise H.TransportError(f"createsite → HTTP {code}")
-                        sid = int(cjs["Id"])
-                        state["sites"][name] = sid
-                        wj(state_f, state)
-                    row["site_id"] = sid
-                    settings = {"Version": schema, "ReferenceType": rt, **(p["site"].get("SiteSettings") or {})}
-                    body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": settings}
-                    if p.get("roles"):                     # the role's group may use the probe site (D15 shape)
-                        body.update(InheritPermission=sid, Permissions=KG.permissions(p, uid, e.get("principals") or {}))
-                    code, _, _ = c.call(f"/api/items/{sid}/updatesite", body)
-                    want = p.get("expect_save", 200)
-                    ok = code == want
-                    log.append(f"{'ok' if ok else 'NG'} save → HTTP {code} (expected {want})")
-                    status = status if ok else "fail"
-                    if ok and code == 200:
+                    for ps in psites:
+                        sid = state["sites"].get(ps["state"])
+                        if sid:
+                            code, sjs, _ = c.call(f"/api/items/{sid}/getsite")
+                            if code == 404:
+                                sid = None
+                            elif code != 200:
+                                raise H.TransportError(f"getsite {sid} → HTTP {code}")
+                            elif not is_own(ps)(sjs["Response"]["Data"]):
+                                raise H.TransportError(f"site {sid} in the state file is not this probe's site (folder, title or "
+                                                       f"type differ) — nothing written; check .pls/kb-probes-{a.env}.json")
+                        if not sid:
+                            code, cjs, text = c.call(f"/api/items/{parent_i}/createsite",
+                                                     {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"],
+                                                      "Body": "", "SiteSettings": {}})
+                            if code != 200 or not (cjs or {}).get("Id"):
+                                raise H.TransportError(f"createsite → HTTP {code}")
+                            sid = int(cjs["Id"])
+                            state["sites"][ps["state"]] = sid
+                            wj(state_f, state)
+                        own[ps["key"]] = sid
+                    sid = row["site_id"] = own["main"]
+                    if len(psites) > 1:
+                        row["site_ids"] = dict(own)
+                    saved_ok = True
+                    for ps in psites:
+                        settings = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(ps["settings"], own)}
+                        body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": settings}
+                        if p.get("roles"):                 # the role's group may use the probe site (D15 shape)
+                            body.update(InheritPermission=own[ps["key"]], Permissions=KG.permissions(p, uid, e.get("principals") or {}))
+                        code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite", body)
+                        want = p.get("expect_save", 200) if ps["key"] == "main" else 200
+                        ok = code == want
+                        where = "" if ps["key"] == "main" else f" {ps['key']}"
+                        log.append(f"{'ok' if ok else 'NG'} save{where} → HTTP {code} (expected {want})")
+                        status = status if ok else "fail"
+                        saved_ok = saved_ok and ok and code == 200
+                        if ps["key"] == "main" and not saved_ok:
+                            break                            # a main site that is expected to refuse: nothing more to save
+                    if saved_ok:
                         data = c.export_site(sid)["Response"]["Data"]
                         for path, exp in (p.get("expect_stored") or {}).items():
                             act = KV.get_path(data["SiteSettings"], path)
-                            good = H._check(act, exp)
+                            good = H._check(act, KV.substitute_sites(exp, own))
                             log.append(f"{'ok' if good else 'NG'} stored {path} = {json.dumps(act, ensure_ascii=False)}")
                             status = status if good else "fail"
                         server_day = None
@@ -3420,49 +3615,65 @@ def http_cmd(r: Path, a) -> int:
                             server_day = datetime.fromisoformat(str(data["UpdatedTime"])[:19]).date()
                             log.append(f"server date {server_day}")
                         vars_ = KV.date_vars(server_day) | {"admin_uid": uid}
-                        specs = [dict(t, vars=dict(vars_)) for t in p.get("tests") or []]
+                        vars_ |= {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
+                                  for role in (p.get("roles") or {})}           # bound: checked by KG.not_runnable
+                        specs = [dict(t, vars=dict(vars_),
+                                      steps=[dict(st, site=own[st["site"]]) if "site" in st else st
+                                             for st in t.get("steps") or []])
+                                 for t in p.get("tests") or []]
                         if specs:
-                            res = H.run_tests(probe_client, sid, specs, a.env)
+                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True)
                             for t in res["tests"]:
-                                log += [x.strip() for x in t["log"] if x.strip().startswith(("NG", "exec", "expected"))]
+                                log += [x.strip() for x in t["log"] if x.strip()]   # passing checks are evidence too
                                 if t["status"] not in ("pass", "pass-api-only"):
                                     status = "fail"
-                    if p.get("teardown") and not is_g:         # leave the probe site usable in the UI (D21)
-                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
-                        code, _, _ = c.call(f"/api/items/{sid}/updatesite", {"Title": KV.TITLE.format(name), "ReferenceType": rt,
-                                                                           "Body": "", "SiteSettings": td})
-                        log.append(f"teardown → HTTP {code}")
-                        if code != 200:
-                            raise H.TransportError(f"teardown failed (HTTP {code}): the probe site may stay broken in the UI")
+                    if not is_g:                             # leave the probe sites usable in the UI (D21)
+                        for ps in psites:
+                            if not ps["teardown"]:
+                                continue
+                            td = {"Version": schema, "ReferenceType": ps["rt"],
+                                  **KV.substitute_sites(ps["teardown"].get("SiteSettings") or {}, own)}
+                            code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite",
+                                                {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"],
+                                                 "Body": "", "SiteSettings": td})
+                            log.append(f"teardown{'' if ps['key'] == 'main' else ' ' + ps['key']} → HTTP {code}")
+                            if code != 200:
+                                raise H.TransportError(f"teardown failed (HTTP {code}): the probe site may stay broken in the UI")
                 except (H.TransportError, KeyError, TypeError, ValueError) as ex:
                     status = "error"
                     log.append(str(ex))
                 finally:                                     # also after an unexpected error or Ctrl-C
-                    own_sid = row.get("site_id")                 # set only for a site created or proven to be this probe's
-                    if is_g and own_sid:                         # no script; a roles probe's grant is removed
-                        td = {"Version": schema, "ReferenceType": rt, **(p["teardown"].get("SiteSettings") or {})}
-                        td.pop("ServerScripts", None)
-                        body = {"Title": KV.TITLE.format(name), "ReferenceType": rt, "Body": "", "SiteSettings": td}
-                        if p.get("roles"):
-                            body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
-                        try:
-                            code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
-                        except H.TransportError as ex:
-                            code = str(ex)
-                        log.append(f"teardown → HTTP {code}")
-                        if code != 200:
-                            status = "error"
-                            log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
-                                       "permissions — a person removes them in Pleasanter")
-                        # then delete the site, and believe it only when getsite no longer finds it (ADR-0025)
-                        gone, why_kept = KG.delete_probe_site(
-                            c, own_sid, lambda site: KV.is_own_probe_site(site, name, rt, parent_i, app_ids))
-                        log.append(why_kept or f"site {own_sid} deleted (deletesite, then getsite no longer finds it)")
-                        if gone:
-                            state["sites"].pop(name, None)
-                            wj(state_f, state)
-                        else:
-                            status = "error"
+                    if is_g:                                 # every own site: no script, no grant, then deleted
+                        for ps in reversed(psites):          # further sites first, the main site last
+                            own_sid = own.get(ps["key"])     # set only for a site created or proven to be this probe's
+                            if not own_sid:
+                                continue
+                            td_src = (ps["teardown"] or {}).get("SiteSettings") or {}
+                            if KV.site_refs(td_src) - set(own):      # names a site that was never created
+                                log.append(f"teardown of {ps['key']} names a site not created — saved empty")
+                                td_src = {}
+                            td = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(td_src, own)}
+                            td.pop("ServerScripts", None)
+                            body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": td}
+                            if p.get("roles"):
+                                body.update(InheritPermission=own_sid, Permissions=KG.permissions({}, uid, {}))
+                            try:
+                                code, _, _ = c.call(f"/api/items/{own_sid}/updatesite", body)
+                            except H.TransportError as ex:
+                                code = str(ex)
+                            log.append(f"teardown → HTTP {code}")
+                            if code != 200:
+                                status = "error"
+                                log.append(f"teardown failed: site {own_sid} may still hold the probe's server script or "
+                                           "permissions — a person removes them in Pleasanter")
+                            # then delete the site, and believe it only when getsite no longer finds it (ADR-0025)
+                            gone, why_kept = KG.delete_probe_site(c, own_sid, is_own(ps))
+                            log.append(why_kept or f"site {own_sid} deleted (deletesite, then getsite no longer finds it)")
+                            if gone:
+                                state["sites"].pop(ps["state"], None)
+                                wj(state_f, state)
+                            else:
+                                status = "error"
                 if p.get("observe") and status == "pass":
                     status = "observed"
                 row["status"] = status
@@ -3473,8 +3684,8 @@ def http_cmd(r: Path, a) -> int:
                 if ctl and results.get(ctl) != "pass" and row["status"] == "pass":
                     row["status"] = "inconclusive"
                     row["log"].append(f"control {ctl} did not pass")
-            entries = set(re.findall(r"^\| (D\d+) \|", (kb / "references" / "behaviours.md").read_text(encoding="utf-8"), re.M))
-            no_probe = sorted(entries - {x["entry"] for x in rows}, key=lambda d: int(d[1:]))
+            entries = set(re.findall(r"^\| (D\d+[a-z]?) \|", (kb / "references" / "behaviours.md").read_text(encoding="utf-8"), re.M))
+            no_probe = sorted(entries - {x["entry"] for x in rows}, key=KV.entry_key)
             today = datetime.now().astimezone().date().isoformat()
             out = r / "ops" / "kb-verify" / f"{today}-{a.env}.md"
             out.parent.mkdir(parents=True, exist_ok=True)
@@ -3596,7 +3807,7 @@ def build_parser() -> argparse.ArgumentParser:
         if c == "plan":
             s.add_argument("--release", required=True)
             s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-            s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+            s.add_argument("--migration", action="append", help="migration folder: required for data-impacting changes, also kept for a data load without one, e.g. a first master load (ADR-0004); repeatable")
     s = sp.add_parser("pack")
     s.add_argument("--env", required=True)
     s.add_argument("--site", required=True)
@@ -3608,7 +3819,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--release", required=True)
     s.add_argument("--export", action="append", required=True, metavar="SITE=EXPORT", help="one per site in the release")
     s.add_argument("--accept-drift", help="path to the drift decision record that allows planning over drift")
-    s.add_argument("--migration", action="append", help="migration folder required for data-impacting changes (ADR-0004); repeatable")
+    s.add_argument("--migration", action="append", help="migration folder: required for data-impacting changes, also kept for a data load without one, e.g. a first master load (ADR-0004); repeatable")
     s.add_argument("--accept-unverified", help="decision record that accepts components without round-trip evidence (ADR-0001)")
     s.add_argument("--summary", action="store_true", help="one SCOPE line per site (count and first names) instead of one per component")
     s = sp.add_parser("bootstrap-plan")
@@ -3710,7 +3921,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s = sp.add_parser("profile", help="set a guarded profile value as the person stated it (I4); never decide it yourself")
     s.add_argument("action", choices=["set"])
-    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV)
+    s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV, help="quote a field with a space: \"Role tests\"")
     s.add_argument("value")
     s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
     s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
@@ -3740,6 +3951,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
     s.add_argument("--export", dest="exports", action="append", metavar="SITE=EXPORT", help="multi-site plan: one per site")
+    s = sp.add_parser("scope", help="components of config/<site> without round-trip evidence (ADR-0001), read from git: "
+                                     "what release-plan would refuse; exit 1 while any is found")
+    s.add_argument("--site", help="one site (default: every site in config/)")
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
@@ -4139,6 +4353,27 @@ def _main(argv=None) -> int:
         (Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n") if a.out else print(text))
         return 0
 
+    if a.cmd == "scope":                                # P2/P3: see at design time what release-plan would refuse
+        cfg = r / "config"
+        sites = [a.site] if a.site else sorted(d.name for d in (cfg.iterdir() if cfg.is_dir() else [])
+                                                if (d / "site.json").exists())
+        if a.site and (Path(a.site).name != a.site or a.site in (".", "..")):
+            raise Fail(f"--site {a.site!r}: a site name, not a path")
+        if a.site and not (cfg / a.site / "site.json").exists():
+            raise Fail(f"config/{a.site}/site.json not found — unpack the site first")
+        found = 0
+        for site in sites:
+            m = read_tree(cfg / site)
+            items = SC.unverified(m["settings"] | m["scripts"])
+            found += len(items)
+            print(f"{site}: " + ("no finding" if not items else f"{len(items)} without round-trip evidence"))
+            for x in items:
+                print(f"  SCOPE {x}")
+        if found:
+            print("release-plan refuses these until a probe proves them (pls kb-verify, ADR-0023) or a person accepts "
+                  "them with a decision record (--accept-unverified)")
+        return 1 if found else 0
+
     if a.cmd == "lint":
         issues = lint(r)
         by_rule = Counter(i["rule"] for i in issues)
@@ -4221,14 +4456,22 @@ def _main(argv=None) -> int:
             print("plan REFUSED: column-slot check failed (A2, ADR-0002). Resolve in the ledger / git first.")
             return 1
         cls = classify(diffs)
-        if cls["classification"] == "data-impacting":
+        if cls["classification"] == "data-impacting" or a.migration:   # a given --migration is checked, never dropped
             probs = migration_problems(r, a.migration)
             if probs:
                 for x in cls["data_impacting"]:
                     print(f"DATA {x}")
                 for x in probs:
                     print(f"MIGRATION {x}")
-                print("plan REFUSED: data-impacting change needs a migration (ADR-0004)")
+                print("plan REFUSED: data-impacting change needs a migration (ADR-0004)" if cls["classification"] == "data-impacting"
+                      else "plan REFUSED: the --migration folder is incomplete (ADR-0004); no files written")
+                return 1
+            ntc = nothing_to_convert_problems(r, a.migration, {a.site} if cls["classification"] == "data-impacting" else set(),
+                                              e.get("role"))
+            if ntc:
+                for x in ntc:
+                    print(f"MIGRATION {x}")
+                print("plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
                 return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
@@ -4241,7 +4484,7 @@ def _main(argv=None) -> int:
             "snapshot_sha256": hashlib.sha256(snap.encode()).hexdigest(),
             "checks": {"L-DEP-01_complete_payload": not missing, "keys_missing_from_payload": missing,
                        "drift_vs_last_release": drift_note, "slot_collisions": "clean",
-                       "migration": a.migration if cls["classification"] == "data-impacting" else None},
+                       "migration": a.migration or None},
             "classification": classify(diffs),
             "steps": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "payload.json"}],
             "rollback": [{"op": "updatesite", "site_id": e["sites"][a.site]["id"], "payload_file": "rollback.json"}],

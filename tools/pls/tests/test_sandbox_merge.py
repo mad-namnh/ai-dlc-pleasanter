@@ -234,6 +234,11 @@ class SandboxTest(unittest.TestCase):
             pls.main(["sandbox", "create", "--name", "nam", "--sites", "equipment", "--parent", str(TH.FOLDER)])
         self.assertEqual(pls.main(["sandbox", "create", "--name", "nam", "--sites", "equipment,loans", "--parent", str(TH.FOLDER)]), 0)
 
+    def test_a_move_target_outside_the_sandbox_is_a_write_to_a_shared_site(self):
+        model = {"settings": {"MoveTargets": ["${site:loans}"]}, "scripts": {}}
+        self.assertEqual(pls._writes_to(model, "loans"), ["MoveTargets"])
+        self.assertEqual(pls._writes_to(model, "equipment"), [])
+
     def test_harvest_brings_ui_edits_into_git_and_refuses_unsaved_work(self):
         self.prepare()
 

@@ -9,6 +9,10 @@ before these records keeps its rows until the person records them (L-PRF-01 asks
 `dev-writes` (per environment, ADR-0024) is the person's standing permission for `apply` / `bootstrap` / `migrate` on
 an environment whose role is dev; the record itself is the state (no file mirrors it), revoked by an `off` record.
 
+The row Role tests (whether restricted roles are proven as each role at G3, or deferred to configuration checks) is
+recorded the same way, but no pls command reads it — the skills do: its record gives tamper evidence (L-PRF-01 reports
+an unrecorded, unknown or differing row), not enforcement.
+
 Record files (`_load`, `_write`) are shared with the as-is review records (pls_as_is_review_records).
 """
 from __future__ import annotations
@@ -19,7 +23,9 @@ import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 
-FIELDS = ("Approvers", "Operators", "Origin")       # profile rows (CLAUDE.md)
+FIELDS = ("Approvers", "Operators", "Origin", "Role tests")       # profile rows (CLAUDE.md)
+ROLE_TESTS = ("deferred", "per-role keys")          # values of the row Role tests
+CODE_VALUES = ("Origin", "Role tests")               # rows whose value is shown in backticks
 ROLE = "role"                                       # envs.<env>.role (environments.json)
 ROLES = ("dev", "stg", "prod")
 DEV_WRITES = "dev-writes"                           # standing permission for writes to one dev environment (ADR-0024)
@@ -39,7 +45,7 @@ def _row(field: str) -> re.Pattern:
 
 def _norm(field: str, value: str) -> str:
     v = " ".join(value.split())
-    return v.strip("`") if field == "Origin" else v
+    return v.strip("`") if field in CODE_VALUES else v
 
 
 def _placeholder(field: str, raw: str) -> bool:
@@ -49,6 +55,8 @@ def _placeholder(field: str, raw: str) -> bool:
         return not GT.approvers(f"| Approvers | {raw} |")
     if field == "Operators":
         return not GT.operators(f"| Operators | {raw} |")
+    if field == "Role tests":                        # the template offers both values, joined by " / "
+        return all(v in raw for v in ROLE_TESTS) and " / " in raw
     return _norm(field, raw) not in ("new", "existing")
 
 
@@ -111,7 +119,7 @@ def effective_profile_text(root: Path) -> str:
         rec = latest(root, field)
         if rec is None:
             continue
-        shown = f"`{rec['value']}`" if field == "Origin" else rec["value"]
+        shown = f"`{rec['value']}`" if field in CODE_VALUES else rec["value"]
         line = f"| {field} | {shown} |"
         text, n = _row(field).subn(lambda _m: line, text, count=1)
         if not n:
@@ -127,6 +135,8 @@ def _check_value(root: Path, field: str, value: str, env: str | None) -> None:
         raise GT.GateError(f"Operators {value!r} names nobody (e.g. 'dev: Nam; stg: Nam; prod: <customer operator>')")
     if field == "Origin" and value not in ("new", "existing"):
         raise GT.GateError("Origin is `new` or `existing`")
+    if field == "Role tests" and value not in ROLE_TESTS:
+        raise GT.GateError("Role tests is `deferred` or `per-role keys`")
     if field == DEV_WRITES:
         if value not in DEV_WRITES_VALUES:
             raise GT.GateError("dev-writes is `on` or `off`")
@@ -175,7 +185,7 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
     rec = {"kind": "profile", "field": field, "value": value, "approver": who, "quote": quote.strip(), "recorded_by": recorded_by}
     if field in PER_ENV:
         rec["env"] = env
-    out = _write(root, PROFILE_DIR, f"{field}{'-' + env if env else ''}", rec)
+    out = _write(root, PROFILE_DIR, f"{field.replace(' ', '-').lower() if ' ' in field else field}{'-' + env if env else ''}", rec)
     if field == DEV_WRITES:
         return out                                  # the record is the state: no file mirrors it
     if field == ROLE:
@@ -185,7 +195,7 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
         p.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     else:
         p = root / "CLAUDE.md"
-        shown = f"`{value}`" if field == "Origin" else value
+        shown = f"`{value}`" if field in CODE_VALUES else value
         p.write_text(_row(field).sub(lambda _m: f"| {field} | {shown} |", _profile_text(root), count=1), encoding="utf-8", newline="\n")
     return out
 
@@ -233,6 +243,7 @@ def lint(root: Path) -> list[dict]:
         return [{"rule": "L-PRF-01", "site": "-", "msg": str(ex)}]
     issues, text = [], _profile_text(root)
     how = "after the person confirms it: pls profile set {f} \"{v}\" {env}--approver <name> --quote \"<their words>\""
+    quoted = lambda f: f'"{f}"' if " " in f else f          # noqa: E731 — a field with a space is one argument
     for field in FIELDS:
         m = _row(field).search(text)
         if not m:
@@ -240,9 +251,12 @@ def lint(root: Path) -> list[dict]:
         row, rec = _norm(field, m.group(1).strip()), latest(root, field)
         if rec and row != rec["value"]:
             issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md {field} {row!r} differs from its record "
-                           f"{rec['value']!r} (edited by hand?) — pls uses the recorded value; " + how.format(f=field, v=row, env="")})
+                           f"{rec['value']!r} (edited by hand?) — pls uses the recorded value; " + how.format(f=quoted(field), v=row, env="")})
+        elif not rec and field == "Role tests" and not _placeholder(field, m.group(1).strip()) and row not in ROLE_TESTS:
+            issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md Role tests {row!r} is not a value pls knows "
+                           f"(`deferred` or `per-role keys`) and has no record — " + how.format(f=quoted(field), v="<value>", env="")})
         elif not rec and not _placeholder(field, m.group(1).strip()):
-            issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md {field} has no record — " + how.format(f=field, v=row, env="")})
+            issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md {field} has no record — " + how.format(f=quoted(field), v=row, env="")})
     p = root / "environments.json"
     envs = (json.loads(p.read_text(encoding="utf-8-sig")).get("envs") or {}) if p.exists() else {}
     names = {n.casefold() for n in GT.approvers(effective_profile_text(root))}

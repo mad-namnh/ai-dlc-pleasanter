@@ -1,0 +1,44 @@
+{
+  "entry": "D45",
+  "title": "View-mode switches of SiteSettings are stored as sent (stored-shape probe; behaviour on the screen is not checked)",
+  "source": "Pleasanter_1.5.2.0 SiteSettings.RecordingData (Libraries/Settings/SiteSettings.cs l.762-1908) and the shipped App_Data/Parameters (General.json, Search.json, Mobile.json, Dashboard.json), read 2026-11-16",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "EnableCalendar": false,
+      "EnableCrosstab": false,
+      "EnableGantt": false,
+      "EnableBurnDown": false,
+      "EnableTimeSeries": false,
+      "EnableAnaly": false,
+      "EnableKamban": false,
+      "EnableImageLib": false,
+      "CalendarType": 1,
+      "NoDisplayCrosstabGraph": true,
+      "ShowGanttProgressRate": false,
+      "ImageLibPageSize": 40,
+      "FirstDayOfWeek": 0,
+      "FirstMonth": 1
+    }
+  },
+  "expect_save": 200,
+  "expect_stored": {
+    "EnableCalendar": false,
+    "EnableCrosstab": false,
+    "EnableGantt": false,
+    "EnableBurnDown": false,
+    "EnableTimeSeries": false,
+    "EnableAnaly": false,
+    "EnableKamban": false,
+    "EnableImageLib": false,
+    "CalendarType": 1,
+    "NoDisplayCrosstabGraph": true,
+    "ShowGanttProgressRate": false,
+    "ImageLibPageSize": 40,
+    "FirstDayOfWeek": 0,
+    "FirstMonth": 1
+  },
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

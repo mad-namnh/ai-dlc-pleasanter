@@ -1,0 +1,100 @@
+{
+  "entry": "D42",
+  "title": "A whole-record read-only status control: a process moves the record into the status, an API update that keeps the status is refused (403), one that changes the status is accepted",
+  "site": {
+    "ReferenceType": "Issues",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "Status",
+          "ChoicesText": "100,未処理,未,status-inprogress\n200,確認中,確,status-inprogress\n900,完了,完,status-closed"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "IssueId",
+          "Title",
+          "Status",
+          "StartTime",
+          "CompletionTime"
+        ]
+      },
+      "Processes": [
+        {
+          "Id": 1,
+          "Name": "to200",
+          "DisplayName": "確認へ",
+          "CurrentStatus": 100,
+          "ChangedStatus": 200,
+          "View": {
+            "ColumnFilterHash": {
+              "Status": "[\"100\"]"
+            }
+          }
+        }
+      ],
+      "StatusControls": [
+        {
+          "Id": 1,
+          "Name": "read-only in 200",
+          "Status": 200,
+          "ReadOnly": true
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "StatusControls[Id=1].ReadOnly": true
+  },
+  "tests": [
+    {
+      "id": "D42-record",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D42 record",
+            "StartTime": "$lastweek",
+            "CompletionTime": "$tomorrow"
+          }
+        },
+        {
+          "op": "exec",
+          "record": "$r",
+          "process": "to200",
+          "expectHttp": 200
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 200
+          }
+        },
+        {
+          "op": "update",
+          "record": "$r",
+          "data": {
+            "Title": "kbprobe D42 edit in 200"
+          },
+          "expectHttp": 403
+        },
+        {
+          "op": "update",
+          "record": "$r",
+          "data": {
+            "Status": 900
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "Status": 900
+          }
+        }
+      ]
+    }
+  ]
+}

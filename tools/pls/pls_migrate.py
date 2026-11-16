@@ -1,12 +1,16 @@
 """Data migrations of a release over the guarded HTTP transport (ADR-0004, ADR-0008, ADR-0014 TB-7).
 
-A data-impacting release carries migration folders (`release-plan --migration DIR`): `migration.json`, `backup/`,
+A data-impacting release carries migration folders (`release-plan --migration DIR`); any other release may carry one
+for a data load (e.g. a first master load), checked and ordered the same way: `migration.json`, `backup/`,
 `dry-run.md`. `pls migrate <release>` sends each folder's explicit `data` with one `bulkupsert` (D13) — after the
 write guard, G4 on non-dev environments (the G4 digest covers the migration folders) and the mail / job checks —
 and records every run in `plan.json` under `migrations_run` before the call is sent. ADR-0004 order is enforced:
 `apply` refuses a release whose migrations have not all run. `--rollback` sends the folder's `rollback.data`, which
 a person prepares from `backup/` and dry-runs on a copy; pls never builds a rollback from the backup itself (how a
 record read back by `get` behaves when sent to `bulkupsert` is not verified on 1.5.x).
+A folder whose migration.json says `"nothing_to_convert": true` with `"data": []` (a data-impacting setting change on
+a site with no records yet) sends nothing: migrate reads the site live and records it as migrated only if the operator's key sees 0 records there,
+and apply reads it again after the confirmation. Production (`pls package`) refuses such a folder.
 """
 from __future__ import annotations
 
@@ -39,6 +43,12 @@ def load(r: Path, mig: str, rollback: bool) -> dict:
         raise MigrateError(f"{mig}/migration.json is not readable JSON ({ex})")
     if not isinstance(m, dict) or not isinstance(m.get("site"), str):
         raise MigrateError(f"{mig}/migration.json: 'site' (logical site name) is missing")
+    if is_nothing_to_convert(m):
+        # A data-impacting setting change on a site that holds no records (e.g. a renamed choice before go-live):
+        # nothing is sent; pls migrate reads the site live and records the folder as migrated only when it is empty.
+        if rollback:
+            raise MigrateError(f"{mig}: a nothing-to-convert migration sent no data — there is nothing to roll back")
+        return {"dir": mig, "site": m["site"], "keys": [], "data": [], "nothing_to_convert": True}
     keys = m.get("keys")
     if not isinstance(keys, list) or not keys or not all(isinstance(k, str) and k for k in keys):
         raise MigrateError(f"{mig}/migration.json: 'keys' must list the business identifier columns (D13)")
@@ -64,6 +74,25 @@ def load(r: Path, mig: str, rollback: bool) -> dict:
             raise MigrateError(f"{mig}: key {dict(zip(keys, key))} appears twice — non-unique keys stop bulkupsert (D18)")
         seen.add(key)
     return {"dir": mig, "site": m["site"], "keys": keys, "data": data}
+
+
+def is_nothing_to_convert(m: dict) -> bool:
+    """migration.json declares `"nothing_to_convert": true` with `"data": []` — explicit, never inferred from empty data."""
+    return isinstance(m, dict) and m.get("nothing_to_convert") is True and m.get("data") == []
+
+
+def read_nothing_to_convert(r: Path, mig: str) -> dict | None:
+    """The folder's migration.json when it is a nothing-to-convert folder; None when it is another kind or missing
+    (the folder checks report a missing file). Read like `load` (UTF-8, BOM tolerated); a file that cannot be read
+    raises MigrateError — a guard never treats an unreadable file as "not nothing-to-convert"."""
+    p = folder(r, mig) / "migration.json"
+    if not p.exists():
+        return None
+    try:
+        m = json.loads(p.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as ex:
+        raise MigrateError(f"{mig}/migration.json is not readable JSON ({ex})")
+    return m if is_nothing_to_convert(m) else None
 
 
 def target(e: dict, env: str, site: str) -> int:
@@ -93,6 +122,8 @@ def state_problem(plan: dict, mig: str, rollback: bool) -> str | None:
         return f"the release has status {plan.get('status')!r}: migrations run before apply (ADR-0004 order)"
     if fwd and fwd["status"] == "migrated":
         return f"{mig} was already migrated at {fwd.get('finished_at')} — never sent twice"
+    if fwd and fwd["status"] in UNKNOWN and fwd.get("nothing_to_convert"):
+        return None                                  # a read-only emptiness check sent nothing: it may simply run again
     if fwd and fwd["status"] in UNKNOWN:
         return (f"{mig}: the last run ended {fwd['status']!r} — the records may have changed. A person compares them with "
                 f"backup/; then roll back (pls migrate --rollback) or record the outcome before any re-run")

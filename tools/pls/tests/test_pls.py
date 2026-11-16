@@ -369,6 +369,25 @@ class PlsTest(unittest.TestCase):
         self.assertIn("202", json.dumps(pa))                              # ${site:b} resolved to stg id
         self.assertNotIn("${site:", json.dumps(pa))
 
+    def test_release_plan_keeps_a_migration_of_a_release_that_is_not_data_impacting(self):
+        # a first master load into a new site changes no config, yet pls migrate must find the folder in the plan
+        sa, sb = self._two_sites()
+        rp = lambda rel, mig: pls.main(["release-plan", "--env", "stg", "--release", rel, "--export", f"a={sa}",  # noqa: E731
+                                        "--export", f"b={sb}", "--migration", mig])
+        self._migration("load", files=("migration.json",))                 # incomplete folder → refused, nothing written
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(rp("R1", "load"), 1)
+        self.assertIn("MIGRATION load/dry-run.md is missing", out.getvalue())
+        self.assertIn("the --migration folder is incomplete", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self._migration("load")
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+        self.assertEqual(rp("R2", "load"), 0)
+        plan = json.loads((self.r / "releases/R2/plan.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(plan["classification"], "data-impacting")
+        self.assertEqual(plan["migration"], ["load"])
+
     def test_release_plan_records_scheduled_script_changes_against_the_last_applied_release(self):
         import pls_side_effects as SE
         sa, sb = self._two_sites()
@@ -537,6 +556,60 @@ class PlsTest(unittest.TestCase):
         self.assertEqual(pls.main(["plan", str(live), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
         self.assertEqual(json.loads((self.r / "releases/R1/plan.json").read_text(encoding="utf-8"))["classification"]["classification"], "config-only")
 
+    def _ntc(self, name, site="a"):
+        d = self._migration(name, files=("backup", "dry-run.md"))
+        (d / "migration.json").write_text(json.dumps({"site": site, "nothing_to_convert": True, "data": []}), encoding="utf-8")
+
+    def test_nothing_to_convert_needs_a_data_impacting_change_on_its_site_and_is_never_for_production(self):
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        self._ntc("ntc")                                                  # the release changes nothing on a
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a",
+                                       "--release", "R1", "--migration", "ntc"]), 1)
+        self.assertIn("no data-impacting change in this release", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self.assertEqual(pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg"), [])
+        self.assertIn("not allowed for production", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "prod")[0])
+        p = self.r / "ntc/migration.json"
+        p.write_text("\ufeff" + p.read_text(encoding="utf-8"), encoding="utf-8")   # a BOM changes nothing
+        self.assertIn("not allowed for production", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "prod")[0])
+        self.assertIn("no data-impacting change", pls.nothing_to_convert_problems(self.r, ["ntc"], set(), "stg")[0])
+        p.write_text(json.dumps({"site": ["a"], "nothing_to_convert": True, "data": []}), encoding="utf-8")
+        self.assertIn("not a name", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg")[0])
+        p.write_text("{not json", encoding="utf-8")                                  # unreadable: a problem, never skipped
+        self.assertIn("not readable JSON", pls.nothing_to_convert_problems(self.r, ["ntc"], {"a"}, "stg")[0])
+
+    def test_release_plan_refuses_a_nothing_to_convert_folder_without_a_data_impacting_change(self):
+        sa, sb = self._two_sites()
+        self._ntc("ntc")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}",
+                                       "--export", f"b={sb}", "--migration", "ntc"]), 1)
+        self.assertIn("nothing-to-convert migration not allowed here", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+
+    def test_plan_keeps_a_migration_of_a_change_that_is_not_data_impacting(self):
+        # single-site plan: a data load (e.g. a first master load) is checked and kept, never dropped silently
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        plan = lambda rel: pls.main(["plan", str(self._stg_live()), "--env", "stg", "--site", "a",  # noqa: E731
+                                     "--release", rel, "--migration", "load"])
+        self._migration("load", files=("migration.json",))                 # incomplete folder → refused, nothing written
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(plan("R1"), 1)
+        self.assertIn("MIGRATION load/dry-run.md is missing", out.getvalue())
+        self.assertIn("the --migration folder is incomplete", out.getvalue())
+        self.assertFalse((self.r / "releases/R1/plan.json").exists())
+        self._migration("load")
+        self.assertEqual(plan("R2"), 0)
+        p = json.loads((self.r / "releases/R2/plan.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(p["classification"]["classification"], "data-impacting")
+        self.assertEqual(p["checks"]["migration"], ["load"])
+
     def test_permission_change_is_permission_impacting(self):
         envs = json.loads(json.dumps(ENVS))
         for k, v in (("dev", "Group,2"), ("stg", "Group,7")):
@@ -550,6 +623,105 @@ class PlsTest(unittest.TestCase):
         diffs = pls.flat_diff(pls.same_meta(pls.logical(json.loads(live.read_text(encoding="utf-8")), envs["envs"]["stg"]), pls.read_tree(self.r / "config/a")),
                               pls.read_tree(self.r / "config/a"))
         self.assertEqual(pls.classify(diffs)["classification"], "permission-impacting")
+
+    def test_access_lists_of_views_exports_dashboards_status_and_column_controls_are_mapped(self):
+        envs = json.loads(json.dumps(ENVS))
+        envs["envs"]["dev"]["principals"] = {"support": "Group,373", "boss": "User,5", "sales": "Dept,7"}
+        envs["envs"]["stg"]["principals"] = {"support": "Group,9", "boss": "User,50", "sales": "Dept,70"}
+        (self.r / "environments.json").write_text(json.dumps(envs), encoding="utf-8")
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        acl = {"Groups": [373], "Users": [5], "Depts": [7]}
+        ss.update(Views=[{"Id": 1, "Name": "[Admin] list", **acl}], Exports=[{"Id": 1, "Name": "csv", **acl}],
+                  DashboardParts=[{"Id": 1, "Type": 3, "Title": "news", **acl}],
+                  StatusControls=[{"Id": 1, "Name": "lock", "Status": 900, "ReadOnly": True, **acl}],
+                  ReadColumnAccessControls=[{"ColumnName": "NumA", **acl}])
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        want = {"Groups": ["${principal:support}"], "Users": ["${principal:boss}"], "Depts": ["${principal:sales}"]}
+        for lst in ("Views", "Exports", "DashboardParts", "StatusControls", "ReadColumnAccessControls"):
+            self.assertEqual({k: site[lst][0][k] for k in want}, want, lst)
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual({k: pl["Views"][0][k] for k in want}, {"Groups": [9], "Users": [50], "Depts": [70]})
+        self.assertEqual(pl["ReadColumnAccessControls"][0]["Groups"], [9])
+        site["ReadColumnAccessControls"][0]["Users"] = ["${principal:boss}", -1]   # -1: every authenticated user
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["ReadColumnAccessControls"][0]["Users"], [50, -1])
+        site["Exports"][0]["Users"] = [5]                                         # a raw id: lint and pack refuse
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertTrue(any(i["rule"] == "L-PERM-01" and "export 'csv' Users" in i["msg"] for i in pls.lint(self.r)))
+        with self.assertRaisesRegex(pls.Fail, "export 'csv' Users uses an environment-specific id 5"):
+            pls.payload(pls.read_tree(self.r / "config/a"), envs["envs"]["stg"], "a")
+
+    def test_site_lists_map_site_ids_and_keep_site_names(self):
+        ex = export(101, 102, "http://dev.internal")
+        ss = ex["Response"]["Data"]["SiteSettings"]
+        ss.update(MoveTargets=[102], IntegratedSites=["102", "販促 group"],
+                  DashboardParts=[{"Id": 1, "Type": 1, "View": {}, "TimeLineSites": "101, 販促,102",
+                                   "CalendarSitesData": ["102"],
+                                   "QuickAccessSites": '[{"Id": "102", "Icon": "x"}, {"Id": "master"}]'}])
+        p = self.r / "dev.json"
+        p.write_text(json.dumps(ex), encoding="utf-8")
+        pls.main(["unpack", str(p), "--env", "dev", "--site", "a"])
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        part = site["DashboardParts"][0]
+        self.assertEqual(site["MoveTargets"], ["${site:b}"])
+        self.assertEqual(site["IntegratedSites"], ["${site:b}", "販促 group"])           # a name is kept
+        self.assertEqual(part["TimeLineSites"], "${site:a}, 販促,${site:b}")             # layout kept
+        self.assertEqual(part["CalendarSitesData"], ["${site:b}"])
+        self.assertEqual(json.loads(part["QuickAccessSites"]), [{"Id": "${site:b}", "Icon": "x"}, {"Id": "master"}])
+        self.assertNotIn("L-PERM-01", [i["rule"] for i in pls.lint(self.r)])
+        pl = pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")["SiteSettings"]
+        self.assertEqual(pl["MoveTargets"], [202])                                       # an integer again
+        self.assertEqual(pl["IntegratedSites"], ["202", "販促 group"])
+        self.assertEqual(pl["DashboardParts"][0]["TimeLineSites"], "201, 販促,202")
+        self.assertEqual(json.loads(pl["DashboardParts"][0]["QuickAccessSites"])[0]["Id"], "202")
+        site["IntegratedSites"].append("999")                                            # a site environments.json lacks
+        site["MoveTargets"].append(998)
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        msgs = [i["msg"] for i in pls.lint(self.r) if i["rule"] == "L-PERM-01"]
+        self.assertTrue(any("999" in m for m in msgs) and any("998" in m for m in msgs), msgs)
+        with self.assertRaisesRegex(pls.Fail, "environment-specific site id"):
+            pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")
+
+    def test_site_list_edge_shapes(self):
+        import pls_site_lists as SL
+        ids = {"102": "b"}
+        for text, want in (('[{"Id": 102}]', [{"Id": "${site:b}"}]),             # a number Id
+                           ('[{"id": "102"}]', [{"id": "${site:b}"}])):            # key case ignored (Newtonsoft)
+            s = {"DashboardParts": [{"Id": 1, "QuickAccessSites": text}]}
+            SL.to_refs(s, ids)
+            self.assertEqual(json.loads(s["DashboardParts"][0]["QuickAccessSites"]), want)
+        bad = {"DashboardParts": [{"Id": 4, "QuickAccessSites": '[{"Id": "102"},]', "TimeLineSites": "102"}]}
+        SL.to_refs(bad, ids)                                                        # other lists still mapped
+        self.assertEqual(bad["DashboardParts"][0]["TimeLineSites"], "${site:b}")
+        self.assertTrue(any("DashboardParts[4].QuickAccessSites" in x and "not readable JSON" in x for x in SL.raw_ids(bad)))
+        with self.assertRaisesRegex(pls.Fail, "not readable JSON"):
+            SL.from_refs(bad, lambda n: 202, "s", pls.Fail)
+        names = {"IntegratedSites": ["１０２", " master "],
+                 "DashboardParts": [{"Id": 2, "QuickAccessSites": '[{"Id": " master "}]'}]}
+        SL.to_refs(names, ids)                                                      # full-width digits and spaces: names
+        self.assertEqual(names["IntegratedSites"], ["１０２", " master "])
+        self.assertEqual(names["DashboardParts"][0]["QuickAccessSites"], '[{"Id": " master "}]')
+        self.assertEqual(SL.raw_ids(names), [])
+        self.assertEqual(SL.raw_ids({"MoveTargets": ["102", True]}), ["MoveTargets: 102", "MoveTargets: True"])
+        self.assertEqual(SL.raw_ids({"DashboardParts": [{"Id": 7, "CalendarSites": "5"}]}), ["DashboardParts[7].CalendarSites: 5"])
+
+    def test_site_list_refusals(self):
+        import pls_site_lists as SL
+        e = {"sites": {"a": {"id": 201}, "new": {}}}
+        resolve = lambda n: pls.site_id_of(e, n)                                          # noqa: E731
+        with self.assertRaisesRegex(pls.Fail, "environment-specific site id 999"):        # a raw id in a text list
+            SL.from_refs({"IntegratedSites": ["${site:a}", "999"]}, resolve, "s", pls.Fail)
+        with self.assertRaisesRegex(pls.Fail, r"unresolved reference \$\{site:gone\}"):
+            SL.from_refs({"MoveTargets": ["${site:gone}"]}, resolve, "s", pls.Fail)
+        with self.assertRaisesRegex(pls.Fail, "not created in this environment yet"):
+            SL.from_refs({"DashboardParts": [{"TimeLineSites": "${site:new}"}]}, resolve, "s", pls.Fail)
 
     def test_process_access_control_refs(self):
         envs = json.loads(json.dumps(ENVS))
@@ -592,6 +764,69 @@ class PlsTest(unittest.TestCase):
         c = pls.classify(d)
         self.assertEqual(c["classification"], "data-impacting")
         self.assertIn("D16", c["data_impacting"][0])
+
+    def test_classify_access_lists_and_status_controls_are_permission_impacting(self):
+        for path, kind, before, after in (
+                ("settings.StatusControls[1]", "added", None, {"Status": 200, "ReadOnly": True}),
+                ("settings.StatusControls[1].ReadOnly", "changed", True, False),
+                ("settings.Views[2].Groups", "changed", ["${principal:a}"], ["${principal:b}"]),
+                ("settings.Exports[1]", "added", None, {"Name": "x", "Users": ["${principal:u}"]}),
+                ("settings.DashboardParts[3].Depts", "added", None, ["${principal:d}"]),
+                ("settings.NotInheritPermissionsWhenCreatingSite", "changed", False, True)):
+            with self.subTest(path=path):
+                c = pls.classify([{"path": path, "kind": kind, "before": before, "after": after}])
+                self.assertEqual(c["classification"], "permission-impacting")
+        c = pls.classify([{"path": "settings.Views[2]", "kind": "added", "before": None, "after": {"Name": "all"}}])
+        self.assertEqual(c["classification"], "config-only")                        # a view without an access list
+
+    def test_classify_real_differ_paths(self):
+        # paths as flat_diff builds them: views keyed by Name (free text), formulas as objects, a look-alike key
+        def cls(before, after):
+            return pls.classify(pls.flat_diff({"settings": before}, {"settings": after}))["classification"]
+        f1 = {"Id": 1, "Target": "NumC", "Formula": {"OperatorType": "Multiplication",
+                                                    "Children": [{"ColumnName": "NumA"}, {"ColumnName": "NumB"}]}}
+        f2 = {"Id": 1, "Target": "NumC", "Formula": {"OperatorType": "Addition",
+                                                    "Children": [{"ColumnName": "NumA"}, {"ColumnName": "NumB"}]}}
+        self.assertEqual(cls({"Formulas": [f1]}, {"Formulas": [f2]}), "data-impacting")
+        self.assertEqual(cls({}, {"Formulas": [f1]}), "data-impacting")
+        self.assertEqual(cls({}, {"FormulasGetErrorDetails": True}), "config-only")          # another key, not a formula
+        self.assertEqual(cls({}, {"DashboardPartsAsynchronousLoading": True}), "config-only")
+        for name in ("All", "[Admin] list"):                                                # a name with "]"
+            with self.subTest(name=name):
+                v = {"Id": 2, "Name": name, "Groups": [3]}
+                self.assertEqual(cls({"Views": [v]}, {"Views": [dict(v, Groups=[4])]}), "permission-impacting")
+                self.assertEqual(cls({"Views": []}, {"Views": [v]}), "permission-impacting")
+                p = {"Id": 5, "Name": name, "Users": [7]}
+                self.assertEqual(cls({"Processes": [p]}, {"Processes": [dict(p, Users=[8])]}), "permission-impacting")
+                self.assertEqual(cls({"Views": [dict(v, Groups=[])]}, {"Views": [dict(v, Groups=[], ColumnSorterHash={"A": "asc"})]}),
+                                 "config-only")
+
+    def test_classify_site_formula_change_is_data_impacting(self):
+        # 1.5.2 records formulas in SiteSettings.Formulas[] (ADR-0004 Decision 1: formula changed → data-impacting)
+        for kind, before, after in (("added", None, {"Target": "NumC", "Formula": "NumA * NumB"}),
+                                    ("changed", "NumA * NumB", "NumA * NumB * 1.1"), ("removed", {"Target": "NumC"}, None)):
+            path = "settings.Formulas[1]" if kind != "changed" else "settings.Formulas[1].Formula"
+            c = pls.classify([{"path": path, "kind": kind, "before": before, "after": after}])
+            self.assertEqual(c["classification"], "data-impacting", kind)
+            self.assertIn("SynchronizeFormulas", c["data_impacting"][0])
+
+    def test_classify_multiple_selections_and_choice_control_are_data_impacting(self):
+        # a multi-select column stores a JSON array, a single-select one the value (source-derived, Pleasanter_1.5.2.0)
+        for kind, before, after in (("added", None, True), ("changed", True, False), ("removed", True, None)):
+            c = pls.classify([{"path": "settings.Columns[ClassA].MultipleSelections", "kind": kind, "before": before,
+                               "after": after}])
+            self.assertEqual(c["classification"], "data-impacting", kind)
+            self.assertIn("JSON array", c["data_impacting"][0])
+        # false is not recorded (SiteSettings.cs l.1463): an explicit false added or removed changes nothing
+        for kind, before, after in (("added", None, False), ("removed", False, None)):
+            c = pls.classify([{"path": "settings.Columns[ClassA].MultipleSelections", "kind": kind, "before": before,
+                               "after": after}])
+            self.assertEqual(c["classification"], "config-only", kind)
+        # radio buttons show a multi-select value as empty (HtmlControls.cs): data-impacting, not verified
+        c = pls.classify([{"path": "settings.Columns[ClassA].ChoicesControlType", "kind": "changed", "before": "DropDown",
+                           "after": "Radio"}])
+        self.assertEqual(c["classification"], "data-impacting")
+        self.assertIn("not verified", c["data_impacting"][0])
 
     def test_classify_lookup_json_by_meaning_not_layout(self):
         before = '[\n  {\n    "SiteId" : ${site:b},\n    "View": {"ColumnFilterHash": {"Status": 1}}\n  }\n]'

@@ -1,0 +1,114 @@
+{
+  "entry": "D41a",
+  "title": "A formula over a looked-up column is computed after the lookup: line NumC = NumB (looked up from the master) x NumA",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "単価"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "NumA"
+        ]
+      }
+    }
+  },
+  "sites": {
+    "lines": {
+      "ReferenceType": "Results",
+      "SiteSettings": {
+        "Columns": [
+          {
+            "ColumnName": "ClassB",
+            "ChoicesText": "[{\"SiteId\": ${probe_site:main}, \"Lookups\": [{\"From\": \"NumA\", \"To\": \"NumB\"}]}]"
+          },
+          {
+            "ColumnName": "NumA",
+            "LabelText": "数量"
+          },
+          {
+            "ColumnName": "NumB",
+            "LabelText": "単価"
+          },
+          {
+            "ColumnName": "NumC",
+            "LabelText": "金額"
+          }
+        ],
+        "EditorColumnHash": {
+          "General": [
+            "ResultId",
+            "Title",
+            "ClassB",
+            "NumA",
+            "NumB",
+            "NumC"
+          ]
+        },
+        "Formulas": [
+          {
+            "Id": 1,
+            "CalculationMethod": "Default",
+            "Target": "NumC",
+            "Formula": {
+              "Children": [
+                {
+                  "ColumnName": "NumB"
+                },
+                {
+                  "ColumnName": "NumA",
+                  "OperatorType": 3
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "tests": [
+    {
+      "id": "D41-lookup",
+      "steps": [
+        {
+          "op": "create",
+          "save": "m",
+          "data": {
+            "Title": "kbprobe D41 master",
+            "NumHash": {
+              "NumA": 1000
+            }
+          }
+        },
+        {
+          "op": "create",
+          "site": "lines",
+          "save": "l",
+          "data": {
+            "Title": "kbprobe D41 line",
+            "ClassHash": {
+              "ClassB": "$m"
+            },
+            "NumHash": {
+              "NumA": 3
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$l",
+          "expect": {
+            "NumHash.NumB": 1000,
+            "NumHash.NumC": 3000
+          }
+        }
+      ]
+    }
+  ]
+}
