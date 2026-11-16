@@ -3951,6 +3951,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("release")
     s.add_argument("export", nargs="?", help="export of the target site taken right after applying (single-site plan)")
     s.add_argument("--export", dest="exports", action="append", metavar="SITE=EXPORT", help="multi-site plan: one per site")
+    s = sp.add_parser("scope", help="components of config/<site> without round-trip evidence (ADR-0001), read from git: "
+                                     "what release-plan would refuse; exit 1 while any is found")
+    s.add_argument("--site", help="one site (default: every site in config/)")
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
@@ -4349,6 +4352,27 @@ def _main(argv=None) -> int:
         text = json.dumps(p, ensure_ascii=False, indent=2)
         (Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n") if a.out else print(text))
         return 0
+
+    if a.cmd == "scope":                                # P2/P3: see at design time what release-plan would refuse
+        cfg = r / "config"
+        sites = [a.site] if a.site else sorted(d.name for d in (cfg.iterdir() if cfg.is_dir() else [])
+                                                if (d / "site.json").exists())
+        if a.site and (Path(a.site).name != a.site or a.site in (".", "..")):
+            raise Fail(f"--site {a.site!r}: a site name, not a path")
+        if a.site and not (cfg / a.site / "site.json").exists():
+            raise Fail(f"config/{a.site}/site.json not found — unpack the site first")
+        found = 0
+        for site in sites:
+            m = read_tree(cfg / site)
+            items = SC.unverified(m["settings"] | m["scripts"])
+            found += len(items)
+            print(f"{site}: " + ("no finding" if not items else f"{len(items)} without round-trip evidence"))
+            for x in items:
+                print(f"  SCOPE {x}")
+        if found:
+            print("release-plan refuses these until a probe proves them (pls kb-verify, ADR-0023) or a person accepts "
+                  "them with a decision record (--accept-unverified)")
+        return 1 if found else 0
 
     if a.cmd == "lint":
         issues = lint(r)

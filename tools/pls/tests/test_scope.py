@@ -1,4 +1,6 @@
 """Components proven to round-trip (ADR-0001, BR3):  python -m unittest discover -s tools/pls/tests -v"""
+import contextlib
+import io
 import json
 import sys
 import unittest
@@ -110,6 +112,29 @@ class ReleasePlanTest(TP.PlsTest):
         git_a.write_text(json.dumps(site), encoding="utf-8")
         self.assertEqual(pls.main(["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]), 1)
         self.assertFalse((self.r / "releases/R1").exists())                               # refused: nothing written
+
+    def test_scope_command_lists_from_git_what_release_plan_would_refuse(self):
+        self._two_sites()
+        git_a = self.r / "config/a/site.json"
+        site = json.loads(git_a.read_text(encoding="utf-8"))
+        site["Exports"] = [{"Id": 1}]
+        site["DashboardParts"] = [{"Id": 8, "Type": 0}]
+        git_a.write_text(json.dumps(site), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(pls.main(["scope"]), 1)
+        text = out.getvalue()
+        self.assertIn("a: 2 without round-trip evidence", text)
+        self.assertIn("SCOPE Exports (no round-trip evidence)", text)
+        self.assertIn("SCOPE DashboardParts[8] type 0 (quick access)", text)
+        self.assertIn("b: no finding", text)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(pls.main(["scope", "--site", "b"]), 0)                       # one clean site
+        self.assertNotIn("a:", out.getvalue())
+        with self.assertRaisesRegex(pls.Fail, "config/zz/site.json not found"):
+            pls.main(["scope", "--site", "zz"])
+        for bad in ("../a", "a/..", ".."):
+            with self.assertRaisesRegex(pls.Fail, "a site name, not a path"):
+                pls.main(["scope", "--site", bad])
 
     def test_missing_decision_record_is_an_error(self):
         with self.assertRaises(pls.Fail):

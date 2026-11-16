@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**`pls scope` (2026-11-16):** lists per site, from git, the components without round-trip evidence that release-plan would refuse; skills do not call it yet (TD-65). `plans/2026-11-16-scope-report/`.
+
 **Departments in `pls principals` (2026-11-16):** a role with `"principal": "Dept"` binds by `dept_code` / `dept_name`, never created; field names not read back on a real server (TD-64). `plans/2026-11-16-departments-in-principals/`.
 
 **Multiple selection classified (2026-11-16):** `Columns[x].MultipleSelections` switched and `ChoicesControlType` changed are data-impacting (source-derived, not probed; WS3b probe open in ADR-0004). `plans/2026-11-16-multiple-selections-classified/`.
