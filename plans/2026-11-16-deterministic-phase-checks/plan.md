@@ -35,7 +35,7 @@
 - Eval matrix per model and more golden cases (assessment item 5): separate plan; needs eval batch approval.
 - Intake questionnaire `pls request new` (item 4) and pattern library (item 6): after B, if P1 checks show the gap.
 
-## Decisions needed from Nam before building (ADR-0029)
+## Decisions (Nam 2026-11-16: A2, B1 blocking, C1, evals approved — ADR-0029 Decision)
 1. Part A: A2 (recommended) / A1 / A3; and the eval rule for a generated reference (data change without eval: recommended).
 2. Part B: B1 front matter (recommended) / B2 JSON / B3 none; gate coupling blocking (recommended) / advisory.
 3. Part C: C1 (recommended) / C2.

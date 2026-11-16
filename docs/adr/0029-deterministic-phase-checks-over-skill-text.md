@@ -1,6 +1,6 @@
 # ADR-0029: Deterministic phase checks over skill text — knowledge from one source, phase outputs with a schema, project hooks
 
-- **Status:** Proposed (2026-11-16) — direction agreed by Nam, options per part open
+- **Status:** Accepted (Nam: A2, B1 blocking, C1 on 2026-11-16) — not built yet
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I4, I6, I8, I9 (`docs/architecture.md` §2); §5 P1–P3 "Checks", §7.3 (hooks listed, not built); ADR-0004 (classification), ADR-0016 (agent team), ADR-0020 (gate records), ADR-0023 (KB shapes); TD-21 (no PreToolUse hook yet), TD-51, TD-64, TD-65, TD-66 (skill text behind code); plan `plans/2026-11-16-deterministic-phase-checks/plan.md`
@@ -68,7 +68,7 @@ Built only after the hook contract is read in the official Claude Code documenta
 
 ## Decision
 
-*(not decided — Nam)* Recommendation: A2 (A1 as its first step), B1 with blocking gate coupling, C1. Build order A → B → C, as Nam asked.
+**A2** (A1 as its first step), **B1** with **blocking** gate coupling, **C1**; build order A → B → C. Nam 2026-11-16 (AskUserQuestion, his answers verbatim): Part A "A2 generated file (Recommended)"; Part B form "B1 front matter (Recommended)"; gate "Blocking + accept (Recommended)"; hooks / evals "C1 + evals approved now (Recommended)". The C1 answer also approves the evals of the P1, P2 and lifecycle skills when their text changes under this ADR, without a further batch approval. The generated reference of Part A is data: a change of its rule texts needs no eval; a change of the generator or of the hand-written procedure does.
 
 ## Consequences
 
@@ -80,5 +80,5 @@ Built only after the hook contract is read in the official Claude Code documenta
 ## Open questions
 
 - [ ] Hook contract (blocking exit code / JSON output, Windows behaviour) — *Claude Code documentation, before Part C*
-- [ ] Whether a generated reference file needs an eval when only its data changes (Part A eval rule) — *Nam*
+- [x] Whether a generated reference file needs an eval when only its data changes — no (Nam 2026-11-16, A2)
 - [ ] Front matter fields for brownfield documents (`pls-x-spec-recovery` writes as-is specifications) — *Part B design, with the onboarding skill*
