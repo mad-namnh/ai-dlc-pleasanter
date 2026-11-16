@@ -78,7 +78,6 @@ pls_http.py | load_connection | raise TransportError(f"{f}: no url for environme
 pls_http.py | resolve_key | raise TransportError(f"no key '{name}' in the connection (keys: {sorted((conn.get('keys') or {}))})")
 pls_http.py | run_tests | raise TransportError(f"get {rid}: HTTP {code}")
 pls_http.py | run_tests | raise TransportError(f"process '{st['process']}' not found")
-pls_http.py | run_tests | raise TransportError(f"unknown op {op}")
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: must be a JSON object")
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: not readable JSON ({ex})") from ex
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: {ex}") from ex

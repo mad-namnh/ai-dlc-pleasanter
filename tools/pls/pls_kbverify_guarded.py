@@ -51,8 +51,26 @@ def scripts(p: dict) -> list:
     return list(((p.get("site") or {}).get("SiteSettings") or {}).get("ServerScripts") or [])
 
 
+def _has_notices(o) -> bool:
+    if isinstance(o, dict):
+        return any((str(k).casefold() in ("notifications", "reminders") and v) or _has_notices(v) for k, v in o.items())
+    if isinstance(o, list):
+        return any(_has_notices(x) for x in o)
+    return False
+
+
+def notices(p: dict) -> bool:
+    """Disabled notifications or reminders in a probe site's settings or a settings step (ADR-0027): such a probe runs
+    only where mail goes to a sink or is disabled, and its sites end like any guarded probe's (teardown, deleted)."""
+    steps = [st for spec in p.get("tests") or [] for st in spec.get("steps") or []
+             if st.get("op") in ("settings", "settings_partial")]
+    return _has_notices([(p.get("site") or {}).get("SiteSettings"),
+                         [(s or {}).get("SiteSettings") for s in (p.get("sites") or {}).values() if isinstance(s, dict)],
+                         [st.get("SiteSettings") or st.get("body") for st in steps]])
+
+
 def is_guarded(p: dict) -> bool:
-    return bool(scripts(p) or p.get("roles"))
+    return bool(scripts(p) or p.get("roles") or notices(p))
 
 
 def _as_keys(p: dict) -> set[str]:
@@ -85,13 +103,15 @@ def check(p: dict) -> None:
     if is_guarded(p):
         td = (p.get("teardown") or {}).get("SiteSettings")
         if not isinstance(td, dict):
-            raise ValueError("a probe with a server script or roles needs a teardown that leaves the site harmless")
+            raise ValueError("a probe with a server script, roles or notifications needs a teardown that leaves the "
+                             "site harmless")
         if "ServerScripts" in td:
             raise ValueError("the teardown must not contain ServerScripts")
         for key, s in (p.get("sites") or {}).items():          # every further site ends like the main one (ADR-0026)
             td = ((s.get("teardown") if isinstance(s, dict) else None) or {}).get("SiteSettings")
             if not isinstance(td, dict):
-                raise ValueError(f"sites.{key}: a probe with a server script or roles needs a teardown for every site")
+                raise ValueError(f"sites.{key}: a probe with a server script, roles or notifications needs a teardown "
+                                 "for every site")
             if "ServerScripts" in td:
                 raise ValueError(f"sites.{key}: the teardown must not contain ServerScripts")
 
@@ -103,7 +123,8 @@ def not_runnable(p: dict, env: str, env_conf: dict, conn: dict, conn_dir: Path) 
     except ValueError as ex:
         return str(ex)
     if mail not in SE.MAIL_SAFE:
-        return (f"side_effects.mail of {env} is {mail!r}: a probe with a server script or a test user runs only where "
+        return (f"side_effects.mail of {env} is {mail!r}: a probe with a server script, a test user or a (disabled) "
+                f"notification runs only where "
                 f"mail goes to a sink or is disabled ({', '.join(SE.MAIL_SAFE)})")
     keys = conn.get("keys") or {}
     for role in sorted(p.get("roles") or {}):

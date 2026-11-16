@@ -22,10 +22,14 @@ Safety: a probe can only create records on its own sites and act on records it c
 update; `get`, `exec`, `update` name a record a create of the same spec returned — checked in the file (a save
 name is never a kb-verify variable, a create expected to be refused saves nothing) and again at run time; no
 `delete`, `run_on`, `vars`, no `site` on a spec, and `site` on a step only names one of the probe's own sites; a
-probe file name has no `__`). Probe sites have no notifications or reminders
-at any depth. A server script at the top level of the main site's settings, `as_key` for a declared test-user role
-and `$group_<role>` (that role's group id) are allowed only under the guards of pls_kbverify_guarded (ADR-0025,
-ADR-0026). kb-verify reuses a probe site only when the site is provably its own (parent folder, title, type).
+probe file name has no `__`). Probe sites hold notifications or reminders only when every item is `Disabled`,
+addresses only example.invalid and carries no credential field (ADR-0027); never in a teardown. A server script at
+the top level of the main site's settings, `as_key` for a declared test-user role, `$group_<role>` (that role's group
+id) and such disabled notifications are allowed only under the guards of pls_kbverify_guarded (ADR-0025, ADR-0026,
+ADR-0027). A `settings` step (`{"op": "settings", "site": "<key>|main", "SiteSettings": {…}}`, updatesite) or
+`settings_partial` step (`"body": {…}`, updatesitesettings) saves one of the probe's own sites, never with a server
+script; `$admin_uid` and `$group_<role>` may be whole values in probe site settings and in those steps.
+kb-verify reuses or writes a probe site only when the site is provably its own (parent folder, title, type).
 """
 from __future__ import annotations
 
@@ -36,31 +40,120 @@ from pathlib import Path
 from typing import Any
 
 import pls_kbverify_guarded as KG
+import pls_secret_fields as SF
+import pls_side_effects as SE
 
 SELECTOR = re.compile(r"^(\w+)\[(\w+)=([^\]]*)\]$")
-OPS = ("create", "get", "list", "exec", "update")
+OPS = ("create", "get", "list", "exec", "update", "settings", "settings_partial")
 RECORD_OPS = ("get", "exec", "update")            # act on one record the probe created
-SITE_OPS = ("create", "list")                     # may name one of the probe's own sites
+SETTINGS_OPS = ("settings", "settings_partial")   # save settings on one of the probe's own sites (ADR-0027)
+SITE_OPS = ("create", "list") + SETTINGS_OPS      # may name one of the probe's own sites
 FORBIDDEN_KEYS = ("site", "run_on", "vars")      # as_key: KG.check (declared roles only); a step's site: below
 TITLE = "zz_kbprobe_{}"
 SITE_KEY = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")      # no leading, trailing or double _
 SITE_REF = re.compile(r"\$\{probe_site:([^}]*)\}")
 GROUP_VAR = re.compile(r"^\$group_(\w+)$")
+SETTINGS_VAR = re.compile(r"^\$(admin_uid|group_\w+)$")    # whole values a probe site's settings may name (ADR-0027)
+SAFE_DOMAIN = "@example.invalid"
 RESERVED_SAVES = ("today", "yesterday", "tomorrow", "lastweek", "admin_uid")   # and group_*: kb-verify's own variables
 
 
-def _mail_parts(o: Any, path: str = "") -> list[str]:
+PLACEHOLDERS = ("[owner]", "[manager]", "[creator]", "[updator]")   # record fields, never a principal id (ADR-0027 3/4)
+ADDRESS_KEY = re.compile(r"(address|^to$|^cc$|^bcc$)", re.I)       # fields that name a recipient or a target
+URL = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://")
+
+
+def _ci(d: dict, key: str) -> Any:
+    """A key read as Pleasanter's JSON reader may read it (property names compared without case: assumed, not
+    verified — duplicates under case folding are refused in _mail_parts)."""
+    return next((v for k, v in d.items() if str(k).casefold() == key.casefold()), None)
+
+
+def notice_problems(kind: str, items: Any) -> list[str]:
+    """Why notifications or reminders could reach anyone (ADR-0027 item 4); [] when every item is `Disabled`, every
+    recipient field holds only example.invalid addresses or the placeholders [Owner] / [Manager] / [Creator] /
+    [Updator], no field holds a URL, and no credential field is filled (pls_secret_fields)."""
+    if not isinstance(items, list) or not all(isinstance(x, dict) for x in items):
+        return [f"{kind} must be a list of objects"]
+    out = [f"{kind}[{i}] is not \"Disabled\": true" for i, x in enumerate(items) if _ci(x, "Disabled") is not True]
+    canon = {k.casefold(): k for k in ("Token", "Headers", "Type", "ReminderType", "Address", "To", "Disabled")}
+    spelled = [{canon.get(str(k).casefold(), k): v for k, v in x.items()} for x in items]   # as Pleasanter may read them
+    for i, x in enumerate(items):
+        folded = [str(k).casefold() for k in x]
+        if len(set(folded)) != len(folded):
+            out.append(f"{kind}[{i}]: two keys differ only in case")
+        for k, v in x.items():
+            texts = _strings(v) + ([str(v)] if isinstance(v, (int, float)) and not isinstance(v, bool) else [])
+            if any(URL.search(t) for t in texts):
+                out.append(f"{kind}[{i}].{k}: a URL (no target outside the probe, ADR-0027)")
+            if ADDRESS_KEY.search(str(k)):
+                for t in texts:
+                    for tok in (y for y in re.split(r"[,;\s]+", t) if y):
+                        if not (tok.lower().endswith(SAFE_DOMAIN) and SE.EMAIL_RE.fullmatch(tok)) \
+                                and tok.lower() not in PLACEHOLDERS:
+                            out.append(f"{kind}[{i}].{k}: recipient {tok!r} (only …{SAFE_DOMAIN} or "
+                                       f"{', '.join(p.title() for p in PLACEHOLDERS)})")
+    out += [f"{kind}: address {a} (only {SAFE_DOMAIN[1:]})" for a in sorted({m for t in _strings(items)
+                                                                          for m in SE.EMAIL_RE.findall(t)})
+            if not a.lower().endswith(SAFE_DOMAIN)]
+    whole = "Reminders" if str(kind).casefold() == "reminders" else "Notifications"
+    out += [f"{kind}: {n}" for n in SF.secret_fields({whole: spelled})]
+    return out
+
+
+def _json_text(v: Any) -> Any:
+    """A string that holds a JSON object or array, parsed (content a step could hide from the key checks)."""
+    if isinstance(v, str) and v.strip()[:1] in ("{", "["):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return None
+    return None
+
+
+def _mail_parts(o: Any, path: str = "", notices: bool = False) -> list[str]:
+    """Paths that could send mail or run a script, keys compared without case, JSON text read as content.
+    notices=True: disabled notifications and reminders that pass notice_problems are allowed (probe site settings,
+    settings steps); never in a teardown."""
     out = []
     if isinstance(o, dict):
+        folded = [str(k).casefold() for k in o]
+        if len(set(folded)) != len(folded):
+            out.append(f"{path or '(top)'}: two keys differ only in case")
         for k, v in o.items():
             p = f"{path}.{k}" if path else k
-            if k in ("Notifications", "Reminders", "ServerScripts") and v:
+            kf = str(k).casefold()
+            if kf in ("notifications", "reminders") and v and notices:
+                out += [f"{p}: {x}" for x in notice_problems(k, v)]
+                continue
+            if kf in ("notifications", "reminders", "serverscripts") and v:
                 out.append(p)
-            out += _mail_parts(v, p)
+            out += _mail_parts(v, p, notices)
     elif isinstance(o, list):
         for i, v in enumerate(o):
-            out += _mail_parts(v, f"{path}[{i}]")
+            out += _mail_parts(v, f"{path}[{i}]", notices)
+    elif (parsed := _json_text(o)) is not None:
+        out += _mail_parts(parsed, f"{path}(json)", False)      # never notices inside a JSON string
     return out
+
+
+def substitute_vars(o: Any, vars_: dict) -> Any:
+    """`$admin_uid` / `$group_<role>` as a whole value → that id (an int when it is digits) — ADR-0027 item 3."""
+    if isinstance(o, str):
+        m = SETTINGS_VAR.fullmatch(o)
+        if m:
+            v = str(vars_[m.group(1)])
+            return int(v) if v.isdigit() else v
+        return o
+    if isinstance(o, list):
+        return [substitute_vars(x, vars_) for x in o]
+    if isinstance(o, dict):
+        return {k: substitute_vars(v, vars_) for k, v in o.items()}
+    return o
+
+
+def settings_steps(p: dict) -> list[dict]:
+    return [st for spec in (p.get("tests") or []) for st in spec.get("steps") or [] if st.get("op") in SETTINGS_OPS]
 
 
 def extra_sites(p: dict) -> dict:
@@ -122,16 +215,34 @@ def check_probe(p: dict) -> None:
     """Raise ValueError when a probe could send mail or touch anything but its own sites and records."""
     sites = extra_sites(p)
     own = {k: v for k, v in (p["site"].get("SiteSettings") or {}).items() if k != "ServerScripts"}   # KG.check
-    mail = _mail_parts(own) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
+    mail = _mail_parts(own, notices=True) + _mail_parts((p.get("teardown") or {}).get("SiteSettings") or {})
     for k, s in sites.items():                       # a further site holds no script at all (ADR-0026)
-        mail += [f"sites.{k}.{x}" for x in _mail_parts(s.get("SiteSettings") or {})
+        mail += [f"sites.{k}.{x}" for x in _mail_parts(s.get("SiteSettings") or {}, notices=True)
                  + _mail_parts((s.get("teardown") or {}).get("SiteSettings") or {})]
+    for st in settings_steps(p):                     # a settings step: same content rules, never a script (ADR-0027)
+        what = st.get("SiteSettings") if st["op"] == "settings" else st.get("body")
+        if not isinstance(what, dict) or not what:
+            raise ValueError(f"a {st['op']} step needs a non-empty {'SiteSettings' if st['op'] == 'settings' else 'body'} object")
+        if st["op"] == "settings_partial" and (                 # body shape of updatesitesettings not read (ADR-0027)
+                {str(k).casefold() for k in what} != {"sitesettings"} or not isinstance(next(iter(what.values())), dict)):
+            raise ValueError("a settings_partial body holds only a SiteSettings object (no permissions, parent, title or "
+                             "type: the route's body shape is not read yet, ADR-0027)")
+        mail += [f"{st['op']} step: {x}" for x in _mail_parts(what, notices=True)]
     if mail:
-        raise ValueError(f"probe sites must not send mail, and server scripts are allowed only at the top level of "
-                         f"the probe's main site settings (ADR-0025, ADR-0026): {mail}")
+        raise ValueError(f"probe sites must not send mail (notifications and reminders only disabled, to example.invalid, "
+                         f"without credentials), and server scripts are allowed only at the top level of the probe's "
+                         f"main site settings (ADR-0025, ADR-0026, ADR-0027): {mail}")
+    roles_declared = set(p.get("roles") or {})
+    setting_texts = _strings([p["site"], [s for s in sites.values()],
+                              [st.get("SiteSettings") or st.get("body") for st in settings_steps(p)]])
+    undeclared = sorted({m.group(1)[6:] for t in setting_texts for m in [SETTINGS_VAR.match(t)]
+                         if m and m.group(1).startswith("group_")} - roles_declared)
+    if undeclared:
+        raise ValueError(f"$group_{undeclared[0]} in probe site settings - only the group of a role declared in roles "
+                         "(ADR-0027)")
     keys = {"main", *sites}
     refs = set()
-    for o in [p["site"], p.get("teardown"), p.get("expect_stored")] + list(sites.values()):
+    for o in [p["site"], p.get("teardown"), p.get("expect_stored")] + list(sites.values()) + settings_steps(p):
         for text in _strings(o):
             refs |= set(SITE_REF.findall(text))
     if refs - keys:

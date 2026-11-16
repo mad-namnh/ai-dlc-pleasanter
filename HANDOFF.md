@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**KB probes change their own settings (2026-11-16, ADR-0027 built):** probe steps `settings` / `settings_partial` on the probe's own sites, `$admin_uid` / `$group_<role>` in probe site settings, disabled notifications and reminders (example.invalid only, no credentials; guarded). No probe uses them yet — WS3c / notification probes next, run on dev by a person. `plans/2026-11-16-probe-settings-steps/`.
+
 **Impact rules generated (2026-11-16, ADR-0029 A):** `tools/pls/pls_impact_rules.py` → `skills/pls-p2-solution-designer/references/impact-rules.md` (regenerate with `python tools/pls/pls_impact_rules.py --write`; a test fails when it is stale); `classify` returns rule ids; P2 0.12 walks the rules, runs `pls scope`, knows department roles. `plans/2026-11-16-deterministic-phase-checks/`.
 
 **Mail address settings kept out of git (2026-11-16):** `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault` never go to git: unpack / harvest / adopt drop them, payload and rollback files leave them out, `pls apply` carries the site's own values on every `updatesite` (`pls_http.LIVE_ONLY_KEYS`); lint L-SEC-01 reports them in `site.json`. Wording of the I1 / I2 exception approved by Nam 2026-11-16 (ADR-0010). Browser runner and production packages: TD-59, TD-60; hashes: TD-61. `plans/2026-11-16-mail-settings-out-of-git/`.

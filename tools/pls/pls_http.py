@@ -476,10 +476,13 @@ def _check(actual: Any, expected: Any) -> bool:
     return json.dumps(actual, sort_keys=True, ensure_ascii=False) == json.dumps(expected, sort_keys=True, ensure_ascii=False)
 
 
-def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list, env: str, confine: bool = False) -> dict:
+def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list, env: str, confine: bool = False,
+              site_ops: Callable[[dict, dict], tuple[bool, list[str]]] | None = None) -> dict:
     """clients(role) → Client using that role's key ("as" in a spec; None = default key).
     confine: a step on one record (get, exec, update, delete) may only name a record that a create of the same spec
-    returned — kb-verify probes act on their own records only (ADR-0009, ADR-0026)."""
+    returned — kb-verify probes act on their own records only (ADR-0009, ADR-0026).
+    site_ops(step, vars) runs a `settings` / `settings_partial` step and returns (ok, log lines): only kb-verify passes
+    it, for the probe's own sites (ADR-0027); without it those ops are unknown."""
     out = []
     for spec in specs:
         c = clients(spec.get("as_key"))
@@ -572,6 +575,12 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                         ok = (exp.get("contains") in str(act)) if isinstance(exp, dict) and "contains" in exp else _check(act, exp)
                         log.append(f"{'ok ' if ok else 'NG '} SiteSettings.{path} = {json.dumps(act, ensure_ascii=False)} (expected {json.dumps(exp, ensure_ascii=False)})")
                         status = status if ok else "fail"
+                elif op in ("settings", "settings_partial") and site_ops is not None:
+                    ok, lines = site_ops(st, vars_)
+                    log += lines
+                    status = status if ok else "fail"
+                    site = clients(None).export_site(spec.get("run_on") or site_id)["Response"]["Data"]
+                    procs = {p["Name"]: p for p in site["SiteSettings"].get("Processes") or []}   # a step may change them
                 elif op == "editPage":
                     # Rendering needs a browser session of that user; an API key cannot open the edit screen.
                     log.append(f"skip editPage '{st.get('button')}' — needs a browser session (pls-runner.js); "

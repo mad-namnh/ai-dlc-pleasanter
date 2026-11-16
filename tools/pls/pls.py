@@ -3671,11 +3671,41 @@ def http_cmd(r: Path, a) -> int:
                     if len(psites) > 1:
                         row["site_ids"] = dict(own)
                     saved_ok = True
-                    for ps in psites:
-                        settings = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(ps["settings"], own)}
+                    pvars = {"admin_uid": uid} | {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
+                                                  for role in (p.get("roles") or {})}   # bound: KG.not_runnable
+
+                    def site_body(ps, site_settings):
+                        """updatesite body for one of the probe's own sites: ${probe_site:…} and $admin_uid /
+                        $group_<role> replaced (ADR-0026, ADR-0027); the roles' grant while the probe runs."""
+                        settings = {"Version": schema, "ReferenceType": ps["rt"],
+                                    **KV.substitute_sites(KV.substitute_vars(site_settings, pvars), own)}
                         body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": settings}
                         if p.get("roles"):                 # the role's group may use the probe site (D15 shape)
                             body.update(InheritPermission=own[ps["key"]], Permissions=KG.permissions(p, uid, e.get("principals") or {}))
+                        return body
+
+                    def site_ops(st, _vars, psites=psites):
+                        """A settings / settings_partial step (ADR-0027): only on one of the probe's own sites, proven
+                        its own by getsite right before the write; the content rules were checked in the file."""
+                        ps = next(x for x in psites if x["key"] == (st.get("site_key") or "main"))
+                        sid_ = own[ps["key"]]
+                        code, sjs, _ = c.call(f"/api/items/{sid_}/getsite")
+                        if code != 200 or not is_own(ps)(((sjs or {}).get("Response") or {}).get("Data") or {}):
+                            raise H.TransportError(f"{st['op']}: site {sid_} is not this probe's site (getsite → HTTP {code}) "
+                                                   "— nothing written")
+                        if st["op"] == "settings":
+                            code, js, _ = c.call(f"/api/items/{sid_}/updatesite", site_body(ps, st["SiteSettings"]))
+                        else:                              # body shape of updatesitesettings: not read (ADR-0027 open question)
+                            code, js, _ = c.call(f"/api/items/{sid_}/updatesitesettings",
+                                                 KV.substitute_sites(KV.substitute_vars(st["body"], pvars), own))
+                        want = st.get("expectHttp") or 200
+                        where = "" if ps["key"] == "main" else f" {ps['key']}"
+                        msg = f" {(js or {}).get('Message')}" if (js or {}).get("Message") else ""
+                        return code == want, [f"{'ok ' if code == want else 'NG '} {st['op']}{where} → HTTP {code} "
+                                              f"(expected {want}){msg}"]
+
+                    for ps in psites:
+                        body = site_body(ps, ps["settings"])
                         code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite", body)
                         want = p.get("expect_save", 200) if ps["key"] == "main" else 200
                         ok = code == want
@@ -3700,14 +3730,18 @@ def http_cmd(r: Path, a) -> int:
                         vars_ |= {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
                                   for role in (p.get("roles") or {})}           # bound: checked by KG.not_runnable
                         specs = [dict(t, vars=dict(vars_),
-                                      steps=[dict(st, site=own[st["site"]]) if "site" in st else st
+                                      steps=[{**{k: v for k, v in st.items() if k != "site"},
+                                              "site_key": st.get("site") or "main"} if st.get("op") in KV.SETTINGS_OPS
+                                             else dict(st, site=own[st["site"]]) if "site" in st else st
                                              for st in t.get("steps") or []])
                                  for t in p.get("tests") or []]
                         if specs:
-                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True)
+                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True, site_ops=site_ops)
                             for t in res["tests"]:
                                 log += [x.strip() for x in t["log"] if x.strip()]   # passing checks are evidence too
-                                if t["status"] not in ("pass", "pass-api-only"):
+                                if t["status"] == "error":    # a refusal or a broken call is not evidence (I9)
+                                    status = "error"
+                                elif t["status"] not in ("pass", "pass-api-only") and status != "error":
                                     status = "fail"
                     if not is_g:                             # leave the probe sites usable in the UI (D21)
                         for ps in psites:

@@ -1,0 +1,5 @@
+# Plan — ADR-0027 build: probe settings steps, variables in probe settings, disabled notifications
+
+- **Tier:** Critical (kb-verify write guards). **Origin:** Nam 2026-11-16 "3B" (ADR-0027 option B); "cu lam tuan tu het khong can hoi".
+- **Change:** `pls_kbverify.py` (ops, content rules, `notice_problems`, `substitute_vars`), `pls_kbverify_guarded.py` (notices → guarded), `pls_http.run_tests(site_ops=…)`, `pls.py` kb-verify (getsite proof before each step write, variables replaced in every probe site save). Docs: ADR-0027 As built, ADR-0009 / 0025 / 0026 amendment notes, README, HANDOFF.
+- **Acceptance:** (1) a settings step writes only the probe's own site, proven by getsite right before; (2) no server script in any step; (3) notifications / reminders only all Disabled, example.invalid, no credential field, never in a teardown, only with mail sink/disabled, and the site is deleted; (4) `$group_<role>` only for declared roles, `$admin_uid` allowed, whole values only; (5) `pls test` cannot use the ops; (6) new tests fail on the parent; suites green; (7) review no open Critical/High.
