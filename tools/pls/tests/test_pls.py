@@ -810,6 +810,24 @@ class PlsTest(unittest.TestCase):
             self.assertEqual(c["classification"], "data-impacting", kind)
             self.assertIn("SynchronizeFormulas", c["data_impacting"][0])
 
+    def test_classify_multiple_selections_and_choice_control_are_data_impacting(self):
+        # a multi-select column stores a JSON array, a single-select one the value (source-derived, Pleasanter_1.5.2.0)
+        for kind, before, after in (("added", None, True), ("changed", True, False), ("removed", True, None)):
+            c = pls.classify([{"path": "settings.Columns[ClassA].MultipleSelections", "kind": kind, "before": before,
+                               "after": after}])
+            self.assertEqual(c["classification"], "data-impacting", kind)
+            self.assertIn("JSON array", c["data_impacting"][0])
+        # false is not recorded (SiteSettings.cs l.1463): an explicit false added or removed changes nothing
+        for kind, before, after in (("added", None, False), ("removed", False, None)):
+            c = pls.classify([{"path": "settings.Columns[ClassA].MultipleSelections", "kind": kind, "before": before,
+                               "after": after}])
+            self.assertEqual(c["classification"], "config-only", kind)
+        # radio buttons show a multi-select value as empty (HtmlControls.cs): data-impacting, not verified
+        c = pls.classify([{"path": "settings.Columns[ClassA].ChoicesControlType", "kind": "changed", "before": "DropDown",
+                           "after": "Radio"}])
+        self.assertEqual(c["classification"], "data-impacting")
+        self.assertIn("not verified", c["data_impacting"][0])
+
     def test_classify_lookup_json_by_meaning_not_layout(self):
         before = '[\n  {\n    "SiteId" : ${site:b},\n    "View": {"ColumnFilterHash": {"Status": 1}}\n  }\n]'
         layout = '[\n  {\n    "SiteId": ${site:b},\n    "View": {\n      "ColumnFilterHash": {\n        "Status": "1"\n      }\n    }\n  }\n]'

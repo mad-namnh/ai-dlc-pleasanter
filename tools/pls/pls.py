@@ -676,7 +676,23 @@ def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
     for d in diffs:
         p = d["path"]
-        if p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
+        if re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p) and bool(d["before"]) != bool(d["after"]):
+            # stored values of a multi-select column are read as a JSON array of choices, of a single-select one as the
+            # value itself (Pleasanter_1.5.2.0 ToExportExtensions.cs l.23-39, ToDisplayExtensions.cs l.35; source-derived,
+            # not probed): switching it changes how every existing value of the column is read
+            data.append(f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
+                        "one value when it is off (source-derived, not verified); migration: convert the stored values, or "
+                        "nothing to convert only on an empty site and never for production")
+        elif re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p):
+            cfg.append(p)                               # an explicit false added or removed: Pleasanter records only true
+        elif re.fullmatch(r"settings\.Columns\[\w+\]\.ChoicesControlType", p):
+            # radio buttons ignore MultipleSelections and tick a choice only when the stored value equals its key
+            # (HtmlFields.cs l.573-592, HtmlControls.cs l.589): a stored JSON array shows as nothing selected, and a
+            # save may replace it (save path not read, not probed)
+            data.append(f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
+                        "stored values as empty and a save may overwrite them (source-derived, not verified); migration: "
+                        "check the column's stored values, or nothing to convert when the column is single-select or empty")
+        elif p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
             data.append(f"{p}: column definition removed")
         elif re.match(r"settings\.Columns\[\w+\]\.ChoicesText", p) and d["kind"] in ("changed", "removed"):
             before = set(str(d["before"] or "").splitlines())
