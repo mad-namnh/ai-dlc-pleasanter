@@ -8,3 +8,9 @@
 - Reviewer call 2 (pls-x-reviewer, opus, high — step 2, Critical: eval contract).
 - Step 2 review round 1: accept with fixes, 2 Medium / 3 Low, all fixed; observation on `docs/` in the baseline allow-list reported to Nam (`review.md`). Subagent calls: 2 of 6.
 - Step 2 verified on `d3a3202` + README + HANDOFF evals line only (temporary worktree): Python 719 OK (exit 0), node 16/16.
+- Step 3: four patches written from HEAD versions (`git show`), each with its reason and apply command at the top; `git apply --check` OK for all four: `proposed-eval-case-brief.patch`, `proposed-eval-case-runner.patch`, `proposed-agent-rules.patch`, `proposed-dev-orchestrator-skill.patch`. ADR-0030 Status "partly built" (Nam's words) and its row in `docs/adr/README.md`.
+- Reviewer call 3 (pls-x-reviewer, opus, high — step 3).
+- Step 3 review round 1: accept with fixes, 1 High / 2 Medium / 4 Low, all fixed (`review.md`); also `evals/README.md` (request copied as `request.md`; `HANDOFF.md`, `interviewee.md`, held folder) and `CLAUDE.md` agent-team line. Patches regenerated; applied in `../_agent-scratch/wt-s3` + step-3 files: Python 719 OK (exit 0), node 16/16. Subagent calls: 3 of 6.
+- Reviewer call 4 (round 2 of step 3, opus, high).
+- Step 3 review round 2: accept with fixes, 3 Medium / 2 Low, all fixed or disposed (`review.md`); M1 asked of Nam. Verified at `62a113f`: patches apply; Python 723 OK, node 16/16. Subagent calls: 4 of 6. Review rounds for step 3: 2 of 2.
+- Open for Nam: apply the four patches (or reject); M1 wording; follow-up — with-skill case inputs that carry setup notes / earlier results (P2 case 002 → `evals/results/`, P3 case 001 reference-answer line).
