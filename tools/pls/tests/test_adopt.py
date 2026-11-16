@@ -61,8 +61,11 @@ class CliTest(unittest.TestCase):
 
     def test_adopt_is_read_only_and_gives_a_drift_baseline(self):
         self.add_old_site()
+        self.fake.sites[OLD]["SiteSettings"]["AddressBook"] = "book@example.com"   # never written to the repository
         n = len(self.fake.calls)
         self.assertEqual(pls.main(["adopt", "--env", "dev", "--site", str(OLD), "--name", "anken"]), 0)
+        for f in list((self.r / "releases").rglob("*.json")) + list((self.r / "config").rglob("*.json")):
+            self.assertNotIn("book@example.com", f.read_text(encoding="utf-8"), f)
         calls = self.fake.calls[n:]
         self.assertEqual([p for p, _ in calls], [f"/api/items/{OLD}/getsite"])        # one read, nothing else
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))

@@ -195,10 +195,22 @@ class Client:
             raise TransportError(f"getsite {site_id}: HTTP {st} {text[:200]}")
         return js
 
-    def apply(self, site_id: int, payload: dict) -> tuple[int, str]:
+    def apply(self, site_id: int, payload: dict, live_settings: dict | None = None) -> tuple[int, str]:
+        """updatesite. live_settings: the site's SiteSettings as the caller has just read and checked them (apply_release
+        passes its re-read, so no second read widens the TB-8 window); without them the site is read here."""
         for k in ("Title", "ReferenceType", "SiteSettings"):
             if k not in payload:
                 raise TransportError(f"payload missing {k} (I2)")
+        if live_settings is None:
+            try:
+                data = self.export_site(site_id)
+            except UncertainOutcome as ex:                  # nothing was written: a read that timed out is not a write
+                raise TransportError(f"site {site_id} could not be read before its write ({ex}); nothing sent")
+            live_settings = ((data or {}).get("Response") or {}).get("Data", {}).get("SiteSettings")
+            if not isinstance(live_settings, dict):
+                raise TransportError(f"site {site_id}: getsite returned no SiteSettings; nothing sent (the mail settings "
+                                     "kept out of git could not be carried)")
+        payload = with_live_only(payload, live_settings)
         st, js, text = self.call(f"/api/items/{site_id}/updatesite", payload)
         return st, (js or {}).get("Message", text[:200])
 
@@ -271,6 +283,18 @@ def migrate(client: Client, site_id: int, keys: list, data: list) -> dict:
 
 # ---------------------------------------------------------------- release (runner applyRelease: same steps, no per-site guard)
 
+# Settings that hold customer mail addresses never go to git (Nam, 2026-11-15; I7): updatesite replaces the whole
+# SiteSettings, so each write carries the values the site holds right then, read just before it.
+LIVE_ONLY_KEYS = ("AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault")
+
+
+def with_live_only(payload: dict, live_settings: dict) -> dict:
+    """A copy of payload whose SiteSettings carry the live LIVE_ONLY_KEYS values (absent live → absent)."""
+    ss = {k: v for k, v in payload["SiteSettings"].items() if k not in LIVE_ONLY_KEYS}
+    ss.update({k: live_settings[k] for k in LIVE_ONLY_KEYS if k in live_settings})
+    return dict(payload, SiteSettings=ss)
+
+
 def apply_release(client: Client, plan: dict, files: dict, guard=None) -> dict:
     """Preflight, then each site in order: check the write guard again (`guard`, a callable that raises TransportError
     when writing is no longer allowed), read the site again, write, restore every touched site on failure. The guard
@@ -309,8 +333,10 @@ def apply_release(client: Client, plan: dict, files: dict, guard=None) -> dict:
         # above is as old as the writes of the sites before this one. A change by someone else found here is not
         # overwritten; the sites already written are restored. (A change in the moment between this read and the
         # write still cannot be seen — ADR-0014 TB-8.)
+        live_now: dict | None = None
         try:
-            now = client.export_site(step["site_id"])["Response"]["Data"].get("UpdatedTime")
+            live_now = client.export_site(step["site_id"])["Response"]["Data"]
+            now = live_now.get("UpdatedTime")
             changed = None if now == step["expect_updated_time"] else f"UpdatedTime {now} ≠ plan {step['expect_updated_time']}"
         except TransportError as ex:
             changed = f"could not be read again before its write ({ex})"
@@ -326,7 +352,8 @@ def apply_release(client: Client, plan: dict, files: dict, guard=None) -> dict:
                                   + (", the sites already written are restored" if touched else "") + " — re-plan"] + lines}
         touched.append(step["site"])          # a failed updatesite may still have changed the site → restore it too
         try:
-            st, msg = client.apply(step["site_id"], files[step["payload_file"]])
+            st, msg = client.apply(step["site_id"], files[step["payload_file"]],
+                                   live_now.get("SiteSettings") if isinstance((live_now or {}).get("SiteSettings"), dict) else None)
         except UncertainOutcome as ex:
             # Do not restore blindly: the write may have landed or not, and a restore could hit the same timeout.
             # The person reads every touched site back and `pls mark-applied` records what is really there.
@@ -538,6 +565,9 @@ def run_tests(clients: Callable[[str | None], Client], site_id: int, specs: list
                             status = status if ok else "fail"
                 elif op == "siteConfig":
                     for path, exp in st["expect"].items():
+                        if path.split(".")[0].split("[")[0] in LIVE_ONLY_KEYS:
+                            raise TransportError(f"siteConfig {path}: customer mail addresses are not checked by tests "
+                                                 "(results are committed; ADR-0010)")
                         act = _get_path(site["SiteSettings"], path)
                         ok = (exp.get("contains") in str(act)) if isinstance(exp, dict) and "contains" in exp else _check(act, exp)
                         log.append(f"{'ok ' if ok else 'NG '} SiteSettings.{path} = {json.dumps(act, ensure_ascii=False)} (expected {json.dumps(exp, ensure_ascii=False)})")

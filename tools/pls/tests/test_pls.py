@@ -689,6 +689,51 @@ class PlsTest(unittest.TestCase):
         with self.assertRaisesRegex(pls.Fail, "environment-specific site id"):
             pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")
 
+    def test_mail_address_settings_never_reach_git_or_release_files(self):
+        sa, sb = self._two_sites()
+        live = json.loads(Path(sa).read_text(encoding="utf-8"))
+        live["Response"]["Data"]["SiteSettings"].update(AddressBook="boss@example.com", MailBccDefault="x@example.com")
+        Path(sa).write_text(json.dumps(live), encoding="utf-8")
+        self.assertFalse({"AddressBook", "MailBccDefault"} & set(pls.logical(live, ENVS["envs"]["stg"])["settings"]))
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]), 0)
+        rp = ["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):                                   # still no round-trip evidence (ADR-0001)
+            self.assertEqual(pls.main(rp), 1)
+        self.assertIn("SCOPE a: AddressBook (no round-trip evidence", out.getvalue())
+        self.assertNotIn("L-DEP-01", out.getvalue())
+        rec = self.r / "design/accept-mail-settings.md"
+        rec.write_text("accepted by Nam", encoding="utf-8")
+        site_hand = dict(site, MailToDefault="hand@example.com")               # a hand edit never reaches a payload
+        (self.r / "config/a/site.json").write_text(json.dumps(site_hand), encoding="utf-8")
+        self.assertEqual(pls.main(rp + ["--accept-unverified", str(rec)]), 0)
+        for f in (self.r / "releases/R1").glob("*.json"):
+            self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        site["AddressBook"] = "typed@example.com"                               # a hand edit is reported
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertTrue(any(i["rule"] == "L-SEC-01" and "AddressBook" in i["msg"] for i in pls.lint(self.r)))
+
+    def test_single_site_plan_leaves_mail_address_settings_out(self):
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        live = json.loads(self._stg_live().read_text(encoding="utf-8"))
+        live["Response"]["Data"]["SiteSettings"].update(AddressBook="boss@example.com", MailToDefault="to@example.com")
+        p = self.r / "stg-mail.json"
+        p.write_text(json.dumps(live), encoding="utf-8")
+        self.assertEqual(pls.main(["plan", str(p), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
+        rel = self.r / "releases/R1"
+        for f in rel.glob("*.json"):
+            self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        self.assertEqual(json.loads((rel / "plan.json").read_text(encoding="utf-8"))["checks"]["keys_missing_from_payload"], [])
+        out = io.StringIO()
+        with contextlib.redirect_stderr(out):
+            pls.main(["pack", "--env", "stg", "--site", "a", "--out", str(self.r / "pk.json")])
+        self.assertIn("leaves out AddressBook", out.getvalue())
+        self.assertEqual(pls.summarize_scope("a", ["SCOPE a: AddressBook (no round-trip evidence)",
+                                                   "SCOPE a: AddressBook (no round-trip evidence; kept from the live site on every write)"])[0],
+                         "SCOPE a: 1 component(s) without round-trip evidence: AddressBook (all of them: run again without --summary)")
+
     def test_site_list_edge_shapes(self):
         import pls_site_lists as SL
         ids = {"102": "b"}

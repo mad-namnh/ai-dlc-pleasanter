@@ -220,6 +220,51 @@ class HttpTest(unittest.TestCase):
             H.assert_writable({"role": "dev"}, {"allow_write": False}, "dev")
         H.assert_writable({"role": "stg"}, {"allow_write": True}, "stg")
 
+    def test_every_write_keeps_the_mail_addresses_the_site_holds(self):
+        # AddressBook / Mail*Default never go to git (I7): a payload without them must not erase them, and a payload
+        # that carries them (a hand edit) must not overwrite them
+        self.fake.sites[EQ]["SiteSettings"].update(AddressBook="a@example.com", MailToDefault="[Group1]")
+        c = H.Client(self.url, "K-ADMIN")
+        st, _ = c.apply(EQ, {"Title": "t", "ReferenceType": "Results",
+                             "SiteSettings": {"Version": 1, "MailCcDefault": "git@example.com"}})
+        self.assertEqual(st, 200)
+        ss = self.fake.sites[EQ]["SiteSettings"]
+        self.assertEqual((ss.get("AddressBook"), ss.get("MailToDefault")), ("a@example.com", "[Group1]"))
+        self.assertNotIn("MailCcDefault", ss)                                # the site had none: git's is not sent
+
+    def test_apply_release_carries_the_site_it_just_checked_without_a_second_read(self):
+        # one read per site right before its write (TB-8): that read's SiteSettings are carried, no extra getsite
+        plan, d = self.plan()
+        files = {f.name: json.loads(f.read_text(encoding="utf-8")) for f in d.glob("*-*.json")}
+        self.fake.sites[EQ]["SiteSettings"]["AddressBook"] = "book@example.com"
+        n = len(self.fake.calls)
+        res = H.apply_release(H.Client(self.url, "K-ADMIN"), plan, files)
+        self.assertEqual(res["status"], "applied-unverified", res)
+        reads = [p for p, _ in self.fake.calls[n:] if p.endswith("/getsite")]
+        self.assertEqual(len(reads), 2 * len(plan["steps"]))                   # preflight + the re-read, nothing more
+        self.assertEqual(self.fake.sites[EQ]["SiteSettings"].get("AddressBook"), "book@example.com")
+
+    def test_site_config_steps_never_read_mail_address_settings(self):
+        (self.r / "s.json").write_text(json.dumps([{"id": "T-M", "steps": [
+            {"op": "siteConfig", "expect": {"MailToDefault": "x"}}]}]), encoding="utf-8")
+        pls.main(["test", "s.json", "--env", "dev", "--site", "equipment", "--out", "m.json"])
+        res = json.loads((self.r / "m.json").read_text(encoding="utf-8"))
+        self.assertEqual(res["tests"][0]["status"], "error", res)
+        self.assertTrue(any("customer mail addresses are not checked" in x for x in res["tests"][0]["log"]), res)
+
+    def test_a_write_whose_site_cannot_be_read_first_sends_nothing(self):
+        from unittest import mock
+        c = H.Client(self.url, "K-ADMIN")
+        pl = {"Title": "t", "ReferenceType": "Results", "SiteSettings": {}}
+        n = len(self.fake.calls)
+        with mock.patch.object(H.Client, "export_site", side_effect=H.UncertainOutcome("read timed out")):
+            with self.assertRaisesRegex(H.TransportError, "could not be read before its write"):
+                c.apply(EQ, pl)
+        with mock.patch.object(H.Client, "export_site", return_value={"Response": {"Data": {"Title": "x"}}}):
+            with self.assertRaisesRegex(H.TransportError, "returned no SiteSettings"):
+                c.apply(EQ, pl)
+        self.assertFalse([p for p, _ in self.fake.calls[n:] if p.endswith("/updatesite")])
+
     def test_apply_release_ok_and_rollback_on_failure(self):
         plan, d = self.plan()
         files = {f.name: json.loads(f.read_text(encoding="utf-8")) for f in d.glob("*-*.json")}
@@ -431,10 +476,13 @@ class HttpTest(unittest.TestCase):
                                                              "SiteSettings": {"X": 1, "Dflt": True}}), encoding="utf-8")
         (d / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
         self.fake.drop_on_save = "Dflt"
+        self.fake.sites[LO]["SiteSettings"]["MailCcDefault"] = "cc@example.com"   # kept on the site, never in a file
         self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
         p2 = json.loads((d / "plan.json").read_text(encoding="utf-8"))
         self.assertEqual(p2["status"], "applied-differs")
         self.assertTrue((d / "live-loans.json").exists())
+        self.assertNotIn("cc@example.com", (d / "live-loans.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.fake.sites[LO]["SiteSettings"].get("MailCcDefault"), "cc@example.com")
         e = pls.env_conf(self.r, "dev")
         base, label = pls.baseline(self.r, e, "dev", "loans", None)
         self.assertIn("live-loans.json", label)
@@ -574,8 +622,8 @@ class HttpTest(unittest.TestCase):
         self.fake.fail_update_on = fail_on
         real = H.Client.apply
 
-        def wrapped(client, site_id, payload):
-            out = real(client, site_id, payload)
+        def wrapped(client, site_id, payload, live_settings=None):
+            out = real(client, site_id, payload, live_settings)
             if site_id == after_site:
                 change()
             return out

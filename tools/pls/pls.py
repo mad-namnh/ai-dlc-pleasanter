@@ -13,7 +13,7 @@ Project layout used (see docs/architecture.md §3.2; v0.1 uses JSON, stdlib only
 
 Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
-  pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
+  pack     --env E --site S [--out F]           config/S → updatesite payload for env E (mail address settings excepted)
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
@@ -70,7 +70,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
-import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists (settings coverage)
+import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists
+import pls_http as HTTP                                     # noqa: E402 — live-only keys of the transport (stdlib only)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
@@ -314,6 +315,11 @@ def embedded_env_refs(obj: Any) -> set:
     return set()
 
 
+def without_live_only(settings: dict) -> dict:
+    """SiteSettings without the keys that never go to git (HTTP.LIVE_ONLY_KEYS: customer mail addresses, I7)."""
+    return {k: v for k, v in settings.items() if k not in HTTP.LIVE_ONLY_KEYS}
+
+
 def site_id_of(e: dict, name: str) -> int:
     """This environment's id of a logical site (the same refusals as ${site:x} in from_refs)."""
     if name not in e["sites"]:
@@ -393,6 +399,8 @@ def logical(export: Any, e: dict) -> dict:
     d = copy.deepcopy(site_data(export))
     ids, vals = id_maps(e)
     ss = d["SiteSettings"]
+    for k in HTTP.LIVE_ONLY_KEYS:                  # customer mail addresses: never in git (I7); kept live on every write
+        ss.pop(k, None)
     scripts = {}
     for kind in SCRIPT_KINDS:
         scripts[kind] = ss.pop(kind, None) or []
@@ -547,6 +555,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
     if "_pls_conflicts" in model["settings"]:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
+    m0["settings"] = without_live_only(m0["settings"])   # never in a payload file: the write takes the live values
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
     SL.from_refs(m0["settings"], lambda name: site_id_of(e, name), site, Fail)   # site lists (MoveTargets as integers)
     AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
@@ -857,6 +866,10 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-MAIL-01", "site": site, "msg": f"{path}: literal mail address {addr}; use ${{env:…}} or ${{principal:…}}"})
         for name in secrets_in(blob):
             issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
+        for k in HTTP.LIVE_ONLY_KEYS:                                # customer mail addresses never go to git (I7)
+            if k in m["settings"]:
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"{k} holds customer mail addresses and is kept out "
+                               "of git — remove it from site.json; every write keeps the value the site holds"})
         for kind, items in m["scripts"].items():
             for it in items:
                 body, nm = it.get("Body", ""), it.get("Name")
@@ -1485,6 +1498,9 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
     live = logical(export, e)
     git = read_tree(r / "config" / site)
     scope = SC.site_findings(live["settings"] | live["scripts"], git["settings"] | git["scripts"])
+    raw_live = site_data(export).get("SiteSettings") or {}       # logical() drops the live-only keys; pls still sends them
+    scope = sorted(set(scope) | {f"{k} (no round-trip evidence; kept from the live site on every write)"
+                                 for k in HTTP.LIVE_ONLY_KEYS if k in raw_live and k not in SC.VERIFIED_KEYS})
     if scope and not accept_unverified:
         return False, [f"SCOPE {site}: {x}" for x in scope] + [
             f"{site}: REFUSED — components without round-trip evidence (ADR-0001); updatesite could change or drop them (D4). "
@@ -1503,10 +1519,12 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
         return False, [f"SLOT {c['kind']:15} {site}: {c['msg']}" for c in coll] + [f"{site}: REFUSED — column-slot check failed (A2)"], {}
     live_site = site_data(export)
     new = payload(git, e, site)
-    missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
+    missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}
+                     - set(HTTP.LIVE_ONLY_KEYS))
     if missing:
         return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
-    rollback = {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
+    rollback = {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
+                for k in ("Title", "Body", "ReferenceType", "SiteSettings")
                 + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
                 if k in live_site}
     found = {part: secrets_in(obj) for part, obj in (("payload (config/)", new), ("rollback (live)", rollback))}
@@ -1536,7 +1554,8 @@ def summarize_scope(site: str, msgs: list[str], top: int = 5) -> list[str]:
     """`--summary` of the scope refusal: one line per site (count and the first names) instead of one line per
     component; every other message is kept as it is, and the full list is one command away (without --summary)."""
     prefix = f"SCOPE {site}: "
-    names = [m[len(prefix):].replace(" (no round-trip evidence)", "") for m in msgs if m.startswith(prefix)]
+    names = list(dict.fromkeys(re.sub(r" \(no round-trip evidence[^)]*\)$", "", m[len(prefix):])
+                               for m in msgs if m.startswith(prefix)))
     if not names:
         return msgs
     line = (f"SCOPE {site}: {len(names)} component(s) without round-trip evidence: {', '.join(names[:top])}"
@@ -1833,7 +1852,8 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     entries = AD.slot_entries(slots_in_use(ss), today, set(slots_in_use(ss)) - set(placed))
     nf = sum(1 for v in entries.values() if v.get("placement") == "filter-only")
     rel = f"A-{stamp}-{env}-{name}"
-    payload_a = {k: d.get(k) for k in ("Title", "Body", "ReferenceType", "SiteSettings")}
+    payload_a = {k: without_live_only(d.get(k) or {}) if k == "SiteSettings" else d.get(k)
+                 for k in ("Title", "Body", "ReferenceType", "SiteSettings")}
     plan_a = {"release": rel, "env": env, "status": "applied", "kind": "adopt", "sites": [name],
               "applied_at": datetime.now().astimezone().isoformat(timespec="seconds"),
               "per_site": {name: {"site_id": sid, "payload_file": f"payload-{name}.json"}},
@@ -4301,7 +4321,8 @@ def _main(argv=None) -> int:
                 pl = rj(rel / plan["per_site"][site]["payload_file"])
                 perms = ("InheritPermission", "Permissions") if ("Permissions" in pl or "InheritPermission" in pl) else ()
                 managed = ("Title", "Body", "ReferenceType", "SiteSettings") + perms     # what the release wrote
-                wj(rel / f"live-{site}.json", {k: d[k] for k in managed if k in d})
+                wj(rel / f"live-{site}.json", {k: without_live_only(d[k]) if k == "SiteSettings" else d[k]
+                                               for k in managed if k in d})
             plan.update(status="applied-differs", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                         post_apply_check="live differs from the payload; live-<site>.json is the baseline — fold the "
                                          "differences into config/ and plan a follow-up release")
@@ -4349,6 +4370,8 @@ def _main(argv=None) -> int:
     if a.cmd == "pack":
         e = env_conf(r, a.env)
         p = payload(read_tree(r / "config" / a.site), e, a.site)
+        print(f"note: the payload leaves out {', '.join(HTTP.LIVE_ONLY_KEYS)} (kept out of git, ADR-0010): pls apply adds "
+              "the site's values; any other updatesite of this file erases them on the site", file=sys.stderr)
         text = json.dumps(p, ensure_ascii=False, indent=2)
         (Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n") if a.out else print(text))
         return 0
@@ -4475,7 +4498,8 @@ def _main(argv=None) -> int:
                 return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
-        missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
+        missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}
+                         - set(HTTP.LIVE_ONLY_KEYS))
         rel = r / "releases" / a.release
         snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
         plan = {
@@ -4491,7 +4515,8 @@ def _main(argv=None) -> int:
         }
         wj(rel / "plan.json", plan)
         wj(rel / "payload.json", new)
-        wj(rel / "rollback.json", {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site})
+        wj(rel / "rollback.json", {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
+                                   for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site})
         (rel / "raw-diff.md").write_text(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live (before) vs git (after)"), encoding="utf-8", newline="\n")
         print(f"plan written to releases/{a.release}/ — {len(diffs)} change(s), {plan['classification']['classification']}"
               + ("" if not missing else f"; L-DEP-01 FAILED: {missing}"))

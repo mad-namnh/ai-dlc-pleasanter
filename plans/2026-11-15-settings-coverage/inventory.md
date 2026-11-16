@@ -26,7 +26,7 @@
 | — without evidence, KB entry or any `pls` code | 94 |
 | Keys holding environment-specific ids | 22 |
 | — mapped fully | 10 (Columns, Links, Summaries, Processes, Notifications, Reminders, ServerScripts, Scripts, Styles, Htmls) |
-| — not (fully) mapped: ids would be deployed raw to another environment | 12 at inventory time; after WS1.1 (access lists) and WS1.3/1.4 (site lists), 2026-11-15: MailTo/Cc/BccDefault (to be excluded from git, WS1.5) and ids inside view filters (WS1.6) |
+| — not (fully) mapped: ids would be deployed raw to another environment | 12 at inventory time; after WS1.1, WS1.3/1.4 and WS1.5 (mail settings kept out of git, 2026-11-16): only ids inside view filters remain (WS1.6) |
 | Keys whose change class is wrong or missing in `pls classify` | 5 (Formulas, StatusControls, Views access, Exports access, DashboardParts access) — fixed by WS2 (`plans/2026-11-15-classify-formulas-access-lists/`) |
 | API routes (1.5.2.0) | 53 in 12 controllers |
 | — used by `pls` | 15 |
@@ -149,10 +149,10 @@ Most of the 100 unverified keys are scalar switches: the `Use*Filter` flags, the
 | | **7 Notifications and mail** | | | | | |
 | 95 | `Notifications` | yes | api, schema | address tokens `[Group<id>]`… — mapped (`${principal:x}`); `Token` (webhook secret, I7) | config-only | mail type only verified; webhook types not (ADR-0001 known limits) |
 | 96 | `Reminders` | yes | schema | `To` tokens — mapped; `Token` (I7) | config-only |  |
-| 97 | `MailToDefault` | — | — | addresses / `[Group<id>]` tokens — **not mapped** (pls_address_principals covers mail elements of Notifications / Reminders / processes only) | config-only |  |
-| 98 | `MailCcDefault` | — | — | same | config-only |  |
-| 99 | `MailBccDefault` | — | — | same | config-only |  |
-| 100 | `AddressBook` | — | — | mail addresses (may be personal data) | config-only |  |
+| 97 | `MailToDefault` | — | — | addresses / `[Group<id>]` tokens — **not mapped** (pls_address_principals covers mail elements of Notifications / Reminders / processes only) | config-only | kept out of git (WS1.5, 2026-11-16; wording approved by Nam 2026-11-16) |
+| 98 | `MailCcDefault` | — | — | same | config-only | kept out of git (WS1.5, 2026-11-16; wording approved by Nam 2026-11-16) |
+| 99 | `MailBccDefault` | — | — | same | config-only | kept out of git (WS1.5, 2026-11-16; wording approved by Nam 2026-11-16) |
+| 100 | `AddressBook` | — | — | mail addresses (may be personal data) | config-only | kept out of git (WS1.5, 2026-11-16; wording approved by Nam 2026-11-16) |
 | | **8 Permissions** | | | | | |
 | 101 | `PermissionForCreating` | yes | api, behaviours, schema | keys `Group`/`Dept`/`User`/column names — no ids | permission-impacting (name contains Permission) | D36 verified |
 | 102 | `PermissionForUpdating` | — | behaviours, schema | same as PermissionForCreating | permission-impacting | D36 source-derived only |

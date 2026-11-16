@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Mail address settings kept out of git (2026-11-16):** `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault` never go to git: unpack / harvest / adopt drop them, payload and rollback files leave them out, `pls apply` carries the site's own values on every `updatesite` (`pls_http.LIVE_ONLY_KEYS`); lint L-SEC-01 reports them in `site.json`. Wording of the I1 / I2 exception approved by Nam 2026-11-16 (ADR-0010). Browser runner and production packages: TD-59, TD-60; hashes: TD-61. `plans/2026-11-16-mail-settings-out-of-git/`.
+
 **`pls scope` (2026-11-16):** lists per site, from git, the components without round-trip evidence that release-plan would refuse; skills do not call it yet (TD-65). `plans/2026-11-16-scope-report/`.
 
 **Departments in `pls principals` (2026-11-16):** a role with `"principal": "Dept"` binds by `dept_code` / `dept_name`, never created; field names not read back on a real server (TD-64). `plans/2026-11-16-departments-in-principals/`.

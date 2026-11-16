@@ -21,8 +21,8 @@ These rules hold in every phase. Each one is enforced by a deterministic check o
 
 | ID | Invariant | Enforced by |
 |---|---|---|
-| I1 | **Git is the desired state; Pleasanter is the runtime.** Every managed site exists in the project repository as unpacked configuration | Round-trip (spike B4), `pls drift` |
-| I2 | **A deploy always sends the complete configuration and is preceded by a drift check.** `updatesite` replaces SiteSettings entirely (D4) | `pls plan` refuses partial payloads; refuses to plan while unresolved drift exists |
+| I1 | **Git is the desired state; Pleasanter is the runtime.** Every managed site exists in the project repository as unpacked configuration — except the mail address settings `AddressBook` / `Mail*Default`, which are kept out of git and live only on each site (ADR-0010) | Round-trip (spike B4), `pls drift` |
+| I2 | **A deploy always sends the complete configuration and is preceded by a drift check.** `updatesite` replaces SiteSettings entirely (D4) | `pls plan` refuses partial payloads; refuses to plan while unresolved drift exists. Exception: the mail address settings kept out of git (`AddressBook`, `Mail*Default`, ADR-0010) are not in payload files; `pls apply` adds the site's own values to each write |
 | I3 | **AI has no path to production and holds no production credentials** | Network isolation; production deploy runs inside the customer network (ADR-0003); write guard in tooling |
 | I4 | **Humans approve at gates G1–G4; AI never approves its own work** | Gate records in `gates/`, written by `pls gate` with the approver's words and required by `release-plan` (G3) and `apply` / `bootstrap` / `migrate` (G4) outside dev, and `package` (G4) always (ADR-0020); P4 reviewer agents, when built, are read-only |
 | I5 | **Standard features before code.** Standard settings → formulas/プロセス (process)/ステータス制御 (status control) → server script → extended SQL → external integration. Climbing a rung requires a written reason | Design review (P2), over-coding reviewer (P4) |
@@ -114,7 +114,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 │     ├─ plan.json                # release plan: ordered steps, snapshot refs, rollback, status
 │     ├─ bootstrap.json           # plan for sites that do not exist yet (ADR-0007)
 │     ├─ bootstrap-log.json       # one entry per bootstrap run: who ran it, how it was confirmed (ADR-0024)
-│     ├─ payload-<site>.json      # complete SiteSettings per site (I2)
+│     ├─ payload-<site>.json      # complete SiteSettings per site (I2), without the mail address settings (ADR-0010)
 │     ├─ rollback-<site>.json     # the site as it was when the release was planned
 │     ├─ raw-diff-<site>.md       # live (before) against git (after), per site
 │     ├─ payload.json             # single-site form of the three files above (pls plan)
@@ -372,7 +372,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 
 | Rule | Source | Checks |
 |---|---|---|
-| L-SEC-01 | D5 | No secret-like values in configuration or scripts. Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
+| L-SEC-01 | D5 | No secret-like values in configuration or scripts, and no mail address settings in `site.json` (`AddressBook`, `Mail*Default` — kept out of git, ADR-0010; payloads leave them out even when site.json has them). Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
 | L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
 | L-REF-02 | S5, B2 | Every `${site:x}`, `${env:x}` and `${principal:x}` in the configuration is defined for every environment; scheduled scripts resolve for every environment that can receive them |
 | L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |
@@ -397,7 +397,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 
 | Check | Source | Checks |
 |---|---|---|
-| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
+| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings (the mail address settings kept out of git excepted: the write carries the live values, ADR-0010) |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`); a folder given for any other release (a data load) gets the same checks and is kept in the plan |
 
