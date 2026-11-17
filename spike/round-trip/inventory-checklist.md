@@ -36,7 +36,7 @@ Fill in after steps 3–5. Legend: ✅ round-trips 100% · 🟡 partial (explain
 | 28 | Outside sites | Built-in MCP (`McpServer.json`) | | ➖ | ➖ | ➖ | D1 |
 
 | 29 | Other | Dashboards (ダッシュボード) parts | | 🟡 | 🟡 | ➖ | BR3: types 1 timeline, 3 HTML, 4 calendar ✅ (D30); 0 quick access, 5 kanban ➖ |
-| 30 | Other | Scalar site switches (editor, grid / filters, view modes, formula / script switches, import / export, form, mail defaults) | | ➖ | 🟡 | ➖ | KB D43–D47 (kb-verify 2026-11-16, 1.5.2.0): 85 of 86 keys saved by updatesite and read back as sent (stored shape only, effect not checked); `DashboardPartsAsynchronousLoading` not stored (server parameter, D46); held back from `VERIFIED_KEYS`: six guard / free-HTML switches (TD-63); the four mail address keys verified 2026-11-16 once kept out of git (ADR-0010: never in config/, carried live by `pls apply`) |
+| 30 | Other | Scalar site switches (editor, grid / filters, view modes, formula / script switches, import / export, form, mail defaults) | | ➖ | 🟡 | ➖ | KB D43–D47 (kb-verify 2026-11-16, 1.5.2.0): 85 of 86 keys saved by updatesite and read back as sent (stored shape only, effect not checked); `DashboardPartsAsynchronousLoading` not stored (server parameter, D46); six guard / free-HTML switches in `VERIFIED_KEYS` since 2026-11-18, with classify rules of their own (TD-63 closed); the four mail address keys verified 2026-11-16 once kept out of git (ADR-0010: never in config/, carried live by `pls apply`) |
 
 ## Summary
 

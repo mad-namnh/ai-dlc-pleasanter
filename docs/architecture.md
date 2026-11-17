@@ -344,7 +344,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls scope [--site S]` | P2, P3 | Components of `config/<site>` without round-trip evidence (ADR-0001), read from git — what `release-plan` would refuse; exit 1 while any is found | built (2026-11-16) |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | built — the rules it reports are listed in §7.2 only |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
-| `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting | **0.4** |
+| `pls classify` | P2, P5 | config-only / data-impacting / permission-impacting (ADR-0004); summaries → data-impacting (D16); permissions and process access control → permission-impacting; server scripts off, migration mode, physical history deletion → permission-impacting | **0.4** |
 | `pls coverage [--env E]` | P4 | REQ ↔ design ↔ config ↔ test gaps for one environment (default dev): covered only when the design documents and config elements exist and every linked test passed **in that environment** (latest run per test); `api-only`, `failed`, `error`, `not-run` counted apart; an empty `traceability.json` is a gap | **v0.1**; per environment since 2026-11-10 |
 | `pls drift` | P5, P6 | Live vs **last applied release** (D11); reports whether reverting is data-impacting | **v0.2** |
 | `pls slots` | P5, P6 | Column-slot check: live target vs git vs slot ledger (A2, ADR-0002) — collision, slot used outside the ledger (incl. editor-only slots), repurposed label, git slot not allocated | **v0.3** |

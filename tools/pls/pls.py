@@ -776,6 +776,29 @@ def classify(diffs: list[dict]) -> dict:
                         "(observed on 1.5.2, D16) and record it with pls step (ADR-0028; pls summaries sync is not "
                         "built); updating one child per parent also recalculates (observed, D16) but rewrites "
                         "business records")
+        # site switches that turn off guards or let records carry other people's names (Pleasanter_1.5.2.0 source,
+        # read 2026-11-18; stored shape verified by KB D44 / D46 / D47, their effect not probed)
+        elif p == "settings.ServerScriptsAllDisabled":
+            hit("CL-SERVER-SCRIPTS-OFF", perm, f"{p}: every server script of the site is switched off or on — guards "
+                        "written as server scripts (D25, D42) stop with them (ServerScriptUtilities.cs; source-derived)")
+        elif p == "settings.AllowMigrationMode":
+            hit("CL-MIGRATION-MODE", perm, f"{p}: migration mode — an API create / update or an import with "
+                        "MigrationMode may then set Creator, Updator, CreatedTime and UpdatedTime of records (IssueModel / "
+                        "ResultModel SetByApi, HtmlImports.cs; source-derived): who may write the record's history")
+        elif p == "settings.AllowPhysicalDeleteHistories":
+            hit("CL-PHYSICAL-DELETE-HISTORIES", perm, f"{p}: physical deletion of history versions allowed or refused "
+                        "(also needs the server parameter History.PhysicalDelete; *Validators.cs, source-derived): who "
+                        "may remove a record's history for good")
+        elif p in ("settings.ScriptsAllDisabled", "settings.HtmlsAllDisabled"):
+            hit("CL-CLIENT-CODE-OFF", cfg, f"{p}: every client script / HTML part of the site is switched off or on "
+                        "(HtmlScripts.cs, HtmlTemplates.cs; source-derived) — a screen behaviour they carry stops with them")
+        elif p == "settings.ExtendedHeader":
+            raw = str(d["after"] or "")                 # only what the release writes
+            # a pointer for the reader, not a check: encoded or unusual markup can pass unnamed
+            code = " — it looks like it holds a script or an event handler, which no lint checks" if re.search(
+                r"(?i)<(script|iframe|object|embed)\b|\son[a-z]+\s*=|javascript:|data:text/html|&#", raw) else ""
+            hit("CL-EXTENDED-HEADER", cfg, f"{p}: free HTML written into the page head of the site as it is "
+                        f"(HtmlTemplates.cs; source-derived){code}")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             hit("CL-PERMISSIONS", perm, p)
         # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
