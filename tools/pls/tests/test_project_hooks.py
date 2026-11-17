@@ -109,6 +109,26 @@ class PureTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "settings.json"):
                     HK.install(f)
 
+    def test_install_replaces_an_older_pls_hook_entry_and_keeps_other_hooks(self):
+        f = self.root / ".claude/settings.json"
+        f.parent.mkdir()
+        old = {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": 'python "${CLAUDE_PROJECT_DIR}/pls.py" hook pre'}]}
+        other = {"matcher": "Bash", "hooks": [{"type": "command", "command": "my-own-check"}]}
+        f.write_text(json.dumps({"hooks": {"PreToolUse": [old, other]}}), encoding="utf-8")
+        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop"])
+        pre = json.loads(f.read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+        self.assertIn(other, pre)
+        self.assertNotIn(old, pre)
+        self.assertIn(HK.SETTINGS["PreToolUse"][0], pre)
+        self.assertEqual(HK.install(f), [])
+        mixed = {"matcher": "Bash", "hooks": [old["hooks"][0], {"type": "command", "command": "my-second-check"}]}
+        f.write_text(json.dumps({"hooks": {"PreToolUse": [mixed]}}), encoding="utf-8")
+        self.assertIn("PreToolUse", HK.install(f))
+        pre = json.loads(f.read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
+        self.assertIn({"matcher": "Bash", "hooks": [{"type": "command", "command": "my-second-check"}]}, pre)
+        self.assertIn(HK.SETTINGS["PreToolUse"][0], pre)
+        self.assertEqual(HK.install(f), [])
+
     def test_install_adds_the_hooks_once_and_keeps_what_is_there(self):
         f = self.root / ".claude/settings.json"
         f.parent.mkdir()

@@ -109,8 +109,9 @@ def stop(event: dict, findings: list[dict]) -> dict | None:
 
 
 def install(settings_file: Path) -> list[str]:
-    """Add the hooks of this module to a settings file; returns the events added. Existing entries are kept; an event
-    that already runs `pls.py" hook` is left as it is."""
+    """Add or update the hooks of this module in a settings file; returns the events written. Entries of other hooks
+    are kept as they are; this module's own entries (a command that runs `pls.py" hook`) are replaced by the current
+    ones when they differ, so a later change of the hook command reaches projects that already have hooks."""
     try:
         data = json.loads(settings_file.read_text(encoding="utf-8-sig")) if settings_file.exists() else {}
     except ValueError as ex:
@@ -123,10 +124,20 @@ def install(settings_file: Path) -> list[str]:
         have = hooks.setdefault(event, [])
         if not isinstance(have, list):
             raise ValueError(f"{settings_file}: hooks.{event} is not a list")
-        if any("pls.py\" hook" in str(h.get("command", "")) for g in have if isinstance(g, dict)
-               for h in (g.get("hooks") or []) if isinstance(h, dict)):
-            continue
-        have.extend(json.loads(json.dumps(groups)))
+        def own(h) -> bool:
+            return isinstance(h, dict) and "pls.py\" hook" in str(h.get("command", ""))
+        kept = []                                    # every group without this module's hooks; a mixed group keeps
+        for g in have:                               # the person's hooks, an emptied group goes
+            if isinstance(g, dict) and isinstance(g.get("hooks"), list) and any(own(h) for h in g["hooks"]):
+                rest = [h for h in g["hooks"] if not own(h)]
+                if rest:
+                    kept.append(dict(g, hooks=rest))
+            else:
+                kept.append(g)
+        new = kept + json.loads(json.dumps(groups))
+        if new == have:
+            continue                                 # already current
+        have[:] = new
         added.append(event)
     if added:                                        # nothing to add: the person's file is left as it is
         settings_file.parent.mkdir(parents=True, exist_ok=True)
