@@ -1,7 +1,7 @@
 # Input
 
 Scratch project:
-- `templates/project/CLAUDE.md`;
+- `templates/project/CLAUDE.md` as `pls init` fills it with its defaults: Origin `new`, Stage `demo`, Release target `dev`; Approvers not named yet;
 - `.claude/skills/` = KB, P1, P2 and `pls-x-lifecycle`;
 - `environments.json` with `dev` only (`parent_id` set, no sites);
 - empty `requirements/`, `design/` and `config/`.
