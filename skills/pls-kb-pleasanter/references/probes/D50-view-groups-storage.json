@@ -15,18 +15,18 @@
           "Id": 1,
           "Name": "zz-grp",
           "Groups": [
-            "$group_staff"
+            "$group_accounting"
           ]
         }
       ]
     }
   },
   "roles": {
-    "staff": 1
+    "accounting": 1
   },
   "expect_stored": {
     "Views[Id=1].Groups": [
-      "$group_staff"
+      "$group_accounting"
     ]
   },
   "teardown": {
