@@ -1,4 +1,4 @@
-# Input — onboarding case 001 (fictional)
+# Input
 
 A project in 運用保守 asks MADLAB to take over its order app. Facts given to the agent:
 

@@ -42,7 +42,7 @@ In interview mode you ask in at most 3 rounds, keep the questions and answers ve
 5. **Write acceptance criteria** for each requirement: observable, numbered, testable through the API or the edit screen. If a criterion cannot be tested automatically (e.g. mail delivery), say so explicitly.
 6. **List open questions** for the customer in **Japanese** (お客様への確認事項), each with the assumption you will use if unanswered, marked `[assumed]`.
 7. **Update `requirements/index.md`** (ID, title, EARS type, status `awaiting G1`) and the questions table.
-8. **Self-check** with the checklist below, then hand over for **G1**. Do not mark anything approved yourself (I4).
+8. **Self-check** with the checklist below and run `pls check p1` until it reports 0 findings (front matter of each REQ, one `shall`, acceptance criteria, sources, index). Then hand over for **G1**: `pls gate G1` refuses an approval while a finding names an approved REQ, unless the approver accepts it in their own words (`--accept-findings`; never write that reason yourself). Do not mark anything approved yourself (I4).
 
 ## Outputs (project repository)
 

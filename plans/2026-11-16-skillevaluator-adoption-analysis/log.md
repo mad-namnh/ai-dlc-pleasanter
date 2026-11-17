@@ -1,0 +1,22 @@
+# Log — skillevaluator-adoption-analysis
+
+- 2026-11-16: classified Critical (eval contract, third-party software). Main session model: claude-opus-5-5.
+- Read: `docs/agent-rules.md`, `docs/architecture.md` §2 invariants and evals rows, HANDOFF "How we work", ADR-0029, `.claude/agents/pls-x-eval-case-runner.md`, eval brief form, `evals/README.md`, `skills/README.md`, `.claude/settings.json`.
+- SkillEvaluator cloned into the session scratchpad (`git clone --depth 1`, commit `d2e0253`); README, docs `tier1-validation.mdx`, `tier3-live-evaluation.mdx`, `eval-datasets.mdx`, `grader-validation.mdx`, `pyproject.toml` (requires Python >=3.12, version 0.9.0) read. Nothing from it run.
+- Local tools: Python 3.12.10, CPython 3.10.21 (uv), uv 0.12.10, Docker 29.4.2.
+- `git status` at start: uncommitted work not of this task (stop point 9 for any commit).
+- Subagent calls: 0. Review rounds: 0.
+- State: waiting for Nam's decisions D1–D4 (plan.md).
+- 2026-11-16 Nam's decisions (AskUserQuestion, verbatim): D1 "Bỏ skill, giữ KB (Recommended)"; D2 "k=3 cho P1, P2, lifecycle (Recommended)"; D3 "quality-check + pii-scan (Recommended)"; D4 "Thử trước, ADR sau (Recommended)".
+- 2026-11-16 trial (D3): skillevaluator 0.9.0 installed by uv into `../_agent-scratch/skillevaluator-trial/uvtools`; `quality-check` and `pii-scan` on a copy of `skills/`, provider/key variables unset; both exit 1 (findings). `git status --porcelain` before/after identical. Results: `trial-report.md`. Tool and skills copy removed; reports kept in `../_agent-scratch/skillevaluator-trial/out/`.
+- Next: ADR (Proposed) for k attempts / baseline without the skill under test, KB kept / activation cases (D1, D2), per plan.md step 2. No commit until Nam settles the pre-existing uncommitted work (stop point 9).
+- 2026-11-16: ADR-0030 written (Proposed), README row added; acceptance criteria in plan.md. Reviewer call 1 (pls-x-reviewer, opus, high).
+- 2026-11-16 review round 1 (pls-x-reviewer, opus, high; 113 754 tokens, 37 tool uses, 777 s): accept with fixes, 0 Critical / 0 High / 4 Medium / 9 Low; `git status` unchanged by the review. All 13 fixed in ADR-0030, README row, plan.md (`review.md`). Note: commit `09de5d2` (other work) landed on the branch during the review.
+- Subagent calls: 1 of 6. Review rounds: 1 of 2. No commit (stop point 9; ADR acceptance is Nam's, stop point 1).
+- 2026-11-16 Nam: "1. chap nhan, 2. toi chua the tra loi, can ban dua ra phan tich logic, 3. co chay, 4. chua commit" — acceptance recorded only after review round 2 (an Accepted ADR is not edited). Reviewer call 2 (round 2, opus, high).
+- 2026-11-16 review round 2 (pls-x-reviewer, opus, high; 107 567 tokens, 38 tool uses, 727 s): accept with fixes, 0 Critical / 0 High / 2 Medium / 5 Low; `git status` unchanged by the review. All fixed (`review.md`). Fixes F1, F2, F3, F5 change the Decision section → Status stays Proposed until Nam confirms the revised text. Model open question recorded with options A–D (Nam: leave open).
+- Subagent calls: 2 of 6. Review rounds: 2 of 2 (limit reached). Suite note: Python suite fails 1 test because of the uncommitted KB edit of other work (stale `impact-rules.md`), not this change.
+- 2026-11-16 Nam: "ADR-0030 chap nhan" — Status set to Accepted (option B, not built), Decision heading no longer "proposed", README row updated. No commit (Nam: "chua commit"; stop point 9). Next when Nam asks: build steps of plan.md step 4 (evals/README.md, HANDOFF evals line, the no-eval-data-in-skills test, patches for protected paths).
+- 2026-11-16 Nam: "kiem tra transcript P1 case 001 ban 0.7" — runner transcript checked: no access outside its scratch copy, no rubric or failure wording in what it read; PASS not contaminated (`transcript-check-p1-case001-v07.md`). No commit.
+- 2026-11-16 Nam: "commit di, doi ADR truoc ADR30 hoan thanh o sesion khac, roi toi quyet dinh lam hay chua?" — commit this task's files now (Nam lifts stop point 9 for them; other uncommitted work left untouched). Building ADR-0030 (plan.md step 4) is deferred until the earlier ADRs are finished in another session; then Nam decides whether to build it.
+- Suites before commit (temporary worktree at `24d64d2` + this task's files only): Python 671 OK, node 16/16 pass. Worktree removed.

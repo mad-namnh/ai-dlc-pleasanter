@@ -21,13 +21,13 @@ These rules hold in every phase. Each one is enforced by a deterministic check o
 
 | ID | Invariant | Enforced by |
 |---|---|---|
-| I1 | **Git is the desired state; Pleasanter is the runtime.** Every managed site exists in the project repository as unpacked configuration | Round-trip (spike B4), `pls drift` |
-| I2 | **A deploy always sends the complete configuration and is preceded by a drift check.** `updatesite` replaces SiteSettings entirely (D4) | `pls plan` refuses partial payloads; refuses to plan while unresolved drift exists |
+| I1 | **Git is the desired state; Pleasanter is the runtime.** Every managed site exists in the project repository as unpacked configuration — except the mail address settings `AddressBook` / `Mail*Default`, which are kept out of git and live only on each site (ADR-0010) | Round-trip (spike B4), `pls drift` |
+| I2 | **A deploy always sends the complete configuration and is preceded by a drift check.** `updatesite` replaces SiteSettings entirely (D4) | `pls plan` refuses partial payloads; refuses to plan while unresolved drift exists. Exception: the mail address settings kept out of git (`AddressBook`, `Mail*Default`, ADR-0010) are not in payload files; `pls apply` adds the site's own values to each write |
 | I3 | **AI has no path to production and holds no production credentials** | Network isolation; production deploy runs inside the customer network (ADR-0003); write guard in tooling |
 | I4 | **Humans approve at gates G1–G4; AI never approves its own work** | Gate records in `gates/`, written by `pls gate` with the approver's words and required by `release-plan` (G3) and `apply` / `bootstrap` / `migrate` (G4) outside dev, and `package` (G4) always (ADR-0020); P4 reviewer agents, when built, are read-only |
 | I5 | **Standard features before code.** Standard settings → formulas/プロセス (process)/ステータス制御 (status control) → server script → extended SQL → external integration. Climbing a rung requires a written reason | Design review (P2), over-coding reviewer (P4) |
 | I6 | **Deterministic checks decide; AI explains.** Diffs, classifications and coverage are computed by code; AI only rewrites them into business language (B3) | `pls diff`, `pls classify`, `pls coverage` |
-| I7 | **No secrets and no customer business data in git.** Configuration holds references only (`${secret:…}`, `${env:…}`) | Lint L-SEC-01, and a refusal before writing in `unpack`, `harvest`, `adopt` and `release-plan` (D5, ADR-0005); no CI yet |
+| I7 | **No secrets and no customer business data in git.** Configuration holds references only (`${secret:…}`, `${env:…}`) | Lint L-SEC-01, and a refusal before writing in `unpack`, `harvest`, `adopt`, `plan`, `release-plan` and `pack` (D5, ADR-0005); no CI yet |
 | I8 | **Every requirement is traceable to configuration and tests, and back** | Traceability ledger; coverage check at G3 |
 | I9 | **Every escaped defect becomes a rule, check, skill change or eval** | Operate phase feedback loop (P6 → framework) |
 
@@ -54,6 +54,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 ├─ .gitattributes                 # config/, releases/, migrations/ are stored byte for byte
 ├─ .claude/
 │  ├─ skills/                     # skills installed from the framework (pls skills sync)
+│  ├─ settings.json               # Claude Code hooks of the project: pls hook pre / post / stop (pls init, pls hook install; ADR-0029)
 │  └─ framework.lock              # framework path and commit, version and hash of every installed skill (ADR-0022)
 ├─ requirements/
 │  ├─ sources/                    # what the customer gave, verbatim
@@ -114,7 +115,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 │     ├─ plan.json                # release plan: ordered steps, snapshot refs, rollback, status
 │     ├─ bootstrap.json           # plan for sites that do not exist yet (ADR-0007)
 │     ├─ bootstrap-log.json       # one entry per bootstrap run: who ran it, how it was confirmed (ADR-0024)
-│     ├─ payload-<site>.json      # complete SiteSettings per site (I2)
+│     ├─ payload-<site>.json      # complete SiteSettings per site (I2), without the mail address settings (ADR-0010)
 │     ├─ rollback-<site>.json     # the site as it was when the release was planned
 │     ├─ raw-diff-<site>.md       # live (before) against git (after), per site
 │     ├─ payload.json             # single-site form of the three files above (pls plan)
@@ -177,7 +178,7 @@ The tree is checked by a test (`tools/pls/tests/test_architecture_project_layout
 | G3 | Build is correct and safe | MADLAB tech lead | All checks green, coverage 100% of in-scope REQs, reviewer-agent findings resolved |
 | G4 | Release may go to the target (stg, then prod) | Customer business owner + operator | Diff report, deploy plan with rollback, drift check clean, data-migration plan if any |
 
-The Approver column is the target. What `pls` enforces today is ADR-0020 (Proposed): one approver per record, named for that gate in the profile row Approvers; who approves G4 for `cstg` / `prod` is an open question of that ADR. In the demo stage, Nam approves every gate (acting as both MADLAB lead and customer owner). Gate decisions are recorded by `pls gate` under `gates/` (the records `pls` checks); the status lines of REQ / DES files and `releases/R-*/approvals.md` are notes for people, and lint L-GATE-01 checks that each approval they mention has its record.
+The Approver column is the target. What `pls` enforces today is ADR-0020 (Proposed): one approver per record, named for that gate in the profile row Approvers; who approves G4 for `cstg` / `prod` is an open question of that ADR. In the demo stage, Nam approves every gate (acting as both MADLAB lead and customer owner). Gate decisions are recorded by `pls gate` under `gates/` (the records `pls` checks); the status lines of REQ / DES files and `releases/R-*/approvals.md` are notes for people, and lint L-GATE-01 checks that each approval they mention has its record. A G1 / G2 approval is refused while `pls check p1` / `p2` reports a finding for an approved item, for an item with no document, or (G2) for a G1-approved REQ no DES covers, unless the approver accepts the findings in their own words (`--accept-findings`, ADR-0029 B).
 
 ## 5. Phases
 
@@ -193,7 +194,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Flags ambiguity, conflicts with existing requirements, and missing non-functional aspects (permissions, notifications, volume, audit).
   - Produces the customer-facing question list (Japanese) for open points.
 - **Outputs:** `requirements/REQ-*.md`, `requirements/index.md`, question list; in interview mode also the interview record under `requirements/sources/`.
-- **Checks:** every REQ has EARS form + acceptance criteria; no duplicate IDs; open questions listed.
+- **Checks:** every REQ has EARS form + acceptance criteria; no duplicate IDs; open questions listed — decided by `pls check p1` from each REQ's front matter and body; `pls gate G1` refuses while a finding names an approved REQ, unless the approver accepts it with a reason (ADR-0029 B).
 - **Gate:** G1.
 - **Status:** **used in slices #1–#3.** Skill 0.3 passed eval cases 001 and 002. Lessons:
   - one `shall` per REQ;
@@ -214,7 +215,7 @@ Each phase lists: goal, inputs, what AI does, outputs, automated checks, gate, a
   - Example of the safe branch: process access control instead of assuming that read-only users cannot see buttons.
   - Origin: slice #2 T-015, eval case 002.
 - **New sites (ADR-0007):** choose the site type and relations, run a skeleton probe, and allocate slots in zone A.
-- **Checks:** every in-scope REQ has a design element; slot ledger consistent; ladder reasons present for rungs ≥ server script.
+- **Checks:** every in-scope REQ has a design element; slot ledger consistent; ladder reasons present for rungs ≥ server script. Decided by `pls check p2` from each DES's front matter (reqs, elements, rungs and reasons, classification, impact rows by rule id; every G1-approved REQ in a DES); `pls gate G2` refuses as G1 does (ADR-0029 B). Impact rows follow `skills/pls-p2-solution-designer/references/impact-rules.md`, generated from `pls classify` rules, design conditions and the KB (`tools/pls/pls_impact_rules.py`; a test fails when it is stale, ADR-0029 A).
 - **Gate:** G2.
 - **Status:** **used in slices #1–#3.** Skill 0.5 (0.4 passed eval case 002; 0.5 adds new sites, not yet evaluated). KB `pls-kb-pleasanter` 0.7, entries D7–D27.
 
@@ -338,6 +339,8 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls principals` | P3 (after G2) | Bind the roles of `design/roles.json` to group / user ids of an environment by exact name; a name that matches several groups is refused; exit 1 while a role has no id. `--create` (dev only, not a sandbox, typed confirmation): creates the missing groups with the operator as member first (ADR-0017) | built (2026-11-05); `--create` 2026-11-11 |
 | `pls test-users` | P3 (after `pls principals`), before P4 role tests | Dev only (not a sandbox, writes allowed, typed confirmation): for each Group role of `design/roles.json`, a test user `zz_test_<project>_<role>` (random password in `.pls/test-users/`), its API key issued through the screens only on a version where KB D32 is verified (else a person issues it, exit 1), `keys.<role>` added to `.pls/connections.json` when absent (never replaced), and the user added to the role's group by read, add, write, check (ADR-0018 option C, ADR-0019 option B). `--remove` (2026-11-13, TD-24): deletes only the test users this machine proves `pls` created there (password file and a key file whose key the API accepts now — a key dies with its user), checks the lookup no longer finds them, then removes their key and password files and their own `keys.<role>`; any other user with the LoginId, and password files of roles no longer designed, are person steps. An existing user joins its group only once proven the same way. Rotation: TD-24 | built (2026-11-11; removal 2026-11-13) |
 | `pls unpack` / `pack` | P3 | Site JSON ↔ readable tree; scripts as files; IDs ↔ logical references; secrets → references; `unpack` refuses a `config/<site>` with uncommitted edits or new files (like `harvest`) | **v0.1** (`tools/pls/pls.py`); secret → reference not yet |
+| `pls hook install` | all | Adds the project's Claude Code hooks to `.claude/settings.json` (`pls init` writes them for a new project): PreToolUse denies file edits under `releases/`, `gates/`, `ops/log/`, `.pls/`, of `.claude/settings*.json` and `pls.py`, and a Read under `.pls/`, and asks the person before a Bash `pls … --yes`; PostToolUse returns `pls lint` of the edited site; Stop shows `pls check p1` / `p2` findings (advisory). `pls hook pre\|post\|stop` are run by Claude Code, not logged; a hook that cannot decide allows | built (2026-11-17, ADR-0029 C) |
+| `pls check p1\|p2\|p3` | P1, P2, P3 | Phase outputs complete: p1 REQ front matter and body (EARS type, one `shall`, acceptance criteria, sources, index), p2 DES front matter (reqs, elements with rung and reason, classification, impact rows by rule id, migration section), every G1-approved REQ in a DES; p3 lint, scope and traceability config paths; exit 1 on findings. `pls gate G1` / `G2` refuse an approval while a finding names one of its items, unless `--accept-findings "<reason>"` (kept in the gate record) | built (2026-11-16, ADR-0029 B) |
 | `pls scope [--site S]` | P2, P3 | Components of `config/<site>` without round-trip evidence (ADR-0001), read from git — what `release-plan` would refuse; exit 1 while any is found | built (2026-11-16) |
 | `pls lint` | P3, P4 | Rule catalogue §7.2 | built — the rules it reports are listed in §7.2 only |
 | `pls diff` | P4, P5 | Structured diff, deterministic (B3) | **v0.1** — keyed by ColumnName/Name/Id; scripts not line-level yet (S6) |
@@ -349,7 +352,7 @@ One file, `traceability.json`, links the chain in both directions:
 | `pls canon` | P3 | Apply Pleasanter's save-time normalisation (`tools/pls/canonical-defaults.json`, D8) | **v0.2** |
 | `pls mark-applied` | P5 | Record a release as applied only after verifying live == payload | **v0.2** |
 | `pls version` | all | Version label per environment: build token and schema detected, application version recorded by a person or from a site package; names the KB entries not verified on that version, as `release-plan` does in its `VERSION` lines (ADR-0009) | branch `brownfield-adr` |
-| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). A probe may carry a server script or steps under a role's test-user key only with mail to a sink or disabled, the role bound to a group and its own test-user key file; afterwards, also after a failure, the site loses its script and a roles probe's grant, then is deleted — a delete is believed only when `getsite` answers 404 afterwards (ADR-0025). A probe may own further probe sites, update the records it created and use the group id of a declared role (ADR-0026). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) | branch |
+| `pls kb-verify` | KB (I9) | Run the KB probes on a dev environment in a probe folder; result per entry and version (ADR-0009). A probe may carry a server script or steps under a role's test-user key only with mail to a sink or disabled, the role bound to a group and its own test-user key file; afterwards, also after a failure, the site loses its script and a roles probe's grant, then is deleted — a delete is believed only when `getsite` answers 404 afterwards (ADR-0025). A probe may own further probe sites, update the records it created and use the group id of a declared role (ADR-0026). Also the step that turns a source-derived shape into verified knowledge before any project deploys it (ADR-0023, `skills/pls-x-lifecycle/references/kb-gaps.md`) Since ADR-0027 a probe may also save new settings on its own sites in a step (`settings`, `settings_partial`), name `$admin_uid` / `$group_<role>` in its sites' settings, and hold notifications / reminders that are all disabled, without any target outside the probe (guarded). | branch |
 | `pls adopt` | before P1 (existing app) | Read-only take-over of an existing site: config, customer-zone ledger, adoption record (drift baseline), report | branch |
 | `pls env-compare` | onboarding, P6 | One site across environments (exports, UI site packages, git), ids mapped, differences classified | branch |
 | `pls refs` / `xref` | P2, P3 | Site ids inside scripts (literal decisions by a person); scripts ↔ columns ↔ sites index for impact analysis | branch |
@@ -372,7 +375,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 
 | Rule | Source | Checks |
 |---|---|---|
-| L-SEC-01 | D5 | No secret-like values in configuration or scripts. Also a refusal before writing: `unpack`, `harvest`, `adopt` (config/) and `release-plan` (payload from config/, rollback from the live site) write nothing when one is found |
+| L-SEC-01 | D5 | No secret-like values in configuration or scripts, and no credential in the notification and reminder fields that hold one whatever it looks like: `Token`, the webhook URL (`Address` / `To` of Slack, Teams, RocketChat, LINE WORKS), credential `Headers`, and credential query parameters or a known webhook host of an HttpClient `Address` (`pls_secret_fields`); no mail address settings in `site.json` (`AddressBook`, `Mail*Default` — kept out of git, ADR-0010; payloads leave them out even when site.json has them); lint checks the payload of each environment too, so a credential kept as an `environments.json` value is found. Also a refusal before writing: `unpack`, `harvest` (the raw export and the mapped model), `adopt` (config/), `plan` and `release-plan` (payload from config/, rollback from the live site) and `pack` write nothing when one is found; `adopt` checks the site's title and description too; `env-compare` writes no report and `mark-applied` no `live-<site>.json` while a source or what it writes holds one; diff tables show `(withheld: <names>)` instead of such a value |
 | L-REF-01 | D3 | No raw site id written as a site id (`…SiteId = 797`, `items.Get(797`, `/items/797/`); other numbers equal to a site id are not ids |
 | L-REF-02 | S5, B2 | Every `${site:x}`, `${env:x}` and `${principal:x}` in the configuration is defined for every environment; scheduled scripts resolve for every environment that can receive them |
 | L-REF-03 | D3 | No `${site:x}` outside a site-id context unless recorded (`pls refs --ref`): the next unpack would turn it back into a number |
@@ -397,7 +400,7 @@ The first column of this table is checked against the parser of `tools/pls/pls.p
 
 | Check | Source | Checks |
 |---|---|---|
-| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings |
+| L-DEP-01 | D4 | Deploy payload contains complete SiteSettings (the mail address settings kept out of git excepted: the write carries the live values, ADR-0010) |
 | L-SLOT-02 | A2 | **Pre-deploy** (in `pls plan` / `pls slots`): slots used on the live target agree with the ledger and git — blocks the plan |
 | P-MIG-01 | A1, ADR-0004 | `plan` / `release-plan` refuse a data-impacting change without a migration folder (`migration.json`, `backup/`, `dry-run.md`); a folder given for any other release (a data load) gets the same checks and is kept in the plan |
 

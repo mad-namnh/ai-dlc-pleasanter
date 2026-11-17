@@ -30,7 +30,7 @@ The Pleasanter source answers the shapes (notes in the task log, `source-notes.m
    - each one is created under the probe folder with its own title `zz_kbprobe_<probe>__<key>` and the same own-site proof (folder, title, type, not an app site) before any write, kept in the same state file;
    - in any site's settings (and in `expect_stored`), `${probe_site:<key>}` (and `${probe_site:main}`) is replaced by that probe site's id — as an integer when it is the whole value, as text inside a string; an unknown key refuses the probe file;
    - a step may name `"site": "<key>"` (or `"main"`) for `create` and `list`; any other value, and `site` on a spec, stay forbidden; `exec` finds processes on the main site only;
-   - no server script outside the main site's top-level settings, no notifications or reminders at any depth (ADR-0009 / ADR-0025 unchanged);
+   - no server script outside the main site's top-level settings, no notifications or reminders at any depth (ADR-0009 / ADR-0025 unchanged; since ADR-0027: only disabled ones without a target outside the probe);
    - a guarded probe's extra sites get the same end as its main site: teardown saved without scripts, the roles' grant removed, then deleted and believed only on `getsite` 404 (ADR-0025 guard 6); an unguarded probe keeps its sites for reuse, like its main site;
    - the roles' grant (`roles`) is set on every site of the probe.
 - Pros: G-1, G-5, G-8 become probes with evidence per version; every addition is limited to the probe folder, the probe's own sites and records, and the roles the probe declares.
@@ -49,3 +49,4 @@ The Pleasanter source answers the shapes (notes in the task log, `source-notes.m
 - Easier: P2 designs with record permissions at creation, lookups and status controls on verified evidence; the KB entries move from "source-derived" to "verified on 1.5.2" after one `kb-verify` run.
 - Harder: a role probe needs every role it declares bound and with a test user on the environment where it runs; a probe whose roles are missing is `error`, not `fail`.
 - Built with this ADR: `pls_kbverify.py` (loader rules), `pls_kbverify_guarded.py` (extra-site teardown and deletion), `pls.py` `kb-verify` (site creation, substitution, per-step site, `$group_<role>`); tests in `tools/pls/tests/`.
+- Amended (2026-11-16) by ADR-0027: `$group_<role>` of a declared role, and `$admin_uid`, may also be whole values in a probe site's settings and in a `settings` step; a `settings` / `settings_partial` step may name `site` like create and list.

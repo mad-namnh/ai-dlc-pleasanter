@@ -1,6 +1,6 @@
 # ADR-0027: KB probes that change their own site's settings, name principals in them, and hold disabled notifications
 
-- **Status:** Proposed (2026-11-16)
+- **Status:** Accepted (Nam: option B on 2026-11-16) — built 2026-11-16
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I5, I9 (`docs/architecture.md` §2); ADR-0009 (`kb-verify` safety), ADR-0010 (mail and jobs outside production), ADR-0023 (shapes the KB does not cover), ADR-0025 and ADR-0026 (guarded probes, several sites, `update`, group variables — this ADR amends both); settings coverage plan `plans/2026-11-15-settings-coverage/plan.md` WS3b, WS3c
@@ -36,14 +36,22 @@ Source of the routes: `Controllers/Api/ItemsController.cs` l.293 (`SynchronizeSu
 
 ## Decision
 
-*(not decided — Nam)* Recommendation: option B.
+**Option B**, accepted by Nam on 2026-11-16 (Nam's message 2026-11-16, verbatim "1a, 2 duyệt, 3B, 4B, 5 đồng ý"; "3B" answers this ADR). It amends ADR-0009's safety list, ADR-0025 (no notification or reminder at any depth → disabled ones under the rules of item 4) and ADR-0026 option B item 2 (`$group_<role>` also in probe site settings).
 
 ## Consequences
 
 - With B: `pls_kbverify.py` gains two ops and two variable places; the file checks and the guarded runner (`pls_kbverify_guarded.py`) gain the refusals above, each with a test that fails on the parent; ADR-0009's safety list and the KB probe format (`skills/pls-kb-pleasanter/references/probes/`) are updated in the same commit.
 - Probes that use them (WS3c-1, WS3c-2, WS3c-3, notification shapes) are written after the build and run on dev by a person, as before.
 
+## As built
+
+- 2026-11-16: `pls_kbverify.py` — ops `settings` (`SiteSettings`) and `settings_partial` (`body`, sent as written after substitution: the request shape of `updatesitesettings` is the open question below), `site` naming one of the probe's own sites like create / list; content rules of the file check on every step (no server script in a step at all — stricter than item 1, which allowed the main site's top-level script; notifications per item 4); `$admin_uid` / `$group_<declared role>` as whole values in probe site settings and steps (`substitute_vars`). `pls_kbverify_guarded.py` — a probe with notifications or reminders is guarded (mail `sink` / `disabled`, teardown required, site deleted). `pls_http.run_tests(site_ops=…)` runs the steps only for kb-verify, re-reading the site's processes after each; `pls.py` `kb-verify` proves the site its own by `getsite` right before each step's write. Tests: `tools/pls/tests/test_kbverify_settings_steps_and_disabled_notifications.py`.
+- Review (2026-11-16) tightened item 4 and 1–2: a notification / reminder field that names a recipient holds only `…@example.invalid` or the placeholders [Owner] / [Manager] / [Creator] / [Updator] (no `[Group n]` / `[User n]` / `[Dept n]`, no bare names), no field of the item holds a URL — a webhook type is probed for its shape with an empty target; keys are compared without case (Pleasanter's JSON reader is assumed to match names without case: not verified) and two keys equal under case folding are refused; a string that holds JSON is read as content; a `settings_partial` body holds only a `SiteSettings` object until the route's body shape is read; credential fields (`Token`, `Headers`, …) are read without case too, and a numeric recipient is checked like text; a spec that ends in `error` (a refused own-site proof, a refused confine, or a broken call such as HTTP 500 without `expectHttp`) makes the probe `error` — not evidence for or against the entry (I9) — where it was `fail` before.
+- 2026-11-17, first probes (D48–D51) and the source read of the route: `updatesitesettings` (Pleasanter_1.5.2.0 `SiteUtilities.UpdateSiteSettingsByApi`, l.2358–2440, source-derived) reads the body as `SiteSettingsApiModel` and upserts by Id only `ServerScripts`, `Scripts`, `Styles`, `Htmls`, `Processes`, `StatusControls`, then saves the rest of the settings unchanged; `Columns` and `Links` are not applied, so this route cannot make a JSON link list its master (WS3c-1 answered from the source: no; the screen save of a JSON link after updatesite stays — KB D40, pending task). A `settings_partial` body therefore holds only `Processes` / `StatusControls` lists (never scripts or free HTML). A `siteConfig` step (read-only, main site) reads the settings back after a step, with list selectors and `$admin_uid` / `$group_<role>` in its expectations — for kb-verify only; `pls test` keeps positional paths and literal values (test-spec.md). `expect_stored` takes the same variables. An `observe` probe ends `observed` whatever its checks said and never decides its entry. A `Users` / `Groups` / `Depts` list anywhere in probe settings or a step holds only `$admin_uid` / `$group_<declared role>`, a teardown holds no such list, and cleanup never saves settings (item 3 enforced for these lists, 2026-11-17; other shapes: TD-70).
+- Probes written 2026-11-17, not run yet: D48 notification / reminder shapes, D49 formula change on existing records (WS3c-2), D50 a view's Groups (WS3c-3; the Owner filter's screen shape `["<id>"]` cannot be sent with a whole-value variable), D51 updatesitesettings Process upsert.
+
 ## Open questions
 
-- [ ] The request body of `updatesitesettings` on 1.5.2.0 and whether it replaces or merges `Columns` — *source read of the item model, then the WS3c-1 probe*
-- [ ] Whether `Disabled: true` on a notification is honoured for every type on 1.5.2 (source shows the flag; not probed) — *first notification probe, with mail `sink`*
+- [x] The request body of `updatesitesettings` on 1.5.2.0 and whether it replaces or merges `Columns` — source read 2026-11-17: upsert by Id of six lists, `Columns` not applied (As built); probe D51 checks the Process upsert on a server
+- [ ] Whether Pleasanter reads JSON property names without case, ignores unknown fields of a notification item (a recipient under an invented name, e.g. `MailTo`, is not checked) and never decodes a string twice (a double-encoded JSON string is not read by the file check) — *source read of `Jsons.Deserialize` and the Notification / Reminder models*
+- [ ] (probe D48 written 2026-11-17 checks the stored shape only) Whether `Disabled: true` on a notification is honoured for every type on 1.5.2 (source shows the flag; not probed) — *first notification probe, with mail `sink`*

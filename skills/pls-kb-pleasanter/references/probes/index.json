@@ -643,6 +643,30 @@
         }
       ],
       "note": "Stored shape only: the 15 keys were read back as sent after updatesite; their effect on the screen and on mail was not checked."
+    },
+    "D48": {
+      "verified_on": [],
+      "probes": [
+        "D48-notification-and-reminder-shapes"
+      ]
+    },
+    "D49": {
+      "verified_on": [],
+      "probes": [
+        "D49-formula-change-existing-records"
+      ]
+    },
+    "D50": {
+      "verified_on": [],
+      "probes": [
+        "D50-view-groups-storage"
+      ]
+    },
+    "D51": {
+      "verified_on": [],
+      "probes": [
+        "D51-updatesitesettings-process-upsert"
+      ]
     }
   }
 }

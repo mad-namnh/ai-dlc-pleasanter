@@ -1,4 +1,4 @@
-# Input — case 003: a rough idea, new app
+# Input
 
 Scratch project:
 - `CLAUDE.md` from `templates/project/CLAUDE.md` with Origin `new`, Stage `project`;

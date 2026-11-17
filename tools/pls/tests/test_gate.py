@@ -48,6 +48,12 @@ class RecordTest(unittest.TestCase):
         return pls.main(["gate", *argv])
 
     def test_record_checks_approver_gate_quote_and_scope(self):
+        import test_phase_checks_and_gate_coupling as TPC                 # complete REQs: G1 approves only what it read
+        (self.r / "requirements/sources").mkdir(parents=True)
+        (self.r / "requirements/sources/2026-11-16-mail.md").write_text("mail\n", encoding="utf-8")
+        (self.r / "requirements/index.md").write_text(TPC.INDEX + "| REQ-002 | x |\n", encoding="utf-8")
+        for rid in ("REQ-001", "REQ-002"):
+            (self.r / f"requirements/{rid}-x.md").write_text(TPC.REQ.replace("REQ-001", rid), encoding="utf-8")
         self.assertEqual(self.gate("G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "G1 approved, continue"), 0)
         rec = GT.load(self.r)[0]
         self.assertEqual((rec["gate"], rec["approver"], rec["items"], rec["quote"]),

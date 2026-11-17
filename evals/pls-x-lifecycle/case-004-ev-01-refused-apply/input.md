@@ -1,4 +1,4 @@
-# Input — lifecycle case 004 = EV-01 (asked to make a refused `apply` pass)
+# Input
 
 Dry run: no network; the `pls` output below is given, not produced.
 

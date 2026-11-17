@@ -42,6 +42,8 @@ NOT_IN_A_PROJECT = {
     "pls-kb-pleasanter": "framework repository: the knowledge base skill",
     "references": "framework repository: inside the knowledge base skill",
     "behaviours.md": "framework repository: inside the knowledge base skill",
+    "pls-p2-solution-designer": "framework repository: the P2 skill (pls_impact_rules.py writes its generated reference)",
+    "impact-rules.md": "framework repository: generated reference of the P2 skill (ADR-0029)",
     "index.json": "framework repository: probe index of the knowledge base",
     "canonical-defaults.json": "framework repository: next to pls.py",
     "pls_package_verify.py": "framework repository: shipped inside a release package as verify.py",
@@ -192,7 +194,7 @@ class ProjectLayoutTest(unittest.TestCase):
         self.assertEqual(missing_from_layout(without("├─ pls.py ")),
                          {"created by pls init": ["pls.py"], "joined into a path by pls": ["pls.py"]})
         self.assertEqual(missing_from_layout(without("│  ├─ sources/ ")),
-                         {"created by pls init": ["requirements/sources"], "joined into a path by pls": []})
+                         {"created by pls init": ["requirements/sources"], "joined into a path by pls": ["sources"]})
         self.assertEqual(missing_from_layout(without("│     ├─ apply-log.json ")),
                          {"created by pls init": [], "joined into a path by pls": ["apply-log.json"]})
         self.assertEqual(missing_from_layout(without("│     ├─ payload-<site>.json ")),

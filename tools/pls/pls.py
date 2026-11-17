@@ -13,7 +13,7 @@ Project layout used (see docs/architecture.md §3.2; v0.1 uses JSON, stdlib only
 
 Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
-  pack     --env E --site S [--out F]           config/S → complete updatesite payload for env E
+  pack     --env E --site S [--out F]           config/S → updatesite payload for env E (mail address settings excepted)
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
   gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
   profile set FIELD VALUE [--env E] --approver N --quote Q
@@ -22,6 +22,10 @@ Commands:
                                                 migrate on a dev environment, ADR-0024) as the person stated it;
                                                 recorded under gates/profile/ (I4)
   review as-is SITE --approver N --quote Q      the person reviewed design/as-is/SITE.md (clears L-LAD-01 via DES-000)
+  hook install                                  add the project's Claude Code hooks to .claude/settings.json (pre / post / stop
+                                                run from there; ADR-0029)
+  check p1|p2|p3                                REQ / DES front matter and body complete (p1, p2); p3 = lint, scope and
+                                                traceability config paths; exit 1 on findings (ADR-0029)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
@@ -58,7 +62,9 @@ if sys.version_info < (3, 10):       # before the other imports: an older Python
 import argparse
 import copy
 import hashlib
+import io
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -70,7 +76,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))   # pls_http (ADR-0008)
 import pls_side_effects as SE                               # noqa: E402 — mail and job safety (ADR-0010)
 import pls_version as PV                                    # noqa: E402 — Pleasanter version label (ADR-0009)
 import pls_scope as SC                                      # noqa: E402 — components proven to round-trip (ADR-0001)
-import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists (settings coverage)
+import pls_site_lists as SL                                 # noqa: E402 — site ids in site lists
+import pls_http as HTTP                                     # noqa: E402 — live-only keys of the transport (stdlib only)
 import pls_adopt as AD                                      # noqa: E402 — adopting existing sites (BR4)
 import pls_compare as CMP                                   # noqa: E402 — one site across environments (BR5)
 import pls_scripts as SX                                    # noqa: E402 — script tooling (BR7)
@@ -78,6 +85,8 @@ import pls_merge as MG                                      # noqa: E402 — sem
 import pls_kbverify as KV                                   # noqa: E402 — executable KB verification (BR8)
 import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
+import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
+import pls_hooks as HK                                      # noqa: E402 — Claude Code hooks of a project (ADR-0029 C)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
@@ -90,6 +99,7 @@ import pls_usage as US                                      # noqa: E402 — LLM
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
 import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
+import pls_secret_fields as SF                              # noqa: E402 — credential fields of notifications (I7)
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -111,9 +121,10 @@ SECRET_RES = {
 
 
 def secrets_in(obj: Any) -> list[str]:
-    """Names of the secret-like patterns (L-SEC-01) found in obj, read as its JSON text."""
+    """Names of the secret-like patterns (L-SEC-01) found in obj, read as its JSON text, and of the notification and
+    reminder fields that hold a credential whatever it looks like (pls_secret_fields)."""
     blob = obj if isinstance(obj, str) else json.dumps(obj, ensure_ascii=False)
-    return [n for n, rx in SECRET_RES.items() if rx.search(blob)]
+    return [n for n, rx in SECRET_RES.items() if rx.search(blob)] + SF.secret_fields(obj)
 
 
 def refuse_secrets(obj: Any, what: str, then: str) -> None:
@@ -121,8 +132,9 @@ def refuse_secrets(obj: Any, what: str, then: str) -> None:
     so a secret-like literal from a live export never lands in config/ or releases/ (I7, ADR-0005)."""
     found = secrets_in(obj)
     if found:
+        hint = f". {SF.HINT}" if set(found) & SF.NAMES else ""
         raise Fail(f"{what}: secret-like values in the configuration ({', '.join(found)}) — nothing written. Secrets must "
-                   f"not reach git (I7, ADR-0005): {then}")
+                   f"not reach git (I7, ADR-0005): {then}{hint}")
 
 
 # Output is UTF-8 on every console: a Windows console with cp932 cannot encode "—" and labels in other
@@ -314,6 +326,11 @@ def embedded_env_refs(obj: Any) -> set:
     return set()
 
 
+def without_live_only(settings: dict) -> dict:
+    """SiteSettings without the keys that never go to git (HTTP.LIVE_ONLY_KEYS: customer mail addresses, I7)."""
+    return {k: v for k, v in settings.items() if k not in HTTP.LIVE_ONLY_KEYS}
+
+
 def site_id_of(e: dict, name: str) -> int:
     """This environment's id of a logical site (the same refusals as ${site:x} in from_refs)."""
     if name not in e["sites"]:
@@ -393,6 +410,8 @@ def logical(export: Any, e: dict) -> dict:
     d = copy.deepcopy(site_data(export))
     ids, vals = id_maps(e)
     ss = d["SiteSettings"]
+    for k in HTTP.LIVE_ONLY_KEYS:                  # customer mail addresses: never in git (I7); kept live on every write
+        ss.pop(k, None)
     scripts = {}
     for kind in SCRIPT_KINDS:
         scripts[kind] = ss.pop(kind, None) or []
@@ -466,9 +485,12 @@ def acl_from_refs(settings: dict, e: dict, site: str) -> None:
                 val = (e.get("principals") or {}).get(m.group(2))
                 if val is None:
                     raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
-                vtyp, vid = val.split(",")[:2]
+                vtyp, _, vid = str(val).partition(",")
                 if vtyp != typ:
                     raise Fail(f"{site}: {label} {key} expects a {typ}, but principal '{m.group(2)}' is {val}")
+                vid = vid.split(",")[0]
+                if not vid.isdigit():                    # a setup placeholder such as "Group,<id>" (L-ENV-01 names it)
+                    raise Fail(f"{site}: {label} {key}: principal '{m.group(2)}' has no id yet ({val})")
                 out.append(int(vid))
             it[key] = out
 
@@ -547,6 +569,7 @@ def payload(model: dict, e: dict, site: str) -> dict:
     if "_pls_conflicts" in model["settings"]:
         raise Fail(f"{site}: unresolved merge conflicts in config/{site}/site.json (_pls_conflicts) — resolve them first")
     m0 = copy.deepcopy(model)
+    m0["settings"] = without_live_only(m0["settings"])   # never in a payload file: the write takes the live values
     acl_from_refs(m0["settings"], e, site)       # before from_refs: principal refs → typed integer IDs
     SL.from_refs(m0["settings"], lambda name: site_id_of(e, name), site, Fail)   # site lists (MoveTargets as integers)
     AP.from_refs(m0["settings"], e.get("principals") or {}, site, Fail)   # [${principal:x}] → [Group<id>] in addresses
@@ -629,16 +652,39 @@ def labels(model: dict) -> dict:
     return {c["ColumnName"]: c.get("LabelText", c["ColumnName"]) for c in model["settings"].get("Columns", [])}
 
 
+def _withheld(d: dict) -> list[str]:
+    """L-SEC-01 names for one diff row: its values are read under the key they belong to (`…Notifications[1]` →
+    `{"Notifications": [value]}`), so a credential field is found whatever its text looks like (pls_secret_fields)."""
+    last = d["path"].rsplit(".", 1)[-1]
+    key, listed = last.split("[", 1)[0], "[" in last
+    names = set()
+    for v in (d.get("before"), d.get("after")):
+        if v is not None:
+            names |= set(secrets_in({key: [v] if listed else v}))
+    item_field = re.search(r"(?i)(notifications|reminders)\[[^\]]*\]\.(\w+)$", d["path"])
+    field = item_field.group(2).casefold() if item_field else ""
+    values = [str(v) for v in (d.get("before"), d.get("after")) if v not in (None, "")]
+    if field in ("token", "headers") and values:
+        names.add("notification-credential")             # read without its item: always a credential field
+    elif field in ("address", "to") and any("://" in v for v in values):
+        names.add("notification-target")                 # a webhook or HttpClient target; mail recipients stay shown
+    return sorted(names)
+
+
 def md_diff(diffs: list[dict], lab: dict, title: str, right: str = "After (git)", kinds: dict | None = None) -> str:
-    """`kinds` renames the kind column for the reader (drift: what exists where, not what a release would do)."""
+    """`kinds` renames the kind column for the reader (drift: what exists where, not what a release would do). A row
+    whose value is secret-like shows the names of what it holds instead of the value (L-SEC-01, I7)."""
     kinds = kinds or {}
     rows = [f"### {title}", "", f"{len(diffs)} difference(s).", ""]
     if diffs:
         rows += [f"| Path | Kind | Label | Before (live) | {right} |", "|---|---|---|---|---|"]
         for d in diffs:
             m = re.search(r"\[(\w+)\]", d["path"])
+            hidden = _withheld(d)
+            before = (f"(withheld: {', '.join(hidden)})" if hidden else short(d["before"])) if d["before"] is not None else ""
+            after = (f"(withheld: {', '.join(hidden)})" if hidden else short(d["after"])) if d["after"] is not None else ""
             rows.append(f"| `{d['path']}` | {kinds.get(d['kind'], d['kind'])} | {lab.get(m.group(1), '') if m else ''} | "
-                        f"{short(d['before']) if d['before'] is not None else ''} | {short(d['after']) if d['after'] is not None else ''} |")
+                        f"{before} | {after} |")
     return "\n".join(rows) + "\n"
 
 
@@ -674,64 +720,76 @@ def _names_principals(d: dict) -> bool:
 
 def classify(diffs: list[dict]) -> dict:
     data, perm, cfg = [], [], []
+    rules: list[dict] = []   # rule ids of tools/pls/pls_impact_rules.py (ADR-0029)
+    DATA, PERM, CFG = "data-impacting", "permission-impacting", "config-only"
+
+    def hit(rule: str, bucket: list, msg: str) -> None:
+        bucket.append(msg)
+        # "id", not "rule": the architecture test reads every "rule" key in tools/pls as a lint rule code
+        rules.append({"id": rule, "path": d["path"],
+                      "class": DATA if bucket is data else PERM if bucket is perm else CFG})
     for d in diffs:
         p = d["path"]
         if re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p) and bool(d["before"]) != bool(d["after"]):
             # stored values of a multi-select column are read as a JSON array of choices, of a single-select one as the
             # value itself (Pleasanter_1.5.2.0 ToExportExtensions.cs l.23-39, ToDisplayExtensions.cs l.35; source-derived,
             # not probed): switching it changes how every existing value of the column is read
-            data.append(f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
+            hit("CL-MULTISELECT-SWITCH", data, f"{p}: multiple selection switched — existing values are read as a JSON array when it is on and as "
                         "one value when it is off (source-derived, not verified); migration: convert the stored values, or "
                         "nothing to convert only on an empty site and never for production")
         elif re.fullmatch(r"settings\.Columns\[\w+\]\.MultipleSelections", p):
-            cfg.append(p)                               # an explicit false added or removed: Pleasanter records only true
+            hit("CL-MULTISELECT-EXPLICIT-FALSE", cfg, p)                               # an explicit false added or removed: Pleasanter records only true
         elif re.fullmatch(r"settings\.Columns\[\w+\]\.ChoicesControlType", p):
             # radio buttons ignore MultipleSelections and tick a choice only when the stored value equals its key
             # (HtmlFields.cs l.573-592, HtmlControls.cs l.589): a stored JSON array shows as nothing selected, and a
             # save may replace it (save path not read, not probed)
-            data.append(f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
+            hit("CL-CHOICE-CONTROL", data, f"{p}: choice control changed (drop-down / radio) — on a multi-select column radio buttons show "
                         "stored values as empty and a save may overwrite them (source-derived, not verified); migration: "
                         "check the column's stored values, or nothing to convert when the column is single-select or empty")
         elif p.startswith("settings.Columns[") and d["kind"] == "removed" and p.count("[") == 1:
-            data.append(f"{p}: column definition removed")
+            hit("CL-COLUMN-REMOVED", data, f"{p}: column definition removed")
         elif re.match(r"settings\.Columns\[\w+\]\.ChoicesText", p) and d["kind"] in ("changed", "removed"):
             before = set(str(d["before"] or "").splitlines())
             after = set(str(d["after"] or "").splitlines())
             jb, ja = _lookup_json(d["before"]), _lookup_json(d["after"])
             if jb is not None and ja is not None:       # a lookup / link definition, not a list of choices
                 if jb == ja:
-                    cfg.append(p)
+                    hit("CL-LOOKUP-UNCHANGED", cfg, p)
                 else:
-                    data.append(f"{p}: lookup / link definition changed")
+                    hit("CL-LOOKUP-CHANGED", data, f"{p}: lookup / link definition changed")
             elif before - after:
-                data.append(f"{p}: choices removed {sorted(before - after)}")
+                hit("CL-CHOICES-REMOVED", data, f"{p}: choices removed {sorted(before - after)}")
             else:
-                cfg.append(p)
+                hit("CL-CHOICES-ADDED", cfg, p)
         elif re.match(r"settings\.Columns\[\w+\]\.DefaultInput", p):
-            data.append(f"{p}: formula/default changed")
+            hit("CL-DEFAULT-INPUT", data, f"{p}: formula/default changed")
         elif re.match(r"settings\.Formulas(\[|$)", p):  # 1.5.2 keeps calculations in SiteSettings.Formulas, not in a column
-            data.append(f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
+            hit("CL-FORMULAS", data, f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
                         "records are not known to be recomputed (the screen has 同期 / SynchronizeFormulas, no API route: "
                         "source-derived, Pleasanter_1.5.2.0 SiteUtilities.cs); migration: the recomputed values as data, "
                         "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
-            data.append(f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
-                        "migration: touch one child record per parent after the release")
+            hit("CL-SUMMARIES", data, f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
+                        "after the release run 同期 (SynchronizeSummaries) on the screen for this summary in each "
+                        "environment, check that a parent's value was recalculated (source-derived, not verified on "
+                        "1.5.2) and record it with pls step (ADR-0028; pls summaries sync is not built); updating one "
+                        "child per parent also recalculates (observed, D16) but rewrites business records")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
-            perm.append(p)
+            hit("CL-PERMISSIONS", perm, p)
         # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
         elif re.fullmatch(r"settings\.Processes\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
                 re.fullmatch(r"settings\.Processes(\[.+\])?", p) and _names_principals(d)):
-            perm.append(f"{p}: process access control (D20)")
+            hit("CL-PROCESS-ACCESS", perm, f"{p}: process access control (D20)")
         elif re.match(r"settings\.StatusControls(\[|$)", p):   # who may change a record in a status (D42)
-            perm.append(f"{p}: status control")
+            hit("CL-STATUS-CONTROL", perm, f"{p}: status control")
         elif re.fullmatch(r"settings\.(Views|Exports|DashboardParts)\[.+\]\.(Groups|Users|Depts)(\[[^\]]*\])?", p) or (
                 re.fullmatch(r"settings\.(Views|Exports|DashboardParts)(\[.+\])?", p) and _names_principals(d)):
-            perm.append(f"{p}: access list of a view / export / dashboard part")
+            hit("CL-ACCESS-LIST", perm, f"{p}: access list of a view / export / dashboard part")
         else:
-            cfg.append(p)
+            hit("CL-OTHER", cfg, p)
     cls = "data-impacting" if data else "permission-impacting" if perm else "config-only"
-    return {"classification": cls, "data_impacting": data, "permission_impacting": perm, "config_only": cfg}
+    return {"classification": cls, "data_impacting": data, "permission_impacting": perm, "config_only": cfg,
+            "rules": rules}
 
 
 # ---------------------------------------------------------------- lint (architecture §7.2)
@@ -857,6 +915,22 @@ def lint(r: Path) -> list[dict]:
             issues.append({"rule": "L-MAIL-01", "site": site, "msg": f"{path}: literal mail address {addr}; use ${{env:…}} or ${{principal:…}}"})
         for name in secrets_in(blob):
             issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in configuration"})
+        for k in HTTP.LIVE_ONLY_KEYS:                                # customer mail addresses never go to git (I7)
+            if k in m["settings"]:
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"{k} holds customer mail addresses and is kept out "
+                               "of git — remove it from site.json; every write keeps the value the site holds"})
+        for env_name in sorted(e_all["envs"]):                   # the same, after environment values are resolved
+            if site not in ((e_all["envs"][env_name] or {}).get("sites") or {}):
+                continue                                         # not deployed to this environment: no payload for it
+            try:
+                resolved = payload(m, env_conf(r, env_name), site)
+            except (Fail, KeyError, ValueError) as ex:           # unresolved references, raw ids, conflicts: other rules
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"not checked for env '{env_name}' after its values "
+                               f"are resolved: {ex}"})
+                continue
+            for name in sorted(set(secrets_in(resolved)) - set(secrets_in(blob))):
+                issues.append({"rule": "L-SEC-01", "site": site, "msg": f"secret-like value ({name}) in the payload for "
+                               f"env '{env_name}': an environments.json value holds it"})
         for kind, items in m["scripts"].items():
             for it in items:
                 body, nm = it.get("Body", ""), it.get("Name")
@@ -1478,13 +1552,46 @@ def nothing_to_convert_problems(r: Path, migs: Any, impacted: set, role: str | N
     return out
 
 
+def first_release_of_new_site(c: dict) -> None:
+    """A classification on the first release of a new site: its data-impacting items become notes, and so do their
+    rule ids (ADR-0007; ADR-0029 rules)."""
+    c["new_site_notes"] = [f"{x} — not applicable: first release of a new site (ADR-0007)" for x in c["data_impacting"]]
+    c["data_impacting"] = []
+    c["rules"] = [x for x in c.get("rules", []) if x["class"] != "data-impacting"]
+    c["classification"] = "permission-impacting" if c["permission_impacting"] else "config-only"
+
+
+def live_only_in_git_refusal(site: str, git: dict) -> str | None:
+    """L-SEC-01 before anything reaches releases/: the payload drops the mail address settings (ADR-0010), but the
+    raw diff is built from config/, so a hand-typed copy would land in a committed release file and show as a change
+    that is never deployed."""
+    found = [k for k in HTTP.LIVE_ONLY_KEYS if k in (git.get("settings") or {})]
+    if not found:
+        return None
+    return (f"{site}: REFUSED — L-SEC-01 config/{site}/site.json holds {', '.join(found)} (customer mail addresses, kept "
+            "out of git, ADR-0010) — nothing written to releases/. Remove them from site.json; every pls apply keeps the "
+            "values the site holds")
+
+
 def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: str | None,
               accept_unverified: str | None = None) -> tuple[bool, list, dict]:
     """All pre-deploy checks for one site. Returns (ok, messages, result)."""
     msgs = []
     live = logical(export, e)
     git = read_tree(r / "config" / site)
+    refusal = live_only_in_git_refusal(site, git)
+    if refusal:
+        return False, [refusal], {}
     scope = SC.site_findings(live["settings"] | live["scripts"], git["settings"] | git["scripts"])
+    raw_live = site_data(export).get("SiteSettings") or {}       # logical() drops the live-only keys; pls still sends them
+    # all live-only keys are verified today (KB D47); the guard stays for a key added to LIVE_ONLY_KEYS later
+    scope = sorted(set(scope) | {f"{k} (no round-trip evidence; kept from the live site on every write)"
+                                 for k in HTTP.LIVE_ONLY_KEYS if k in raw_live and k not in SC.VERIFIED_KEYS})
+    held = [k for k in HTTP.LIVE_ONLY_KEYS if k in raw_live]
+    if held:
+        msgs.append(f"NOTE {site}: the site holds {', '.join(held)} (kept out of git, ADR-0010): pls apply keeps them; a "
+                    "browser-runner or hand-applied payload file erases them (TD-59); a production package's checklist "
+                    "copies them (TD-60)")
     if scope and not accept_unverified:
         return False, [f"SCOPE {site}: {x}" for x in scope] + [
             f"{site}: REFUSED — components without round-trip evidence (ADR-0001); updatesite could change or drop them (D4). "
@@ -1503,17 +1610,20 @@ def plan_site(r: Path, e: dict, env: str, site: str, export: Any, accept_drift: 
         return False, [f"SLOT {c['kind']:15} {site}: {c['msg']}" for c in coll] + [f"{site}: REFUSED — column-slot check failed (A2)"], {}
     live_site = site_data(export)
     new = payload(git, e, site)
-    missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
+    missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}
+                     - set(HTTP.LIVE_ONLY_KEYS))
     if missing:
         return False, [f"{site}: REFUSED — L-DEP-01 payload misses {missing}"], {}
-    rollback = {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings")
+    rollback = {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
+                for k in ("Title", "Body", "ReferenceType", "SiteSettings")
                 + (("InheritPermission", "Permissions") if "Permissions" in new or "InheritPermission" in new else ())
                 if k in live_site}
     found = {part: secrets_in(obj) for part, obj in (("payload (config/)", new), ("rollback (live)", rollback))}
     if any(found.values()):
         return False, [f"{site}: REFUSED — L-SEC-01 secret-like values in the " + "; ".join(
             f"{part}: {', '.join(n)}" for part, n in found.items() if n) + " — nothing written to releases/. Secrets must "
-            "not reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"], {}
+            "not reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"
+            + (f". {SF.HINT}" if {n for v in found.values() for n in v} & SF.NAMES else "")], {}
     diffs = flat_diff(same_meta(live, git), git)
     snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
     return True, msgs, {
@@ -1536,7 +1646,8 @@ def summarize_scope(site: str, msgs: list[str], top: int = 5) -> list[str]:
     """`--summary` of the scope refusal: one line per site (count and the first names) instead of one line per
     component; every other message is kept as it is, and the full list is one command away (without --summary)."""
     prefix = f"SCOPE {site}: "
-    names = [m[len(prefix):].replace(" (no round-trip evidence)", "") for m in msgs if m.startswith(prefix)]
+    names = list(dict.fromkeys(re.sub(r" \(no round-trip evidence[^)]*\)$", "", m[len(prefix):])
+                               for m in msgs if m.startswith(prefix)))
     if not names:
         return msgs
     line = (f"SCOPE {site}: {len(names)} component(s) without round-trip evidence: {', '.join(names[:top])}"
@@ -1595,9 +1706,7 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
         # First release of a site created by a bootstrap (ADR-0007): no records can predate it, and a summary
         # whose destination is also new has no existing values to recalculate (D16). Kept as notes, not gates.
         if s_ in fresh and c["data_impacting"] and all(d in fresh for d in res["deps"]):
-            c["new_site_notes"] = [f"{x} — not applicable: first release of a new site (ADR-0007)" for x in c["data_impacting"]]
-            c["data_impacting"] = []
-            c["classification"] = "permission-impacting" if c["permission_impacting"] else "config-only"
+            first_release_of_new_site(c)
     order, cyc = order_sites({s: res["deps"] for s, res in results.items()})
     rel = r / "releases" / release
     worst = max((res["classification"]["classification"] for res in results.values()), key=SEVERITY.index)
@@ -1828,12 +1937,14 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     model = logical(export, e_new)
     model["settings"] = canonicalize(model["settings"])
     ss = d.get("SiteSettings") or {}
-    refuse_secrets(ss, f"site {sid}", "move them out of the site configuration first, then adopt")
+    refuse_secrets({k: d[k] for k in ("Title", "Body", "SiteSettings") if k in d}, f"site {sid}",
+                   "move them out of the site configuration (and its title / description) first, then adopt")
     placed = slots_in_use({k: v for k, v in ss.items() if k != "FilterColumns"})
     entries = AD.slot_entries(slots_in_use(ss), today, set(slots_in_use(ss)) - set(placed))
     nf = sum(1 for v in entries.values() if v.get("placement") == "filter-only")
     rel = f"A-{stamp}-{env}-{name}"
-    payload_a = {k: d.get(k) for k in ("Title", "Body", "ReferenceType", "SiteSettings")}
+    payload_a = {k: without_live_only(d.get(k) or {}) if k == "SiteSettings" else d.get(k)
+                 for k in ("Title", "Body", "ReferenceType", "SiteSettings")}
     plan_a = {"release": rel, "env": env, "status": "applied", "kind": "adopt", "sites": [name],
               "applied_at": datetime.now().astimezone().isoformat(timespec="seconds"),
               "per_site": {name: {"site_id": sid, "payload_file": f"payload-{name}.json"}},
@@ -1960,6 +2071,12 @@ def env_compare(r: Path, site: str, sources: list[str], today: str) -> int:
             notes.append(f"{i0['label']} → {info['label']}: permissions not compared (one side has none)")
         for d_ in flat_diff(CMP.comparable(m0, perms), CMP.comparable(m, perms)):
             rows.append(d_ | {"pair": f"{i0['label']} → {info['label']}", "class": CMP.classify(d_, missing, values)})
+    found = {info["label"]: secrets_in(m) for m, info in loaded}
+    if any(found.values()):                              # the report quotes values: L-SEC-01 before it is written (I7)
+        raise Fail(f"{site}: secret-like values in " + "; ".join(f"{k}: {', '.join(v)}" for k, v in found.items() if v)
+                   + " — no report written. Secrets must not reach git (I7, ADR-0005): remove them from that "
+                   "environment's site configuration (or from config/), then compare again" + (
+                       f". {SF.HINT}" if {n for v in found.values() for n in v} & SF.NAMES else ""))
     out = r / "ops" / "env-compare" / f"{today}-{datetime.now():%H%M%S}-{site}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(CMP.report(site, rows, [i["label"] for _, i in loaded], notes, today, short), encoding="utf-8", newline="\n")
@@ -2232,7 +2349,9 @@ def sandbox_drop(r: Path, name: str) -> int:
 
 def unpack(r: Path, env: str, export: Path, site: str) -> None:
     """Write the export of a site into config/<site> (its whole tree is replaced)."""
-    model = logical(rj(export), env_conf(r, env))
+    raw = rj(export)
+    refuse_secrets(raw, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
+    model = logical(raw, env_conf(r, env))
     refuse_secrets(model, f"unpack {site}", "move them out of the site configuration in Pleasanter, export again, then unpack")
     write_tree(model, r / "config" / site)
 
@@ -2269,6 +2388,7 @@ def harvest(r: Path, env: str, site: str) -> int:
     exp = c.export_site(e["sites"][site]["id"])
     out = r / ".pls" / "exports" / f"{env}-{site}-harvest-{_stamp()}.json"
     wj(out, exp)
+    refuse_secrets(exp, f"harvest {site} from {env}", f"move them out of the site configuration on {env}, then harvest")
     model = logical(exp, e)
     model["settings"] = canonicalize(model["settings"])
     pf = r / "config" / site / "permissions.json"
@@ -2632,6 +2752,7 @@ def init_project(target: Path, stage: str, release_target: str, approver: str | 
             PR.set_field(target, field, m.group(1).strip(), approver, said, recorded_by="pls init")
     (target / ".claude").mkdir(exist_ok=True)
     wj(target / ".claude" / "framework.lock", {"path": _relpath(fw, target.resolve())})
+    HK.install(target / ".claude" / "settings.json")      # guardrails applied by Claude Code itself (ADR-0029 C)
     sync_skills(target, fw)
 
 
@@ -3589,11 +3710,41 @@ def http_cmd(r: Path, a) -> int:
                     if len(psites) > 1:
                         row["site_ids"] = dict(own)
                     saved_ok = True
-                    for ps in psites:
-                        settings = {"Version": schema, "ReferenceType": ps["rt"], **KV.substitute_sites(ps["settings"], own)}
+                    pvars = {"admin_uid": uid} | {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
+                                                  for role in (p.get("roles") or {})}   # bound: KG.not_runnable
+
+                    def site_body(ps, site_settings):
+                        """updatesite body for one of the probe's own sites: ${probe_site:…} and $admin_uid /
+                        $group_<role> replaced (ADR-0026, ADR-0027); the roles' grant while the probe runs."""
+                        settings = {"Version": schema, "ReferenceType": ps["rt"],
+                                    **KV.substitute_sites(KV.substitute_vars(site_settings, pvars), own)}
                         body = {"Title": KV.TITLE.format(ps["state"]), "ReferenceType": ps["rt"], "Body": "", "SiteSettings": settings}
                         if p.get("roles"):                 # the role's group may use the probe site (D15 shape)
                             body.update(InheritPermission=own[ps["key"]], Permissions=KG.permissions(p, uid, e.get("principals") or {}))
+                        return body
+
+                    def site_ops(st, _vars, psites=psites):
+                        """A settings / settings_partial step (ADR-0027): only on one of the probe's own sites, proven
+                        its own by getsite right before the write; the content rules were checked in the file."""
+                        ps = next(x for x in psites if x["key"] == (st.get("site_key") or "main"))
+                        sid_ = own[ps["key"]]
+                        code, sjs, _ = c.call(f"/api/items/{sid_}/getsite")
+                        if code != 200 or not is_own(ps)(((sjs or {}).get("Response") or {}).get("Data") or {}):
+                            raise H.TransportError(f"{st['op']}: site {sid_} is not this probe's site (getsite → HTTP {code}) "
+                                                   "— nothing written")
+                        if st["op"] == "settings":
+                            code, js, _ = c.call(f"/api/items/{sid_}/updatesite", site_body(ps, st["SiteSettings"]))
+                        else:                              # body shape of updatesitesettings: not read (ADR-0027 open question)
+                            code, js, _ = c.call(f"/api/items/{sid_}/updatesitesettings",
+                                                 KV.substitute_sites(KV.substitute_vars(st["body"], pvars), own))
+                        want = st.get("expectHttp") or 200
+                        where = "" if ps["key"] == "main" else f" {ps['key']}"
+                        msg = f" {(js or {}).get('Message')}" if (js or {}).get("Message") else ""
+                        return code == want, [f"{'ok ' if code == want else 'NG '} {st['op']}{where} → HTTP {code} "
+                                              f"(expected {want}){msg}"]
+
+                    for ps in psites:
+                        body = site_body(ps, ps["settings"])
                         code, _, _ = c.call(f"/api/items/{own[ps['key']]}/updatesite", body)
                         want = p.get("expect_save", 200) if ps["key"] == "main" else 200
                         ok = code == want
@@ -3607,7 +3758,7 @@ def http_cmd(r: Path, a) -> int:
                         data = c.export_site(sid)["Response"]["Data"]
                         for path, exp in (p.get("expect_stored") or {}).items():
                             act = KV.get_path(data["SiteSettings"], path)
-                            good = H._check(act, KV.substitute_sites(exp, own))
+                            good = H._check(act, KV.substitute_sites(KV.substitute_vars(exp, pvars), own))   # ids as sent (ADR-0027)
                             log.append(f"{'ok' if good else 'NG'} stored {path} = {json.dumps(act, ensure_ascii=False)}")
                             status = status if good else "fail"
                         server_day = None
@@ -3618,14 +3769,18 @@ def http_cmd(r: Path, a) -> int:
                         vars_ |= {f"group_{role}": str((e.get("principals") or {})[role]).split(",")[1]
                                   for role in (p.get("roles") or {})}           # bound: checked by KG.not_runnable
                         specs = [dict(t, vars=dict(vars_),
-                                      steps=[dict(st, site=own[st["site"]]) if "site" in st else st
+                                      steps=[{**{k: v for k, v in st.items() if k != "site"},
+                                              "site_key": st.get("site") or "main"} if st.get("op") in KV.SETTINGS_OPS
+                                             else dict(st, site=own[st["site"]]) if "site" in st else st
                                              for st in t.get("steps") or []])
                                  for t in p.get("tests") or []]
                         if specs:
-                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True)
+                            res = H.run_tests(probe_client, sid, specs, a.env, confine=True, site_ops=site_ops)
                             for t in res["tests"]:
                                 log += [x.strip() for x in t["log"] if x.strip()]   # passing checks are evidence too
-                                if t["status"] not in ("pass", "pass-api-only"):
+                                if t["status"] == "error":    # a refusal or a broken call is not evidence (I9)
+                                    status = "error"
+                                elif t["status"] not in ("pass", "pass-api-only") and status != "error":
                                     status = "fail"
                     if not is_g:                             # leave the probe sites usable in the UI (D21)
                         for ps in psites:
@@ -3674,7 +3829,7 @@ def http_cmd(r: Path, a) -> int:
                                 wj(state_f, state)
                             else:
                                 status = "error"
-                if p.get("observe") and status == "pass":
+                if p.get("observe") and status in ("pass", "fail"):   # recorded, not judged: read the log
                     status = "observed"
                 row["status"] = status
                 results[name] = status
@@ -3787,9 +3942,38 @@ def http_cmd(r: Path, a) -> int:
 # ---------------------------------------------------------------- CLI
 
 def main(argv=None) -> int:
-    """Every command is logged (ops/log/, ADR-0013); the work is done by _main."""
+    """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
+    tool call of Claude Code and is not logged (the run log would hold every edit)."""
     args = list(sys.argv[1:] if argv is None else argv)
+    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"]):
+        return hook(args[1])
     return LG.run(root, args, lambda: _main(args))
+
+
+def hook(event_name: str, stdin=None, stdout=None) -> int:
+    """One Claude Code hook (ADR-0029 C1): the event's JSON on stdin, the answer as JSON on stdout, exit 0. A hook that
+    cannot decide stays silent and allows: these are guardrails; pls enforces writes, gates and secrets itself."""
+    stdin, stdout = stdin or sys.stdin.buffer, stdout or sys.stdout.buffer   # UTF-8 bytes, not the console code page
+    try:
+        raw = stdin.read()
+        event = json.loads((raw.decode("utf-8-sig") if isinstance(raw, bytes) else raw) or "{}")
+        proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or "") if os.environ.get("CLAUDE_PROJECT_DIR") else root()
+        if not (proj / "environments.json").exists():
+            return 0                                   # not a pls project: nothing to say
+        if event_name == "pre":
+            out = HK.pre(proj, event)
+        elif event_name == "post":
+            site = HK.edited_site(proj, event)
+            out = HK.post(lint(proj), site) if site else None
+        else:
+            out = HK.stop(event, PC.p1(proj) + PC.p2(proj)) if not event.get("stop_hook_active") else None
+    except Exception:                                  # noqa: BLE001 — a guardrail never breaks the session
+        return 0
+    if out:
+        text = json.dumps(out, ensure_ascii=False) + "\n"
+        stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
+        stdout.flush()
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -3916,6 +4100,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--approver", required=True, help="name as listed in the profile row Approvers")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
+    s.add_argument("--accept-findings", metavar="REASON", help="G1/G2: approve although pls check p1/p2 reports findings "
+                   "for these items; the findings and the reason are kept in the gate record (ADR-0029)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
     s = sp.add_parser("package", help="zip a G4-approved release for the customer's operator, with a stdlib verify.py (ADR-0003)")
     s.add_argument("release")
@@ -3954,6 +4140,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sp.add_parser("scope", help="components of config/<site> without round-trip evidence (ADR-0001), read from git: "
                                      "what release-plan would refuse; exit 1 while any is found")
     s.add_argument("--site", help="one site (default: every site in config/)")
+    s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
+                      "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
+    s.add_argument("action", choices=["pre", "post", "stop", "install"])
+    s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
+    s.add_argument("phase", choices=["p1", "p2", "p3"])
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
@@ -4192,9 +4383,26 @@ def _main(argv=None) -> int:
 
     if a.cmd == "gate":
         need_onboarding(r, f"gate {a.gate}")
+        extra = None
+        if a.accept_findings is not None and a.gate not in ("G1", "G2"):
+            raise Fail("--accept-findings belongs to G1 / G2 (pls check p1 / p2, ADR-0029)")
+        if a.gate in ("G1", "G2") and a.decision == "approved":      # completeness decided by pls check (ADR-0029)
+            try:
+                GT.validate(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release)   # who decides comes first
+                mine = PC.for_gate(r, a.gate, a.item)
+            except GT.GateError as ex:
+                raise Fail(str(ex))
+            if mine and not (a.accept_findings or "").strip():
+                for x in mine:
+                    print(f"{x['phase'].upper()} {x['item']}: {x['msg']}")
+                raise Fail(f"{a.gate} REFUSED: pls check {'p1' if a.gate == 'G1' else 'p2'} reports {len(mine)} finding(s) "
+                           "for these items — fix them, or let the approver accept them: --accept-findings \"<reason>\"")
+            if mine:
+                extra = {"accepted_findings": [f"{x['item']}: {x['msg']}" for x in mine],
+                         "accept_reason": a.accept_findings.strip()}
         try:
             out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
-                            datetime.now().astimezone().date().isoformat())
+                            datetime.now().astimezone().date().isoformat(), extra=extra)
         except GT.GateError as ex:
             raise Fail(str(ex))
         LG.record_metric(gate=a.gate, decision=a.decision, approver=rj(out)["approver"])
@@ -4289,19 +4497,32 @@ def _main(argv=None) -> int:
                   f"rollback-<site>.json (or complete the others), export every site and run mark-applied again.")
             return 1
         bad = "differs" in states.values()
+        if bad:                  # the diff below and the baseline quote live values: L-SEC-01 first (I7, ADR-0005)
+            found = {}
+            for site in plan["sites"]:
+                d_ = site_data(rj(Path(exports[site])))
+                found[site] = secrets_in({k: d_[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings",
+                                                             "InheritPermission", "Permissions") if k in d_})
+            if any(found.values()):
+                print(f"{a.release}: REFUSED — L-SEC-01 secret-like values on the live site: " + "; ".join(
+                    f"{s_}: {', '.join(v)}" for s_, v in found.items() if v) + " — no live-<site>.json written and "
+                    "the release state is unchanged. Remove them from the site in Pleasanter (I7, ADR-0005), export "
+                    "every site again and run mark-applied again")
+                return 1
         for site, st_ in states.items():
             if st_ == "differs":
                 want = payload_model(rj(rel / plan["per_site"][site]["payload_file"]), e, site)
                 print(md_diff(shown[site], labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
         if bad:
             # The release WAS applied; Pleasanter stored some values differently (D8). Record that state as the
-            # baseline so the fold-back release (P3 step 6) is not refused as drift (S2).
+            # baseline so the fold-back release (P3 step 6) is not refused as drift (S2) — but never a secret (I7).
             for site in plan["sites"]:
                 d = site_data(rj(Path(exports[site])))
                 pl = rj(rel / plan["per_site"][site]["payload_file"])
                 perms = ("InheritPermission", "Permissions") if ("Permissions" in pl or "InheritPermission" in pl) else ()
                 managed = ("Title", "Body", "ReferenceType", "SiteSettings") + perms     # what the release wrote
-                wj(rel / f"live-{site}.json", {k: d[k] for k in managed if k in d})
+                wj(rel / f"live-{site}.json", {k: without_live_only(d[k]) if k == "SiteSettings" else d[k]
+                                               for k in managed if k in d})
             plan.update(status="applied-differs", applied_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                         post_apply_check="live differs from the payload; live-<site>.json is the baseline — fold the "
                                          "differences into config/ and plan a follow-up release")
@@ -4349,6 +4570,9 @@ def _main(argv=None) -> int:
     if a.cmd == "pack":
         e = env_conf(r, a.env)
         p = payload(read_tree(r / "config" / a.site), e, a.site)
+        refuse_secrets(p, f"pack {a.site} for {a.env}", "an environment value or config/ holds them — remove them, then pack")
+        print(f"note: the payload leaves out {', '.join(HTTP.LIVE_ONLY_KEYS)} (kept out of git, ADR-0010): pls apply adds "
+              "the site's values; any other updatesite of this file erases them on the site", file=sys.stderr)
         text = json.dumps(p, ensure_ascii=False, indent=2)
         (Path(a.out).write_text(text + "\n", encoding="utf-8", newline="\n") if a.out else print(text))
         return 0
@@ -4372,6 +4596,37 @@ def _main(argv=None) -> int:
         if found:
             print("release-plan refuses these until a probe proves them (pls kb-verify, ADR-0023) or a person accepts "
                   "them with a decision record (--accept-unverified)")
+        return 1 if found else 0
+
+    if a.cmd == "hook":                                 # pre / post / stop never reach here (main)
+        try:
+            added = HK.install(r / ".claude" / "settings.json")
+        except ValueError as ex:
+            raise Fail(str(ex))
+        print(f".claude/settings.json: {'added ' + ', '.join(added) if added else 'hooks already there'} (ADR-0029)")
+        return 0
+
+    if a.cmd == "check":
+        if a.phase == "p3":
+            found = [{"phase": "p3", "item": i["site"], "msg": f"{i['rule']} {i['msg']}"} for i in lint(r)]
+            cfg = r / "config"
+            for d in sorted(cfg.iterdir() if cfg.is_dir() else []):
+                if (d / "site.json").exists():
+                    m = read_tree(d)
+                    found += [{"phase": "p3", "item": d.name, "msg": f"SCOPE {x}"} for x in SC.unverified(m["settings"] | m["scripts"])]
+            tr = rj(r / "traceability.json") if (r / "traceability.json").exists() else {}
+            for req, links in sorted((tr or {}).items()):
+                for ref in (links or {}).get("config") or []:
+                    if not config_path_exists(r, ref):
+                        found.append({"phase": "p3", "item": req, "msg": f"traceability config path {ref} does not exist"})
+        else:
+            try:
+                found = PC.CHECKS[a.phase](r)
+            except GT.GateError as ex:
+                raise Fail(str(ex))
+        for x in found:
+            print(f"{x['phase'].upper()} {x['item']}: {x['msg']}")
+        print(f"{len(found)} finding(s)")
         return 1 if found else 0
 
     if a.cmd == "lint":
@@ -4473,9 +4728,26 @@ def _main(argv=None) -> int:
                     print(f"MIGRATION {x}")
                 print("plan REFUSED: nothing-to-convert migration not allowed here (ADR-0004); no files written")
                 return 1
+        refusal = live_only_in_git_refusal(a.site, git)
+        if refusal:
+            print(refusal)
+            return 1
         live_site = site_data(export)
         new = payload(git, e, a.site)
-        missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"})
+        missing = sorted(set(live_site["SiteSettings"]) - set(new["SiteSettings"]) - {"ServerScripts", "Scripts", "Styles", "Htmls"}
+                         - set(HTTP.LIVE_ONLY_KEYS))
+        rollback = {k: without_live_only(live_site[k]) if k == "SiteSettings" else live_site[k]
+                    for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site}
+        # raw-diff.md is built from the whole live export and config/ (meta included), so those are checked too
+        found = {part: secrets_in(obj) for part, obj in (("payload (config/)", new), ("rollback (live)", rollback),
+                                                         ("live export", export), ("config/", git))}
+        if any(found.values()):                  # L-SEC-01 before anything reaches releases/ (I7, ADR-0005)
+            names = sorted({n for v in found.values() for n in v})
+            print("plan REFUSED: L-SEC-01 secret-like values in the " + "; ".join(
+                f"{part}: {', '.join(n)}" for part, n in found.items() if n) + " — no files written. Secrets must not "
+                "reach git (I7, ADR-0005): move them out of the configuration (and out of the live site), then plan again"
+                + (f". {SF.HINT}" if set(names) & SF.NAMES else ""))
+            return 1
         rel = r / "releases" / a.release
         snap = json.dumps(export, ensure_ascii=False, sort_keys=True)
         plan = {
@@ -4491,7 +4763,7 @@ def _main(argv=None) -> int:
         }
         wj(rel / "plan.json", plan)
         wj(rel / "payload.json", new)
-        wj(rel / "rollback.json", {k: live_site[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings") if k in live_site})
+        wj(rel / "rollback.json", rollback)
         (rel / "raw-diff.md").write_text(md_diff(diffs, labels(git) | labels(live), f"{a.env}/{a.site}: live (before) vs git (after)"), encoding="utf-8", newline="\n")
         print(f"plan written to releases/{a.release}/ — {len(diffs)} change(s), {plan['classification']['classification']}"
               + ("" if not missing else f"; L-DEP-01 FAILED: {missing}"))

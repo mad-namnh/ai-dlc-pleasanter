@@ -100,7 +100,10 @@ def checklist(manifest: dict) -> str:
     lines += [
         f"{6 if m['migrations'] else 5}. **Apply** the sites in this order: {' → '.join(m['sites'])} — the method is the"
         " one agreed in ADR-0003 (pending: runner or manual import). On failure restore in reverse order from the"
-        " `rollback-*.json` files.",
+        " `rollback-*.json` files. **Before each updatesite** (apply and restore) copy `AddressBook`, `MailToDefault`,"
+        " `MailCcDefault`, `MailBccDefault` from the site as it is now into the file's SiteSettings: the files leave"
+        " them out (customer mail addresses never go to git, ADR-0010) and updatesite replaces the whole SiteSettings —"
+        " without them the site loses them. `pls apply` does this itself.",
         f"{7 if m['migrations'] else 6}. **Manual steps:** {m['manual_step'] or 'none'}.",
         f"{8 if m['migrations'] else 7}. **Report back** the result (applied / rolled back / unknown) and an export of each"
         " site, so the release is recorded and drift can be checked.",

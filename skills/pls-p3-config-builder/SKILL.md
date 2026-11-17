@@ -1,6 +1,6 @@
 ---
 name: pls-p3-config-builder
-description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design into the unpacked configuration in git (config/<site>/ site.json, scripts, permissions), keeps it canonical and lint-clean, and deploys it to dev as a dev release until the round trip shows 0 differences. Use after G2, and whenever P4 sends a build defect back.
+description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design into the unpacked configuration in git (site.json, scripts and permissions of each site under config/), keeps it canonical and lint-clean, and deploys it to dev as a dev release until the round trip shows 0 differences. Use after G2, and whenever P4 sends a build defect back.
 ---
 
 # pls-p3-config-builder
@@ -29,6 +29,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
    - `pls canon --site <s>`
    - `pls lint` → 0 issues
    - `pls coverage` → every in-scope REQ has config (test gaps are expected until P4)
+   - `pls check p3` → 0 findings (lint, `pls scope` per site — a component without round-trip evidence needs a probe or a decision record before release — and every traceability config path exists)
 
    Fix what they report; do not silence a rule.
 5. **Deploy to dev** with the commands in `pls-x-lifecycle` P3 step 3: export → `release-plan` → the person runs `pls apply` (or you run it when the person recorded the standing permission for dev, lifecycle section 2 rule 3). Release ids are `R-YYYYMMDD-NN-dev`.

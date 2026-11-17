@@ -78,6 +78,9 @@ class PackageTest(unittest.TestCase):
         for want in ("manifest.json", "verify.py", "pls_release_digest.py", "g4.json", "CHECKLIST.md",
                      f"releases/{R}/plan.json", f"releases/{R}/payload-loans.json", f"releases/{R}/rollback-loans.json"):
             self.assertIn(want, names)
+        checklist = zipfile.ZipFile(z).read("CHECKLIST.md").decode("utf-8")       # mail settings are not in the files
+        self.assertIn("Before each updatesite", checklist)
+        self.assertIn("AddressBook", checklist)
         code, out = self.verify(self.unzip(z))
         self.assertEqual(code, 0, out)
         self.assertIn("VERIFIED", out)

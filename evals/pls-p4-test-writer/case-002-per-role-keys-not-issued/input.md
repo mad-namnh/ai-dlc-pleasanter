@@ -1,8 +1,8 @@
-# Input — P4 case 002 (role tests `per-role keys`, no role key on dev yet)
+# Input
 
 Dry run: no network; describe the commands you would run, do not invent their output.
 
-Scratch project (fictional; build it in the scratch folder as described). Project folder `pls-demo-purchase` — purchase requests, one site `requests`.
+Scratch project (fictional; build it in the scratch folder as described). Project folder `purchase` — purchase requests, one site `requests`.
 
 Profile (`CLAUDE.md`, from `templates/project/CLAUDE.md`):
 

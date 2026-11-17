@@ -1,4 +1,4 @@
-# Input — lifecycle case 003 (fictional)
+# Input
 
 A project repository created by `pls init kintai --approver Nam` (defaults): its `CLAUDE.md` profile says Origin `new`, Stage `demo`, Release target `dev`. Nothing else exists yet.
 

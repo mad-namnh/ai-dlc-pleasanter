@@ -1,3 +1,19 @@
+---
+id: DES-NNN
+status: awaiting G2
+reqs: [REQ-…]
+classification: config-only
+elements:
+  - id: E1
+    site: <logical site>
+    setting: <what is set>
+    req: REQ-…
+    rung: 1
+impact:
+  - rule: <rule id of impact-rules.md>
+    element: <existing element>
+    action: <what the design does, or checked: none>
+---
 # DES-NNN — <title>
 
 - **Status:** awaiting G2
@@ -22,9 +38,9 @@ A server script gets its own row that names the site and the script exactly as i
 
 ## Impact analysis
 
-| Existing element | Impact | Action |
-|---|---|---|
-| … | … | … |
+| Rule (`impact-rules.md`) | Existing element | Impact | Action |
+|---|---|---|---|
+| … | … | … | … |
 
 ## Migration (only if data-impacting)
 
@@ -33,3 +49,11 @@ Script, dry run on a copy, rollback.
 ## Open points
 
 - …
+
+## Front matter (read by `pls check p2`)
+
+- `reqs`: the requirements this design meets (every G1-approved REQ must be in some DES).
+- `elements`: one item per design-table row — `id`, `site`, `setting`, `req` (a REQ of `reqs`, or `impact` for an element an impact row needs), `rung` 1–5 and, from rung 3, `reason`.
+- `classification`: `config-only` | `data-impacting` (then a `## Migration` section) | `permission-impacting`.
+- `impact`: one item per impact-table row — `rule` (an id of `impact-rules.md`), `element`, `action`.
+- The format is a small subset of YAML (`key: value`, `key: [a, b]`, block lists of `- k: v` items); `pls check p2` names any line it cannot read.

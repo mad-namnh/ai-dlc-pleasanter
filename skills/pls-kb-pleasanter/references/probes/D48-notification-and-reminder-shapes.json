@@ -1,0 +1,103 @@
+{
+  "entry": "D48",
+  "title": "Notifications of each type and a mail reminder, all disabled, are stored as sent (shape only)",
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "数量"
+        },
+        {
+          "ColumnName": "DateA",
+          "LabelText": "期日"
+        }
+      ],
+      "Notifications": [
+        {
+          "Id": 1,
+          "Type": 1,
+          "Prefix": "zz",
+          "Subject": "zz件名",
+          "Address": "zz-to@example.invalid, [Owner]",
+          "CcAddress": "zz-cc@example.invalid",
+          "BccAddress": "[Manager]",
+          "AfterCreate": false,
+          "MonitorChangesColumns": [
+            "NumA"
+          ],
+          "Disabled": true
+        },
+        {
+          "Id": 2,
+          "Type": 2,
+          "Disabled": true
+        },
+        {
+          "Id": 3,
+          "Type": 3,
+          "Disabled": true
+        },
+        {
+          "Id": 4,
+          "Type": 6,
+          "Disabled": true
+        },
+        {
+          "Id": 5,
+          "Type": 9,
+          "MethodType": 2,
+          "Encoding": "utf-8",
+          "Body": "{\"a\":1}",
+          "Disabled": true
+        },
+        {
+          "Id": 6,
+          "Type": 10,
+          "Disabled": true
+        }
+      ],
+      "Reminders": [
+        {
+          "Id": 1,
+          "ReminderType": 1,
+          "Subject": "zz",
+          "Body": "zz",
+          "Line": "[Title]",
+          "From": "zz-from@example.invalid",
+          "To": "zz-to@example.invalid",
+          "Column": "DateA",
+          "StartDateTime": "2030-01-01T09:00:00",
+          "Type": 10,
+          "Range": 7,
+          "NotSendIfNotApplicable": true,
+          "Disabled": true
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Notifications[Id=1].Disabled": true,
+    "Notifications[Id=1].AfterCreate": false,
+    "Notifications[Id=1].Address": "zz-to@example.invalid, [Owner]",
+    "Notifications[Id=1].MonitorChangesColumns": [
+      "NumA"
+    ],
+    "Notifications[Id=2].Type": 2,
+    "Notifications[Id=2].Disabled": true,
+    "Notifications[Id=3].Type": 3,
+    "Notifications[Id=4].Type": 6,
+    "Notifications[Id=5].Type": 9,
+    "Notifications[Id=5].MethodType": 2,
+    "Notifications[Id=5].MediaType": "application/json",
+    "Notifications[Id=6].Type": 10,
+    "Reminders[Id=1].ReminderType": 1,
+    "Reminders[Id=1].Disabled": true,
+    "Reminders[Id=1].NotSendIfNotApplicable": true,
+    "Reminders[Id=1].Column": "DateA"
+  },
+  "teardown": {
+    "SiteSettings": {}
+  }
+}

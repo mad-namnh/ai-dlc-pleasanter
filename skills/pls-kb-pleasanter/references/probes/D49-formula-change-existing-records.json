@@ -1,0 +1,172 @@
+{
+  "entry": "D49",
+  "title": "After a formula change (NumB x NumA → NumB + NumA) saved by updatesite, an existing record keeps its stored value until it is updated",
+  "observe": true,
+  "site": {
+    "ReferenceType": "Results",
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "数量"
+        },
+        {
+          "ColumnName": "NumB",
+          "LabelText": "単価"
+        },
+        {
+          "ColumnName": "NumC",
+          "LabelText": "金額"
+        }
+      ],
+      "EditorColumnHash": {
+        "General": [
+          "ResultId",
+          "Title",
+          "NumA",
+          "NumB",
+          "NumC"
+        ]
+      },
+      "Formulas": [
+        {
+          "Id": 1,
+          "CalculationMethod": "Default",
+          "Target": "NumC",
+          "Formula": {
+            "Children": [
+              {
+                "ColumnName": "NumB"
+              },
+              {
+                "ColumnName": "NumA",
+                "OperatorType": 3
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "expect_stored": {
+    "Formulas[Id=1].Target": "NumC"
+  },
+  "tests": [
+    {
+      "id": "D49",
+      "steps": [
+        {
+          "op": "create",
+          "save": "r",
+          "data": {
+            "Title": "kbprobe D49",
+            "NumHash": {
+              "NumA": 3,
+              "NumB": 1000
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "NumHash.NumC": 3000
+          }
+        },
+        {
+          "op": "settings",
+          "SiteSettings": {
+            "Columns": [
+              {
+                "ColumnName": "NumA",
+                "LabelText": "数量"
+              },
+              {
+                "ColumnName": "NumB",
+                "LabelText": "単価"
+              },
+              {
+                "ColumnName": "NumC",
+                "LabelText": "金額"
+              }
+            ],
+            "EditorColumnHash": {
+              "General": [
+                "ResultId",
+                "Title",
+                "NumA",
+                "NumB",
+                "NumC"
+              ]
+            },
+            "Formulas": [
+              {
+                "Id": 1,
+                "CalculationMethod": "Default",
+                "Target": "NumC",
+                "Formula": {
+                  "Children": [
+                    {
+                      "ColumnName": "NumB"
+                    },
+                    {
+                      "ColumnName": "NumA",
+                      "OperatorType": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "op": "siteConfig",
+          "expect": {
+            "Formulas[Id=1].Formula.Children.1.OperatorType": 1
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "NumHash.NumC": 3000
+          }
+        },
+        {
+          "op": "update",
+          "record": "$r",
+          "data": {
+            "NumHash": {
+              "NumA": 4
+            }
+          }
+        },
+        {
+          "op": "get",
+          "record": "$r",
+          "expect": {
+            "NumHash.NumC": 1004
+          }
+        }
+      ]
+    }
+  ],
+  "teardown": {
+    "SiteSettings": {
+      "Columns": [
+        {
+          "ColumnName": "NumA",
+          "LabelText": "数量"
+        },
+        {
+          "ColumnName": "NumB",
+          "LabelText": "単価"
+        },
+        {
+          "ColumnName": "NumC",
+          "LabelText": "金額"
+        }
+      ]
+    }
+  }
+}

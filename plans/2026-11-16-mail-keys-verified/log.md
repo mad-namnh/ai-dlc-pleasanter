@@ -1,0 +1,3 @@
+- 2026-11-16 Implemented in worktree wt-mk. Parent check (HEAD pls_scope swapped in): test_scope and test_pls mail test FAIL. Curator for D47 (opus, medium; subagent 1/6).
+- Review round 1: accept with fixes, H1 High (review.md). All fixed; new refusal tests fail on ed8374a pls.py (swapped in). Review round 2 next.
+- Review round 2: accept with fixes, Low only → fixed (review.md); curator D47 clause (sonnet, low; subagent 4/6). KB number 0.31 (904927f took 0.30). Commit.

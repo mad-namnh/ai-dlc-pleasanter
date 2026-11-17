@@ -160,6 +160,37 @@ class RecoveryTest(unittest.TestCase):
         self.assertEqual(live["Permissions"], ["User,1,511"])
         self.assertEqual(live["InheritPermission"], LO)
 
+    def test_applied_differs_writes_no_baseline_holding_a_secret(self):
+        plan, d = self.plan()
+        self.fake.drop_on_save = "Dflt"
+        for s in ("equipment", "loans"):
+            (d / f"payload-{s}.json").write_text(json.dumps({"Title": f"new {s}", "ReferenceType": "Results",
+                                                             "SiteSettings": {"X": 1, "Dflt": True}}), encoding="utf-8")
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)            # applied, Pleasanter dropped a field
+        for f in d.glob("live-*.json"):
+            f.unlink()
+        self.set_state(d, status="applying")
+        self.fake.sites[LO]["SiteSettings"]["Notifications"] = [{"Id": 1, "Type": 3, "Token": "zz9tok", "Disabled": True}]
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(pls.main(["mark-applied", "R-1", *self.exports()]), 1)
+        self.assertIn("REFUSED — L-SEC-01", out.getvalue())
+        self.assertIn("notification-token", out.getvalue())
+        self.assertNotIn("zz9tok", out.getvalue())
+        self.assertFalse(list(d.glob("live-*.json")))
+        self.assertEqual(self.status(d), "applying")
+
+    def test_a_volatile_field_of_the_export_does_not_block_the_baseline(self):
+        plan, d = self.plan()
+        self.fake.drop_on_save = "Dflt"
+        for s in ("equipment", "loans"):
+            (d / f"payload-{s}.json").write_text(json.dumps({"Title": f"new {s}", "ReferenceType": "Results",
+                                                             "SiteSettings": {"X": 1, "Dflt": True}}), encoding="utf-8")
+        self.fake.sites[LO]["ApiKey"] = "0123456789abcdef0123456789"           # never printed nor written
+        self.assertEqual(pls.main(["apply", "R-1", "--yes"]), 1)
+        self.assertEqual(self.status(d), "applied-differs")
+        self.assertNotIn("0123456789abcdef", (d / "live-loans.json").read_text(encoding="utf-8"))
+
     def set_state(self, d, **kw):
         plan = json.loads((d / "plan.json").read_text(encoding="utf-8"))
         (d / "plan.json").write_text(json.dumps(dict(plan, **kw)), encoding="utf-8")

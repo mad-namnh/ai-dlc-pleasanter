@@ -16,7 +16,7 @@ This skill lives in `.claude/skills/` on purpose: folders under `skills/` are in
 | Subagent | When | Brief form |
 |---|---|---|
 | `pls-x-reviewer` | independent review of a Standard or Critical change | `references/reviewer-brief.md` |
-| `pls-x-eval-case-runner` | one blind eval case | `references/eval-case-brief.md` |
+| `pls-x-eval-case-runner` | one blind run of an eval case (k runs per case) | `references/eval-case-brief.md` |
 | `pls-kb-curator` | an edit of `skills/pls-kb-pleasanter/` from probe evidence | free form, with the evidence attached |
 
 Model and effort for each call: `CLAUDE.md` "Adaptive Model Routing" (evals are exempt: the model is the one the result file records). Everything else you do yourself.
@@ -41,7 +41,7 @@ Model and effort for each call: `CLAUDE.md` "Adaptive Model Routing" (evals are 
    - Critical and High findings are fixed and verified again before completion. Medium is fixed or given a written disposition. Never downgrade a severity.
    - At most 2 rounds. Critical or High still open → stop and report.
    - Save the report once: `plans/<date>-<slug>/review.md`.
-9. **Evals** when a skill's text or an evaluation contract changes, or the task asks for it: one `pls-x-eval-case-runner` per case (ask Nam before a batch), then grade each output against `expected.md` yourself and write `evals/results/<skill>/<date>.md` with the model and the skill version. Never report a result that was not produced.
+9. **Evals** when a skill's text or an evaluation contract changes, or the task asks for it: one `pls-x-eval-case-runner` per run, k runs per case as `evals/README.md` sets (ADR-0030: k = 3 for P1, P2 and lifecycle; earlier runs' folders held apart; a run that opened a forbidden path is void), asking Nam before a batch and for every baseline or selection batch; then grade each output against `expected.md` yourself and write `evals/results/<skill>/<date>.md` with the model, the skill version, each run's arm, grade and cost, and `x / k`. Never report a result that was not produced.
 10. **Documents in the same commit**: the ADR, `docs/architecture.md`, the skill text and its version in `skills/README.md`, the project template, `HANDOFF.md` — whatever the change touches.
 11. **Local commit**, as `HANDOFF.md` says: on `brownfield-adr`, explicit paths (never `git add -A`), one item per commit, conventional message without AI references, both suites green first. Never on `main`; never push, reset, clean or rewrite history; never while a decision of Nam's is pending.
 12. **Report** to Nam in Vietnamese from `references/report.md`. Every claim has its evidence; what was not verified is said so (EV-07).

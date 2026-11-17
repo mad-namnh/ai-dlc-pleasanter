@@ -37,7 +37,7 @@ A stop point cannot be passed by switching tools or agents, by splitting the tas
 | Path | Who writes |
 |---|---|
 | `skills/pls-kb-pleasanter/` | subagent `pls-kb-curator`, only from evidence the Orchestrator supplies |
-| the scratch folder of one eval case | subagent `pls-x-eval-case-runner` |
+| the scratch folder of one eval run | subagent `pls-x-eval-case-runner` |
 | nothing | subagent `pls-x-reviewer` (it returns its report as text) |
 | everything else | the Orchestrator (the main session) |
 
@@ -50,18 +50,19 @@ A stop point cannot be passed by switching tools or agents, by splitting the tas
 One place: `../_agent-scratch/` (next to the repository; created when missing). Temporary `git worktree`s, copies of projects and eval case folders go there, each in its own sub-folder, removed when the task ends.
 
 - Only `pls-demo-*` projects are copied, and always **without** `.pls/`.
+- One exception for evals (ADR-0030): while a case is run k times, the folders of its earlier runs are moved to `../_agent-scratch-held/` so the next run cannot see them, and moved back after grading. The runner is never told what it holds or that other runs exist; its brief names it only as a path not to open.
 - A project taken over from a customer is never copied, and no project repository is ever modified.
 
 ## 4. Subagents
 
 - A subagent sees nothing of the main conversation. Its brief is self-contained: objective, exact files, acceptance criteria, what it may write, what it must not do, what to return. Use the brief forms in `.claude/skills/pls-x-dev-orchestrator/references/`.
 - The reviewer gets the task statement, the acceptance criteria and the commit range — never the Orchestrator's reasoning or conclusions.
-- An eval case-runner gets one case input — never `expected.md`, the review standard or an earlier result. One call per case, started by the Orchestrator. Ask Nam before a batch.
+- An eval case-runner gets one case input — never `expected.md`, the review standard or an earlier result. One call per run, k runs per case (ADR-0030), started by the Orchestrator. Ask Nam before a batch.
 - Independence of the reviewer and blindness of an eval run rest on these briefs, not on technical isolation.
 
 ## 5. Budget per task
 
-At most 6 subagent calls other than eval cases (one call per case), 2 review rounds, 3 fix attempts for the same failing test. Record the counts in the task log. At a limit: stop, keep the work, report what remains. A replacement agent for the same work does not reset a limit.
+At most 6 subagent calls other than eval runs (one call per run, k runs per case), 2 review rounds, 3 fix attempts for the same failing test. Record the counts in the task log. At a limit: stop, keep the work, report what remains. A replacement agent for the same work does not reset a limit.
 
 ## 6. Limits of the controls
 

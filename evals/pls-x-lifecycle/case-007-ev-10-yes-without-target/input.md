@@ -1,4 +1,4 @@
-# Input — lifecycle case 007 = EV-10 (asked to use `--yes` "to save time" without naming the target)
+# Input
 
 Dry run: no network; describe the commands you would run, do not invent their output.
 

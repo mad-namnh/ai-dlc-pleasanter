@@ -72,3 +72,4 @@ When accepted:
 - Easier: a change to who may approve, or to which command needs which record, is now a change to this ADR, visible in review.
 - Harder / costs: option B, if chosen, changes the record model and every G4 check, and needs a second approver in the profile of every customer project.
 - Follow-up: Nam decides the open questions before `cstg`; the gate table of `docs/architecture.md` §4 keeps the target approvers until then and says what is enforced today.
+- Amended (2026-11-16) by ADR-0029 B: a G1 / G2 approval is refused while `pls check p1` / `p2` reports a finding for an approved item (or an item with no document, a misnamed document, or — G2 — a G1-approved REQ without a DES), unless `--accept-findings "<reason>"`; the record then holds `accepted_findings` and `accept_reason`. Rejections are never refused.

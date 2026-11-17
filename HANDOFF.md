@@ -4,6 +4,24 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Probes on ADR-0027 (2026-11-17):** D48 notification / reminder shapes, D49 formula change on existing records (WS3c-2), D50 a view's Groups (WS3c-3), D51 updatesitesettings Process upsert (source: the route upserts only scripts, styles, HTML, processes and status controls — it cannot fix a JSON link, WS3c-1 answered no); not run yet — Nam: `pls principals` (role staff), mail sink/disabled, then `pls kb-verify --env dev`. kb-verify: `siteConfig` step, selectors and `$admin_uid` / `$group_<role>` in read-backs (kb-verify only); `observe` never decides an entry. KB 0.32. `plans/2026-11-17-adr-0027-probes/`.
+
+**Project hooks (2026-11-17, ADR-0029 C):** `pls init` writes `.claude/settings.json` hooks (`pls hook pre|post|stop`): file edits under `releases/`, `gates/`, `ops/log/`, `.pls/` (and the hooks' own settings) denied, the person asked before `pls … --yes`, lint after a config edit, check findings shown at stop. Older projects' REQ / DES need front matter (TD-68). Existing projects: `python pls.py hook install`. `plans/2026-11-16-deterministic-phase-checks/`.
+
+**Phase checks (2026-11-16, ADR-0029 B):** `pls check p1|p2|p3`; REQ / DES front matter (templates); `pls gate G1` / `G2` refuse while a finding names an approved item, unless `--accept-findings "<reason>"`. Not yet: agreement of a DES with the built change (TD-67). Evals of P1 / P2 / P3 / lifecycle pending (approved by Nam). `plans/2026-11-16-deterministic-phase-checks/`.
+
+**KB probes change their own settings (2026-11-16, ADR-0027 built):** probe steps `settings` / `settings_partial` on the probe's own sites, `$admin_uid` / `$group_<role>` in probe site settings, disabled notifications and reminders (example.invalid only, no credentials; guarded). No probe uses them yet — WS3c / notification probes next, run on dev by a person. `plans/2026-11-16-probe-settings-steps/`.
+
+**Impact rules generated (2026-11-16, ADR-0029 A):** `tools/pls/pls_impact_rules.py` → `skills/pls-p2-solution-designer/references/impact-rules.md` (regenerate with `python tools/pls/pls_impact_rules.py --write`; a test fails when it is stale); `classify` returns rule ids; P2 0.12 walks the rules, runs `pls scope`, knows department roles. `plans/2026-11-16-deterministic-phase-checks/`.
+
+**Mail address settings kept out of git (2026-11-16):** `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault` never go to git: unpack / harvest / adopt drop them, payload and rollback files leave them out, `pls apply` carries the site's own values on every `updatesite` (`pls_http.LIVE_ONLY_KEYS`); lint L-SEC-01 reports them in `site.json`. Wording of the I1 / I2 exception approved by Nam 2026-11-16 (ADR-0010). Browser runner and production packages: TD-59, TD-60; hashes: TD-61. `plans/2026-11-16-mail-settings-out-of-git/`.
+
+**Mail keys verified (2026-11-16):** `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault` are in `VERIFIED_KEYS` (KB D47 round trip; kept out of git since 2d365cf): `release-plan` no longer needs `--accept-unverified` for a site that sets them on the screen (it prints a NOTE); a copy in `site.json` is refused by `release-plan` and `plan` (L-SEC-01). KB 0.31. `plans/2026-11-16-mail-keys-verified/`.
+
+**Summary change advice (2026-11-16):** `classify` and KB D16 name 同期 on the screen + a check of one parent + `pls step` after a `Summaries[]` change (ADR-0028 option C until `pls summaries sync` is built after a dev probe); updating one child per parent is the fallback. KB 0.30; P2 checklist: TD-66. `plans/2026-11-16-summary-sync-interim/`.
+
+**Credential fields of notifications and reminders (2026-11-16):** L-SEC-01 names `Token`, webhook URLs (Slack, Teams, RocketChat, LINE WORKS), credential `Headers` and credential query parameters / webhook hosts of HttpClient whatever their text looks like (`pls_secret_fields.py`); unpack, harvest, adopt, pack, single-site `plan` and release-plan refuse before writing; lint checks each environment's payload. Consequence (Nam "1a", 2026-11-16): a site with such a notification must have it removed from the live site before adoption (ADR-0005). Open: TD-62. `plans/2026-11-16-secret-fields-of-notifications/`.
+
 **`pls scope` (2026-11-16):** lists per site, from git, the components without round-trip evidence that release-plan would refuse; skills do not call it yet (TD-65). `plans/2026-11-16-scope-report/`.
 
 **Departments in `pls principals` (2026-11-16):** a role with `"principal": "Dept"` binds by `dept_code` / `dept_name`, never created; field names not read back on a real server (TD-64). `plans/2026-11-16-departments-in-principals/`.
@@ -73,7 +91,7 @@
 - A `fix` commit that changes `tools/pls/` carries its regression test in the same commit (`python tools/dev/check_fix_commits.py`; the suite runs the same check). A new refusal in `pls` gets a test in the same commit: `tools/pls/tests/refusals_without_a_test.txt` only gets shorter. A test for a guard that already exists cannot fail on the parent: show instead that it fails with the guard switched off in a copy under `../_agent-scratch/`.
 - Every behaviour change updates the docs it touches in the same commit: the ADR, `docs/architecture.md`, the skill text (and its version in `skills/README.md`), the project template, and the progress block below.
 - A design choice that is Nam's (architecture, scope, a reversal of an Accepted ADR) is asked with options and a recommendation before building; everything else is decided and reported.
-- Evals: one fresh subagent per case, rubric unseen (inputs never point to `expected.md` or to the standard), dry run without `pls`/network; results in `evals/results/<skill>/<date>.md` with model and skill versions.
+- Evals: one fresh subagent per run, rubric unseen (inputs never point to `expected.md` or to the standard), dry run without `pls`/network; results in `evals/results/<skill>/<date>.md` with model and skill versions. ADR-0030: k = 3 runs per case for P1, P2 and lifecycle (pass = k / k; runs do not see each other), a no-skill baseline arm only when triggered, baseline and selection runs asked of Nam per batch (and only after Nam applies the runner / brief patches), cost per run, results advisory and labelled provisional below 10 cases or without a negative scope case (`evals/README.md`).
 
 ## Design review in progress — 2026-11-09 (read this first if you resume the review)
 

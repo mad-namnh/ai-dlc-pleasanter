@@ -18,7 +18,6 @@ pls.py | _main | raise Fail(f"{out} exists — it may hold reviewed text; use --
 pls.py | _record_reference | raise Fail(f"--ref {a.ref!r}: {why}")
 pls.py | _record_reference | raise Fail(f"context {a.ref!r} not found as written in config/{a.site} scripts (copy it from `pls refs`)")
 pls.py | _record_reference | raise Fail(f"the context must contain exactly one site id of {a.env} (found {[n for _, n in found] or 'none'})")
-pls.py | acl_from_refs | raise Fail(f"unresolved reference ${{principal:{m.group(2)}}} — add it to environments.json principals")
 pls.py | adopt | raise Fail(f"'{name}' is already in this project — adopt never overwrites; choose another name")
 pls.py | adopt | raise Fail(f"design/slot-ledger.json already has '{name}'")
 pls.py | adopt | raise Fail(f"environment '{env}' is not in environments.json")
@@ -71,15 +70,14 @@ pls.py | setup_profile | raise Fail(f"folder {parent}: HTTP {st} - check the URL
 pls.py | site_data | raise Fail("export does not look like a getsite response")
 pls.py | sub | raise Fail(f"unresolved reference ${{principal:{name}}} — add it to environments.json principals")
 pls.py | sub | raise Fail(f"unresolved reference ${{site:{name}}}")
-pls_gate.py | record | raise GateError(f"decision must be one of {', '.join(DECISIONS)}")
-pls_gate.py | record | raise GateError(f"gate must be one of {', '.join(GATES)}")
+pls_gate.py | validate | raise GateError(f"decision must be one of {', '.join(DECISIONS)}")
+pls_gate.py | validate | raise GateError(f"gate must be one of {', '.join(GATES)}")
 pls_http.py | backup_records | raise TransportError(f"get {site_id} offset {offset}: HTTP {st}")
 pls_http.py | load_connection | raise TransportError(f"{f} not found — copy connections.example.json to .pls/connections.json and fill in the URL " "(keys go in environment
 pls_http.py | load_connection | raise TransportError(f"{f}: no url for environment '{env}'")
 pls_http.py | resolve_key | raise TransportError(f"no key '{name}' in the connection (keys: {sorted((conn.get('keys') or {}))})")
 pls_http.py | run_tests | raise TransportError(f"get {rid}: HTTP {code}")
 pls_http.py | run_tests | raise TransportError(f"process '{st['process']}' not found")
-pls_http.py | run_tests | raise TransportError(f"unknown op {op}")
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: must be a JSON object")
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: not readable JSON ({ex})") from ex
 pls_kbverify.py | load_probes | raise ValueError(f"probe {f.name}: {ex}") from ex

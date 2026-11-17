@@ -23,12 +23,12 @@ Evidence (0 differences after export → updatesite → export, and through pls 
 - KB probes D43–D47 2026-11-16 (`pls kb-verify`, MADLAB dev 1.5.2.0 build 201520, run by a person; evidence
   `plans/2026-11-16-scalar-keys-verified/evidence-kb-verify-2026-11-16-dev.md`): 85 scalar keys set to non-default
   values on probe sites and read back as sent (stored shape only, not their effect on the screen). Each key counts on
-  its own: D46 keys read back as sent are here although probe D46 failed for one key.
+  its own: D46 keys read back as sent are here although probe D46 failed for one key (reading confirmed by Nam
+  2026-11-16, ADR-0023). `AddressBook`, `MailToDefault`, `MailCcDefault`, `MailBccDefault` (D47) round-trip and are
+  here since they are kept out of git (ADR-0010, 2026-11-16): they never appear in config/ or a payload, and every
+  write carries the values the site holds (pls_http.LIVE_ONLY_KEYS).
   Not here: `DashboardPartsAsynchronousLoading` (D46) was not stored — it is recorded only when it
-  differs from the server parameter Dashboard.AsynchronousLoadingDefault (source-derived); `AddressBook`,
-  `MailToDefault`, `MailCcDefault`, `MailBccDefault` (D47) round-trip, but hold customer addresses and principal ids
-  and are to be kept out of git (Nam 2026-11-15, settings coverage WS1.5) — until then release-plan refuses them (a
-  copy in git by scope, a value only on the live site by L-DEP-01);
+  differs from the server parameter Dashboard.AsynchronousLoadingDefault (source-derived);
   `ServerScriptsAllDisabled`, `ScriptsAllDisabled`, `HtmlsAllDisabled`, `AllowPhysicalDeleteHistories`,
   `AllowMigrationMode`, `ExtendedHeader` round-trip, but switch off guards or carry free HTML; classify has no rule
   for them (a change would be config-only), so a person still accepts them with a decision record (TD-63).
@@ -75,7 +75,7 @@ VERIFIED_KEYS = frozenset({
     "ServerScriptsGetErrorDetails",                                                                               # D46
     "AllowStandardExport", "StandardExportType", "ImportEncoding", "UpdatableImport", "DefaultImportKey",
     "RejectNullImport", "FormStartDateTime", "FormEndDateTime", "FormThanksMessage",
-    "FormUnavailableMessage",                                                                                     # D47
+    "FormUnavailableMessage", "AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault",                 # D47
 })
 VERIFIED_DASHBOARD_TYPES = frozenset({1, 3, 4})
 DASHBOARD_TYPE_NAMES = {0: "quick access", 1: "timeline", 3: "HTML", 4: "calendar", 5: "kanban"}

@@ -689,6 +689,71 @@ class PlsTest(unittest.TestCase):
         with self.assertRaisesRegex(pls.Fail, "environment-specific site id"):
             pls.payload(pls.read_tree(self.r / "config/a"), ENVS["envs"]["stg"], "a")
 
+    def test_mail_address_settings_never_reach_git_or_release_files(self):
+        sa, sb = self._two_sites()
+        live = json.loads(Path(sa).read_text(encoding="utf-8"))
+        live["Response"]["Data"]["SiteSettings"].update(AddressBook="boss@example.com", MailBccDefault="x@example.com")
+        Path(sa).write_text(json.dumps(live), encoding="utf-8")
+        self.assertFalse({"AddressBook", "MailBccDefault"} & set(pls.logical(live, ENVS["envs"]["stg"])["settings"]))
+        site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]), 0)
+        rp = ["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]
+        site_hand = dict(site, MailToDefault="hand@example.com")   # a hand-typed copy would reach the raw diff
+        (self.r / "config/a/site.json").write_text(json.dumps(site_hand), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(rp), 1)
+        self.assertIn("L-SEC-01 config/a/site.json holds MailToDefault", out.getvalue())
+        self.assertNotIn("hand@example.com", out.getvalue())
+        self.assertFalse((self.r / "releases/R1").exists())
+        rec = self.r / "design/accept.md"
+        rec.write_text("accepted", encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):          # a decision record does not get past it
+            self.assertEqual(pls.main(rp + ["--accept-unverified", str(rec)]), 1)
+        self.assertFalse((self.r / "releases/R1").exists())
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):     # round trip proven (KB D47), kept out of git: no decision record needed
+            self.assertEqual(pls.main(rp), 0)
+        self.assertNotIn("SCOPE a:", out.getvalue())
+        self.assertNotIn("L-DEP-01", out.getvalue())
+        self.assertIn("NOTE a: the site holds AddressBook, MailBccDefault", out.getvalue())
+        for f in (self.r / "releases/R1").rglob("*"):                 # every release file, raw diffs included
+            if f.is_file():
+                self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        site["AddressBook"] = "typed@example.com"                               # a hand edit is reported
+        (self.r / "config/a/site.json").write_text(json.dumps(site), encoding="utf-8")
+        self.assertTrue(any(i["rule"] == "L-SEC-01" and "AddressBook" in i["msg"] for i in pls.lint(self.r)))
+
+    def test_single_site_plan_leaves_mail_address_settings_out(self):
+        self.unpack_dev()
+        self._ledger({"ClassA": "No", "ClassB": ""})
+        live = json.loads(self._stg_live().read_text(encoding="utf-8"))
+        live["Response"]["Data"]["SiteSettings"].update(AddressBook="boss@example.com", MailToDefault="to@example.com")
+        p = self.r / "stg-mail.json"
+        p.write_text(json.dumps(live), encoding="utf-8")
+        self.assertEqual(pls.main(["plan", str(p), "--env", "stg", "--site", "a", "--release", "R1"]), 0)
+        rel = self.r / "releases/R1"
+        for f in rel.rglob("*"):                                          # every release file, raw diff included
+            if f.is_file():
+                self.assertNotIn("example.com", f.read_text(encoding="utf-8"), f.name)
+        self.assertEqual(json.loads((rel / "plan.json").read_text(encoding="utf-8"))["checks"]["keys_missing_from_payload"], [])
+        f = self.r / "config/a/site.json"                               # a hand-typed copy in git is refused
+        site = json.loads(f.read_text(encoding="utf-8"))
+        f.write_text(json.dumps(dict(site, MailCcDefault="hand@example.com")), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()) as o:
+            self.assertEqual(pls.main(["plan", str(p), "--env", "stg", "--site", "a", "--release", "R2"]), 1)
+        self.assertIn("L-SEC-01 config/a/site.json holds MailCcDefault", o.getvalue())
+        self.assertFalse((self.r / "releases/R2").exists())
+        f.write_text(json.dumps(site), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stderr(out):
+            pls.main(["pack", "--env", "stg", "--site", "a", "--out", str(self.r / "pk.json")])
+        self.assertIn("leaves out AddressBook", out.getvalue())
+        self.assertEqual(pls.summarize_scope("a", ["SCOPE a: AddressBook (no round-trip evidence)",
+                                                   "SCOPE a: AddressBook (no round-trip evidence; kept from the live site on every write)"])[0],
+                         "SCOPE a: 1 component(s) without round-trip evidence: AddressBook (all of them: run again without --summary)")
+
     def test_site_list_edge_shapes(self):
         import pls_site_lists as SL
         ids = {"102": "b"}
@@ -764,6 +829,11 @@ class PlsTest(unittest.TestCase):
         c = pls.classify(d)
         self.assertEqual(c["classification"], "data-impacting")
         self.assertIn("D16", c["data_impacting"][0])
+        # the screen's 同期 recalculates existing parents (ADR-0028 option C until pls summaries sync is built);
+        # updating child records rewrites business data: it is named only as the observed fallback
+        self.assertIn("同期", c["data_impacting"][0])
+        self.assertIn("ADR-0028", c["data_impacting"][0])
+        self.assertNotIn("touch one child", c["data_impacting"][0])
 
     def test_classify_access_lists_and_status_controls_are_permission_impacting(self):
         for path, kind, before, after in (
@@ -938,7 +1008,9 @@ class PlsTest(unittest.TestCase):
             (proj / "ops/onboarding/2026-11-09-summary.md").write_text("# Onboarding\n", encoding="utf-8")
             self.assertNotIn("L-ONB-01", {i["rule"] for i in pls.lint(proj)})
             self.assertEqual(pls.main(["step", "P1", "analyse the request"]), 0)
-            self.assertEqual(pls.main(["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok"]), 0)
+            # the fixture REQ has no front matter: G1 needs the approver's acceptance of that finding (ADR-0029)
+            self.assertEqual(pls.main(["gate", "G1", "--approver", "Nam", "--item", "REQ-001", "--quote", "ok",
+                                       "--accept-findings", "fixture without front matter"]), 0)
         finally:
             os.chdir(self.r)
         new = self.r / "fresh"
