@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Summary sync on the screen (2026-11-17):** Nam on MADLAB dev 1.5.2.0: a summary added by a site save left the parent at 0; the サマリ tab's synchronise button recalculated it (30). Summaries are on the tab サマリ, not 集計 (grid aggregation) — names fixed in classify, impact rules, KB D16, ADR-0028. `plans/2026-11-17-summary-sync-screen-check/`.
+
 **Probes on ADR-0027 (2026-11-17):** D48 notification / reminder shapes, D49 formula change on existing records (WS3c-2), D50 a view's Groups (WS3c-3), D51 updatesitesettings Process upsert (source: the route upserts only scripts, styles, HTML, processes and status controls — it cannot fix a JSON link, WS3c-1 answered no); not run yet — Nam: `pls principals` (role staff), mail sink/disabled, then `pls kb-verify --env dev`. kb-verify: `siteConfig` step, selectors and `$admin_uid` / `$group_<role>` in read-backs (kb-verify only); `observe` never decides an entry. KB 0.32. `plans/2026-11-17-adr-0027-probes/`.
 
 **Project hooks (2026-11-17, ADR-0029 C):** `pls init` writes `.claude/settings.json` hooks (`pls hook pre|post|stop`): file edits under `releases/`, `gates/`, `ops/log/`, `.pls/` (and the hooks' own settings) denied, the person asked before `pls … --yes`, lint after a config edit, check findings shown at stop. Older projects' REQ / DES need front matter (TD-68). Existing projects: `python pls.py hook install`. `plans/2026-11-16-deterministic-phase-checks/`.

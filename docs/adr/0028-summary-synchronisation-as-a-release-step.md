@@ -7,7 +7,7 @@
 
 ## Context
 
-A `Summaries[]` change (集計) does not recalculate existing destination values (KB D16). `classify` puts it in the data-impacting class with the note "migration: touch one child record per parent after the release" — a workaround that writes business records.
+A `Summaries[]` change (the site's サマリ tab — not 集計, the grid aggregation) does not recalculate existing destination values (KB D16). `classify` puts it in the data-impacting class with the note "migration: touch one child record per parent after the release" — a workaround that writes business records.
 
 KB D16 records an earlier API call to `synchronizesummaries` that answered HTTP 400 (request shape not recorded in the row): the route below exists in the source, but how to call it is not known.
 
@@ -27,7 +27,7 @@ Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}
 - Pros: the recalculation the screen does, per summary, with the same guards as every write; no business record touched by hand.
 - Cons: a new write path (ADR-0004 Decision 3 order gains "configuration → recalculation"); the body and the answer must be probed first.
 
-### Option C — B, but a person runs 同期 on the screen and records it with `pls step`
+### Option C — B, but a person presses the synchronise button of the サマリ tab and records it with `pls step`
 - Pros: no new write path.
 - Cons: a manual step per summary per environment; drift between environments when one is forgotten.
 
@@ -47,6 +47,6 @@ Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}
 ## Open questions
 
 - [ ] Request body and answer of `SynchronizeSummaries` on 1.5.2.0, and why the earlier call answered 400 (KB D16) — *source read of the item model, then a dev probe*
-- [ ] Whether 同期 on the screen recalculates existing parents on 1.5.2 (option C relies on it) — *a person's screen check on dev*
+- [x] Whether the screen's synchronise button recalculates existing parents on 1.5.2 — yes: Nam's screen check on MADLAB dev 1.5.2.0, 2026-11-17 (a summary added and saved left the parent at 0; the サマリ tab's synchronise button made it 30; `plans/2026-11-17-summary-sync-screen-check/evidence.md`)
 - [ ] Whether it recalculates every summary of the site or one — *same*
 - [ ] Running time on many records — *first real release with a summary change (TD-27)*

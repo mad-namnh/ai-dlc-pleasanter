@@ -770,10 +770,11 @@ def classify(diffs: list[dict]) -> dict:
                         "or 同期 on the screen; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
             hit("CL-SUMMARIES", data, f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
-                        "after the release run 同期 (SynchronizeSummaries) on the screen for this summary in each "
-                        "environment, check that a parent's value was recalculated (source-derived, not verified on "
-                        "1.5.2) and record it with pls step (ADR-0028; pls summaries sync is not built); updating one "
-                        "child per parent also recalculates (observed, D16) but rewrites business records")
+                        "after the release press the synchronise button of the site's サマリ tab (Summaries, not "
+                        "集計) for this summary in each environment, check that a parent's value was recalculated "
+                        "(observed on 1.5.2, D16) and record it with pls step (ADR-0028; pls summaries sync is not "
+                        "built); updating one child per parent also recalculates (observed, D16) but rewrites "
+                        "business records")
         elif p.startswith("permissions") or "Permission" in p or "AccessControl" in p:
             hit("CL-PERMISSIONS", perm, p)
         # items are keyed by Name (free text, may hold "]"): anchor on the end of the path, not on the key
