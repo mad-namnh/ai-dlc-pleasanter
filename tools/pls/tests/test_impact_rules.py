@@ -74,7 +74,7 @@ class ImpactRulesTest(unittest.TestCase):
 
     def test_the_old_summary_advice_is_gone_from_the_generated_reference(self):
         text = IR.render()
-        self.assertIn("同期", text)
+        self.assertIn("サマリ", text)
         self.assertNotIn("migration that touches one child per parent", text)
 
 
