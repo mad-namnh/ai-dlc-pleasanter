@@ -652,16 +652,39 @@ def labels(model: dict) -> dict:
     return {c["ColumnName"]: c.get("LabelText", c["ColumnName"]) for c in model["settings"].get("Columns", [])}
 
 
+def _withheld(d: dict) -> list[str]:
+    """L-SEC-01 names for one diff row: its values are read under the key they belong to (`…Notifications[1]` →
+    `{"Notifications": [value]}`), so a credential field is found whatever its text looks like (pls_secret_fields)."""
+    last = d["path"].rsplit(".", 1)[-1]
+    key, listed = last.split("[", 1)[0], "[" in last
+    names = set()
+    for v in (d.get("before"), d.get("after")):
+        if v is not None:
+            names |= set(secrets_in({key: [v] if listed else v}))
+    item_field = re.search(r"(?i)(notifications|reminders)\[[^\]]*\]\.(\w+)$", d["path"])
+    field = item_field.group(2).casefold() if item_field else ""
+    values = [str(v) for v in (d.get("before"), d.get("after")) if v not in (None, "")]
+    if field in ("token", "headers") and values:
+        names.add("notification-credential")             # read without its item: always a credential field
+    elif field in ("address", "to") and any("://" in v for v in values):
+        names.add("notification-target")                 # a webhook or HttpClient target; mail recipients stay shown
+    return sorted(names)
+
+
 def md_diff(diffs: list[dict], lab: dict, title: str, right: str = "After (git)", kinds: dict | None = None) -> str:
-    """`kinds` renames the kind column for the reader (drift: what exists where, not what a release would do)."""
+    """`kinds` renames the kind column for the reader (drift: what exists where, not what a release would do). A row
+    whose value is secret-like shows the names of what it holds instead of the value (L-SEC-01, I7)."""
     kinds = kinds or {}
     rows = [f"### {title}", "", f"{len(diffs)} difference(s).", ""]
     if diffs:
         rows += [f"| Path | Kind | Label | Before (live) | {right} |", "|---|---|---|---|---|"]
         for d in diffs:
             m = re.search(r"\[(\w+)\]", d["path"])
+            hidden = _withheld(d)
+            before = (f"(withheld: {', '.join(hidden)})" if hidden else short(d["before"])) if d["before"] is not None else ""
+            after = (f"(withheld: {', '.join(hidden)})" if hidden else short(d["after"])) if d["after"] is not None else ""
             rows.append(f"| `{d['path']}` | {kinds.get(d['kind'], d['kind'])} | {lab.get(m.group(1), '') if m else ''} | "
-                        f"{short(d['before']) if d['before'] is not None else ''} | {short(d['after']) if d['after'] is not None else ''} |")
+                        f"{before} | {after} |")
     return "\n".join(rows) + "\n"
 
 
@@ -1914,7 +1937,8 @@ def adopt(r: Path, env: str, name: str, export: dict, today: str, stamp: str) ->
     model = logical(export, e_new)
     model["settings"] = canonicalize(model["settings"])
     ss = d.get("SiteSettings") or {}
-    refuse_secrets(ss, f"site {sid}", "move them out of the site configuration first, then adopt")
+    refuse_secrets({k: d[k] for k in ("Title", "Body", "SiteSettings") if k in d}, f"site {sid}",
+                   "move them out of the site configuration (and its title / description) first, then adopt")
     placed = slots_in_use({k: v for k, v in ss.items() if k != "FilterColumns"})
     entries = AD.slot_entries(slots_in_use(ss), today, set(slots_in_use(ss)) - set(placed))
     nf = sum(1 for v in entries.values() if v.get("placement") == "filter-only")
@@ -2047,6 +2071,12 @@ def env_compare(r: Path, site: str, sources: list[str], today: str) -> int:
             notes.append(f"{i0['label']} → {info['label']}: permissions not compared (one side has none)")
         for d_ in flat_diff(CMP.comparable(m0, perms), CMP.comparable(m, perms)):
             rows.append(d_ | {"pair": f"{i0['label']} → {info['label']}", "class": CMP.classify(d_, missing, values)})
+    found = {info["label"]: secrets_in(m) for m, info in loaded}
+    if any(found.values()):                              # the report quotes values: L-SEC-01 before it is written (I7)
+        raise Fail(f"{site}: secret-like values in " + "; ".join(f"{k}: {', '.join(v)}" for k, v in found.items() if v)
+                   + " — no report written. Secrets must not reach git (I7, ADR-0005): remove them from that "
+                   "environment's site configuration (or from config/), then compare again" + (
+                       f". {SF.HINT}" if {n for v in found.values() for n in v} & SF.NAMES else ""))
     out = r / "ops" / "env-compare" / f"{today}-{datetime.now():%H%M%S}-{site}.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(CMP.report(site, rows, [i["label"] for _, i in loaded], notes, today, short), encoding="utf-8", newline="\n")
@@ -4467,13 +4497,25 @@ def _main(argv=None) -> int:
                   f"rollback-<site>.json (or complete the others), export every site and run mark-applied again.")
             return 1
         bad = "differs" in states.values()
+        if bad:                  # the diff below and the baseline quote live values: L-SEC-01 first (I7, ADR-0005)
+            found = {}
+            for site in plan["sites"]:
+                d_ = site_data(rj(Path(exports[site])))
+                found[site] = secrets_in({k: d_[k] for k in ("Title", "Body", "ReferenceType", "SiteSettings",
+                                                             "InheritPermission", "Permissions") if k in d_})
+            if any(found.values()):
+                print(f"{a.release}: REFUSED — L-SEC-01 secret-like values on the live site: " + "; ".join(
+                    f"{s_}: {', '.join(v)}" for s_, v in found.items() if v) + " — no live-<site>.json written and "
+                    "the release state is unchanged. Remove them from the site in Pleasanter (I7, ADR-0005), export "
+                    "every site again and run mark-applied again")
+                return 1
         for site, st_ in states.items():
             if st_ == "differs":
                 want = payload_model(rj(rel / plan["per_site"][site]["payload_file"]), e, site)
                 print(md_diff(shown[site], labels(want), f"{plan['env']}/{site}: live after apply vs release payload"))
         if bad:
             # The release WAS applied; Pleasanter stored some values differently (D8). Record that state as the
-            # baseline so the fold-back release (P3 step 6) is not refused as drift (S2).
+            # baseline so the fold-back release (P3 step 6) is not refused as drift (S2) — but never a secret (I7).
             for site in plan["sites"]:
                 d = site_data(rj(Path(exports[site])))
                 pl = rj(rel / plan["per_site"][site]["payload_file"])

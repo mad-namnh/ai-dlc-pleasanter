@@ -138,6 +138,37 @@ def _mail_parts(o: Any, path: str = "", notices: bool = False) -> list[str]:
     return out
 
 
+PRINCIPAL_LISTS = ("users", "groups", "depts")
+
+
+def literal_principals(o: Any, path: str = "") -> list[str]:
+    """Paths of principal lists (`Users`, `Groups`, `Depts`, any depth, case ignored) that hold anything but
+    `$admin_uid` / `$group_<role>` — a probe names no other principal (ADR-0027 item 3)."""
+    out = []
+    if isinstance(o, dict):
+        for k, v in o.items():
+            p = f"{path}.{k}" if path else str(k)
+            if str(k).casefold() in PRINCIPAL_LISTS and isinstance(v, list):
+                bad = [x for x in v if not (isinstance(x, str) and SETTINGS_VAR.fullmatch(x))]
+                if bad:
+                    out.append(f"{p} holds {bad[:3]}")
+                continue
+            out += literal_principals(v, p)
+    elif isinstance(o, list):
+        for i, v in enumerate(o):
+            out += literal_principals(v, f"{path}[{i}]")
+    return out
+
+
+def _named_lists(o: Any) -> bool:
+    """Any non-empty Users / Groups / Depts list, at any depth."""
+    if isinstance(o, dict):
+        return any((str(k).casefold() in PRINCIPAL_LISTS and bool(v)) or _named_lists(v) for k, v in o.items())
+    if isinstance(o, list):
+        return any(_named_lists(x) for x in o)
+    return False
+
+
 def substitute_vars(o: Any, vars_: dict) -> Any:
     """`$admin_uid` / `$group_<role>` as a whole value → that id (an int when it is digits) — ADR-0027 item 3."""
     if isinstance(o, str):
@@ -237,6 +268,18 @@ def check_probe(p: dict) -> None:
         raise ValueError(f"probe sites must not send mail (notifications and reminders only disabled, to example.invalid, "
                          f"without credentials), and server scripts are allowed only at the top level of the probe's "
                          f"main site settings (ADR-0025, ADR-0026, ADR-0027): {mail}")
+    named = literal_principals([p["site"].get("SiteSettings") or {}] + [(x.get("SiteSettings") or {}) for x in sites.values()]
+                               + [st.get("SiteSettings") or st.get("body") for st in settings_steps(p)])
+    if named:
+        raise ValueError(f"principals named by id in probe settings: {named} — only $admin_uid and $group_<declared "
+                         "role> (ADR-0027)")
+    teardowns = [(p.get("teardown") or {}).get("SiteSettings") or {}] + [
+        ((x.get("teardown") or {}).get("SiteSettings") or {}) for x in sites.values()]
+    if literal_principals(teardowns) or any(_named_lists(t) for t in teardowns):   # a teardown is sent as written
+        raise ValueError("a teardown names principals (Users / Groups / Depts): a teardown gets no variables and "
+                         "leaves the site harmless — leave those lists out (ADR-0027)")
+    if any(st.get("op") in SETTINGS_OPS for st in p.get("cleanup") or []):
+        raise ValueError("cleanup steps never save settings (ADR-0027): only records the probe created")
     roles_declared = set(p.get("roles") or {})
     setting_texts = _strings([p["site"], [s for s in sites.values()],
                               [st.get("SiteSettings") or st.get("body") for st in settings_steps(p)]])

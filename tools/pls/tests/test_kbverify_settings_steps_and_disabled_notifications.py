@@ -170,6 +170,27 @@ class ProbeFileTest(unittest.TestCase):
             self.assertEqual(res["tests"][0]["status"], "error")
             self.assertIn(f"unknown op {op}", res["tests"][0]["log"][-1])
 
+    def test_no_principal_is_named_by_id(self):
+        for where, settings in (("site", {"Processes": [{"Id": 1, "Name": "p", "Users": [5]}]}),
+                                ("site", {"StatusControls": [{"Id": 1, "Groups": ["374"]}]}),
+                                ("site", {"Views": [{"Id": 1, "depts": [3]}]})):
+            with self.subTest(settings=settings):
+                self.refused(probe(site={"ReferenceType": "Results", "SiteSettings": settings}), "principals named by id")
+        self.refused(with_step({"op": "settings_partial", "body": {"Processes": [
+            {"Id": 1, "Name": "p", "Permission": {"Users": [{"Id": 5}]}}]}}), "principals named by id")
+        self.ok(probe(site={"ReferenceType": "Results", "SiteSettings": {"Processes": [
+            {"Id": 1, "Name": "p", "Groups": ["$group_staff"], "Users": ["$admin_uid"]}]}},
+            roles={"staff": 1}, teardown={"SiteSettings": {}}))
+
+    def test_a_teardown_names_no_principal_and_cleanup_saves_no_settings(self):
+        self.refused(probe(teardown={"SiteSettings": {"Processes": [{"Id": 1, "Users": [5]}]}}), "teardown names principals")
+        self.refused(probe(teardown={"SiteSettings": {"Views": [{"Id": 1, "Groups": ["$group_staff"]}]}}, roles={"staff": 1}),
+                     "teardown names principals")
+        p = probe(sites={"line": {"ReferenceType": "Results", "SiteSettings": {},
+                                  "teardown": {"SiteSettings": {"StatusControls": [{"Id": 1, "Groups": [7]}]}}}})
+        self.refused(p, "principals")
+        self.refused(probe(cleanup=[{"op": "settings", "SiteSettings": {"GridPageSize": 1}}]), "cleanup steps never save")
+
     def test_variables_are_replaced_as_whole_values_only(self):
         got = KV.substitute_vars({"a": "$admin_uid", "b": ["$group_staff"], "c": "x $admin_uid", "d": "$today"},
                                  {"admin_uid": "7", "group_staff": "374"})

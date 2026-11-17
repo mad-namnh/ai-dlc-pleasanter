@@ -74,6 +74,86 @@ class HarvestTest(unittest.TestCase):
             pls.main(["harvest", "--env", "dev", "--site", "loans"])
         self.assertEqual(git("status", "--porcelain", "--", "config").stdout.strip(), "")
 
+    def test_harvest_checks_the_raw_export_before_values_are_mapped_back(self):
+        self.prepare()
+        for args in (["init", "-q"], ["config", "user.email", "t@example.com"], ["config", "user.name", "t"],
+                     ["add", "config"], ["commit", "-qm", "base"]):
+            subprocess.run(["git", *args], cwd=self.r, capture_output=True)
+        ev = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        ev["envs"]["dev"].setdefault("values", {})["hdrs"] = '{"Authorization": "Basic zz9"}'
+        (self.r / "environments.json").write_text(json.dumps(ev), encoding="utf-8")
+        before = (self.r / "config/loans/site.json").read_text(encoding="utf-8")
+        self.fake.sites[TH.LO]["SiteSettings"]["Notifications"] = [
+            {"Id": 1, "Type": 9, "Address": "https://api.example/h", "Headers": '{"Authorization": "Basic zz9"}'}]
+        with self.assertRaises(pls.Fail) as cm:                 # mapped, the value would read ${env:hdrs}
+            pls.main(["harvest", "--env", "dev", "--site", "loans"])
+        self.assertIn("credential-header", str(cm.exception))
+        self.assertNotIn("zz9", str(cm.exception))
+        self.assertEqual((self.r / "config/loans/site.json").read_text(encoding="utf-8"), before)
+
+
+class LiveContentWritersTest(unittest.TestCase):
+    """env-compare reports and the applied-differs baseline quote live content: L-SEC-01 before they are written."""
+    setUp = TH.HttpTest.setUp
+    tearDown = TH.HttpTest.tearDown
+
+    def test_env_compare_writes_no_report_with_a_secret(self):
+        import test_compare as TC
+        rows = []
+        for env, site_id in (("dev", 797), ("prod", 9001)):
+            data = TC.site(site_id, 500)
+            if env == "prod":
+                data["SiteSettings"]["Notifications"] = [{"Id": 1, "Type": 3, "Token": "zz9tok", "Disabled": True}]
+            f = self.r / f"{env}-x.json"
+            f.write_text(json.dumps({"Response": {"Data": data}}), encoding="utf-8")
+            rows.append(f"{env}={f.name}")
+        ev = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
+        ev["envs"]["dev"].setdefault("sites", {})["anken"] = {"id": 797}
+        ev["envs"].setdefault("prod", {"role": "prod", "sites": {}})["sites"]["anken"] = {"id": 9001}
+        (self.r / "environments.json").write_text(json.dumps(ev), encoding="utf-8")
+        with self.assertRaises(pls.Fail) as cm:
+            pls.main(["env-compare", "--site", "anken", "--source", rows[0], "--source", rows[1]])
+        self.assertIn("notification-token", str(cm.exception))
+        self.assertNotIn("zz9tok", str(cm.exception))
+        self.assertFalse((self.r / "ops/env-compare").exists() and list((self.r / "ops/env-compare").iterdir()))
+
+
+class DiffOutputTest(unittest.TestCase):
+    """diff, drift, plan and mark-applied print md_diff tables that a person copies into ops/ records: a secret-like
+    value is replaced by the names of what it holds (L-SEC-01)."""
+
+    def test_a_secret_like_value_is_withheld_and_other_values_are_shown(self):
+        text = pls.md_diff([
+            {"path": "settings.Notifications[1].Token", "kind": "changed", "before": "zz9a", "after": "zz9b"},
+            {"path": "settings.Notifications", "kind": "added", "before": None,
+             "after": [{"Id": 1, "Type": 2, "Address": "https://hooks.example/T0/B0/zz9c"}]},
+            {"path": "settings.ServerScripts[1].Body", "kind": "changed", "before": "var x;", "after": f"var k = '{KEY}';"},
+            {"path": "settings.GridPageSize", "kind": "changed", "before": 20, "after": 50}], {}, "t")
+        self.assertNotIn("zz9", text)
+        self.assertNotIn(KEY, text)
+        self.assertIn("(withheld: webhook-url)", text)
+        self.assertIn("| 20 | 50 |", text)
+        mail = pls.md_diff([                                     # the G4 summary needs who gets mail
+            {"path": "settings.Notifications[1].Address", "kind": "changed", "before": "[${principal:mgr}]",
+             "after": "${env:mail_to}"},
+            {"path": "settings.Notifications[2].Address", "kind": "changed", "before": "",
+             "after": "https://hooks.example/T0/B0/zz9d"}], {}, "m")
+        self.assertIn("[${principal:mgr}] | ${env:mail_to}", mail)
+        self.assertNotIn("zz9d", mail)
+
+
+class AdoptTest(unittest.TestCase):
+    setUp = TH.HttpTest.setUp
+    tearDown = TH.HttpTest.tearDown
+
+    def test_adopt_refuses_a_secret_in_the_site_description(self):
+        import test_adopt as TA
+        TA.CliTest.add_old_site(self)
+        self.fake.sites[TA.OLD]["Body"] = f"api_key = '{KEY}'"
+        with self.assertRaisesRegex(pls.Fail, "secret-like"):
+            pls.main(["adopt", "--env", "dev", "--site", str(TA.OLD), "--name", "anken"])
+        self.assertFalse((self.r / "config/anken").exists())
+
 
 class CredentialFieldsTest(unittest.TestCase):
     """Fields that hold a credential whatever it looks like (Pleasanter_1.5.2.0 Notification / Reminder, source-derived):
