@@ -10,6 +10,8 @@ Nam's reports (chat, verbatim):
 
 5. "nhan nut dong bo la 同期, user phai la admin moi bam duoc" — the button's label is 同期; only an administrator can press it.
 
-Not recorded: the text of the confirmation; whether "admin" means the tenant administrator or a user with site-manage permission.
+6. "user co quyen quan lý site do" — "admin" here means a user with the manage permission of that site (サイト管理), not necessarily the tenant administrator.
+
+Not recorded: the text of the confirmation.
 
 Reading: on 1.5.2.0, a summary added by a site save does not recalculate an existing parent (KB D16, now also seen on the screen); the サマリ tab's synchronise button recalculates it (observed once, one parent, two children, 合計).

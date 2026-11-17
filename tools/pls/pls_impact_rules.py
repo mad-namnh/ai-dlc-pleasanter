@@ -105,7 +105,7 @@ RULES: tuple[dict, ...] = (
          kb=["D41", "D41a"], example=""),
     dict(area="Links, lookups, summaries", id="CL-SUMMARIES", cls=DATA,
          trigger="adds or changes a **summary** (サマリ tab — not 集計, which is the grid aggregation)",
-         design="existing destination values are not recalculated: after the release an administrator presses 同期 on "
+         design="existing destination values are not recalculated: after the release a user with the site's manage permission presses 同期 on "
                 "the サマリ tab per summary per environment (observed to recalculate on 1.5.2), a check of one parent, "
                 "`pls step` (ADR-0028); updating one child per parent is the observed fallback and rewrites "
                 "更新日時 / 更新者 (tell the customer)",
