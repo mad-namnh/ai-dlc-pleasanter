@@ -144,6 +144,22 @@ RULES: tuple[dict, ...] = (
          trigger="changes the access list of a view, export or dashboard part",
          design="who sees the view / export / part in each environment; principals as `${principal:x}`",
          kb=["D20"], example=""),
+    dict(area="Permissions", id="CL-SERVER-SCRIPTS-OFF", cls=PERM,
+         trigger="switches **all server scripts** of a site off or on (`ServerScriptsAllDisabled`)",
+         design="every guard written as a server script stops (rung 3, D25 / D42): name which REQs lose their "
+                "enforcement and what replaces it; permission matrix before / after",
+         kb=["D46"], example=""),
+    dict(area="Permissions", id="CL-MIGRATION-MODE", cls=PERM,
+         trigger="allows or forbids **migration mode** (`AllowMigrationMode`)",
+         design="while on, an API client or an import with MigrationMode may set Creator, Updator, CreatedTime and "
+                "UpdatedTime (source-derived, not probed): who uses it, for which load, and that it is switched off "
+                "again in a later release",
+         kb=["D47"], example=""),
+    dict(area="Permissions", id="CL-PHYSICAL-DELETE-HISTORIES", cls=PERM,
+         trigger="allows or forbids **physical deletion of history** (`AllowPhysicalDeleteHistories`)",
+         design="who may remove history versions for good (also needs the server parameter History.PhysicalDelete, "
+                "source-derived); whether the customer keeps history for audit",
+         kb=["D44"], example=""),
     dict(area="Permissions", id="RO-ROLES", cls=None,
          trigger="names a **role** (`design/roles.json`)",
          design="each role binds to a group, a user or a department (`\"principal\": \"Dept\"`, bound by `dept_code` "
@@ -158,6 +174,16 @@ RULES: tuple[dict, ...] = (
                 "…) are set on the screen of each environment, never in git (ADR-0010)",
          kb=["D47"], example=""),
     # ---- scripts
+    dict(area="Scripts", id="CL-CLIENT-CODE-OFF", cls=CFG,
+         trigger="switches **all client scripts or HTML parts** of a site off or on (`ScriptsAllDisabled`, "
+                 "`HtmlsAllDisabled`)",
+         design="a screen behaviour those scripts or parts carry stops; name the REQs it served",
+         kb=["D46"], example=""),
+    dict(area="Scripts", id="CL-EXTENDED-HEADER", cls=CFG,
+         trigger="sets the site's **extended header** (`ExtendedHeader`, free HTML in the page head)",
+         design="no script check reads it (no ladder reason, no syntax check; L-SEC-01 still refuses a secret) — "
+                "put code in `Scripts` instead and keep the header to meta / link tags",
+         kb=["D46"], example=""),
     dict(area="Scripts", id="SC-SCRIPT-CHANGE", cls=None,
          trigger="adds or changes a **script**",
          design="ladder reason (I5); no hard-coded site ids (D3); no secrets (D5); no top-level const / let in a "

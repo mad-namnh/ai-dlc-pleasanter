@@ -851,6 +851,38 @@ class PlsTest(unittest.TestCase):
         c = pls.classify([{"path": "settings.Views[2]", "kind": "added", "before": None, "after": {"Name": "all"}}])
         self.assertEqual(c["classification"], "config-only")                        # a view without an access list
 
+    def test_classify_site_switches_that_turn_off_guards_or_carry_free_html(self):
+        """Six switches round-trip (KB D44, D46, D47); what they do is read from the 1.5.2.0 source: server scripts off,
+        migration mode and physical history deletion are permission-impacting, client code off and the extended header
+        are config-only with a rule of their own (Nam 2026-11-18)."""
+        def c(before, after):
+            return pls.classify(pls.flat_diff({"settings": before}, {"settings": after}))
+        for key, value, cls, rid in (("ServerScriptsAllDisabled", True, "permission-impacting", "CL-SERVER-SCRIPTS-OFF"),
+                                     ("AllowMigrationMode", True, "permission-impacting", "CL-MIGRATION-MODE"),
+                                     ("AllowPhysicalDeleteHistories", False, "permission-impacting",
+                                      "CL-PHYSICAL-DELETE-HISTORIES"),
+                                     ("ScriptsAllDisabled", True, "config-only", "CL-CLIENT-CODE-OFF"),
+                                     ("HtmlsAllDisabled", True, "config-only", "CL-CLIENT-CODE-OFF"),
+                                     ("ExtendedHeader", "<meta name=\"x\">", "config-only", "CL-EXTENDED-HEADER")):
+            with self.subTest(key=key):
+                cases = [({}, {key: value}), ({key: value}, {})]                      # switched on and switched back
+                if isinstance(value, bool):
+                    cases.append(({key: value}, {key: not value}))                      # changed in place
+                for before, after in cases:
+                    r = c(before, after)
+                    self.assertEqual(r["classification"], cls)
+                    self.assertEqual([x["id"] for x in r["rules"]], [rid])
+        self.assertNotIn("script", c({}, {"ExtendedHeader": "<meta name=\"x\">"})["config_only"][0])
+        self.assertNotIn("script", c({}, {"ExtendedHeader": '<meta name="x" content="one=two">'})["config_only"][0])
+        for head in ("<script>alert(1)</script>", "<body onload = 'x()'>", "<a href='javascript:x()'>",
+                     "<iframe src='x'>", "<a href='jav&#x61;script:x()'>"):
+            with self.subTest(head=head):
+                self.assertIn("holds a script", c({"ExtendedHeader": "<meta>"}, {"ExtendedHeader": head})["config_only"][0])
+                self.assertNotIn("holds a script", c({"ExtendedHeader": head}, {})["config_only"][0])   # a script removed
+        # a guard switch decides the class of a release that also changes a label
+        r = c({"GridPageSize": 20}, {"GridPageSize": 50, "ServerScriptsAllDisabled": True})
+        self.assertEqual(r["classification"], "permission-impacting")
+
     def test_classify_real_differ_paths(self):
         # paths as flat_diff builds them: views keyed by Name (free text), formulas as objects, a look-alike key
         def cls(before, after):

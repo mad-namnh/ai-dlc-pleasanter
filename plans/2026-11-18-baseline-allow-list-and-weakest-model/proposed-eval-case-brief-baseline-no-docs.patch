@@ -1,0 +1,15 @@
+Reason: ADR-0030 amended 2026-11-18 (Nam: "Bỏ docs/ (Recommended)"): the baseline runner may no longer open the framework docs/; pointers to docs/ in CLAUDE.md or a template are not followed. Apply from the repository root with git apply.
+
+diff --git a/.claude/skills/pls-x-dev-orchestrator/references/eval-case-brief.md b/.claude/skills/pls-x-dev-orchestrator/references/eval-case-brief.md
+index d286fe0..a384ba3 100644
+--- a/.claude/skills/pls-x-dev-orchestrator/references/eval-case-brief.md
++++ b/.claude/skills/pls-x-dev-orchestrator/references/eval-case-brief.md
+@@ -18,7 +18,7 @@ Same fields as above, except:
+ 
+ - **Skill under test:** none. Do the request with what the project and the framework rules give you.
+ - **Case input:** `../_agent-scratch/<run-id>/request.md` (the Orchestrator copies the case `input.md` there word for word; the brief names no `evals/` path)
+-- **You may open only:** your scratch folder; in the framework `skills/pls-kb-pleasanter/`, `CLAUDE.md`, `docs/` except `docs/review-criteria.md`, and `templates/`. Search only inside these. Nothing else — in particular no other folder under `skills/`, no `skills/README.md`, no `HANDOFF.md`, no `evals/`, no skill copy in another project folder
++- **You may open only:** your scratch folder; in the framework `skills/pls-kb-pleasanter/`, `CLAUDE.md` and `templates/`. Search only inside these. Nothing else — in particular no `docs/` (where `CLAUDE.md` or a template points to a file under `docs/`, do not follow it), no other folder under `skills/`, no `skills/README.md`, no `HANDOFF.md`, no `evals/`, no skill copy in another project folder
+ - (Orchestrator, before the run: in a scratch copy of a project, remove every folder under `.claude/skills/` other than `pls-kb-pleasanter`, and record it in the result. Not part of the brief text.)
+ 
+ ## Arm "selection"

@@ -30,8 +30,8 @@ Evidence (0 differences after export → updatesite → export, and through pls 
   Not here: `DashboardPartsAsynchronousLoading` (D46) was not stored — it is recorded only when it
   differs from the server parameter Dashboard.AsynchronousLoadingDefault (source-derived);
   `ServerScriptsAllDisabled`, `ScriptsAllDisabled`, `HtmlsAllDisabled`, `AllowPhysicalDeleteHistories`,
-  `AllowMigrationMode`, `ExtendedHeader` round-trip, but switch off guards or carry free HTML; classify has no rule
-  for them (a change would be config-only), so a person still accepts them with a decision record (TD-63).
+  `AllowMigrationMode`, `ExtendedHeader` round-trip and are here since classify names them (2026-11-18, TD-63 closed):
+  the first, fourth and fifth are permission-impacting, the others config-only with a rule of their own.
 Add a key here only with such evidence (I9), and record it in the KB and the spike checklist.
 
 Granularity: the evidence is per **top-level key** with the attributes those sites used (columns: label, type,
@@ -67,15 +67,17 @@ VERIFIED_KEYS = frozenset({
     "UseIncompleteFilter", "UseOwnFilter", "UseNearCompletionTimeFilter", "UseDelayFilter", "UseOverdueFilter",
     "UseSearchFilter", "AlwaysRequestSearchCondition", "DisableSiteConditions", "AllowViewReset", "SaveViewType",
     "SearchType", "FullTextIncludeBreadcrumb", "FullTextIncludeSiteId", "FullTextIncludeSiteTitle",
-    "FullTextNumberOfMails", "LinkPageSize", "LinkTableView",                                                     # D44
+    "FullTextNumberOfMails", "LinkPageSize", "LinkTableView", "AllowPhysicalDeleteHistories",                    # D44
     "EnableCalendar", "EnableCrosstab", "EnableGantt", "EnableBurnDown", "EnableTimeSeries", "EnableAnaly",
     "EnableKamban", "EnableImageLib", "CalendarType", "NoDisplayCrosstabGraph", "ShowGanttProgressRate",
     "ImageLibPageSize", "FirstDayOfWeek", "FirstMonth",                                                           # D45
     "FormulasGetErrorDetails", "OutputFormulaLogs", "ProcessOutputFormulaLogs", "StylesAllDisabled",
-    "ServerScriptsGetErrorDetails",                                                                               # D46
+    "ServerScriptsGetErrorDetails", "ServerScriptsAllDisabled", "ScriptsAllDisabled", "HtmlsAllDisabled",
+    "ExtendedHeader",                                                                                             # D46
     "AllowStandardExport", "StandardExportType", "ImportEncoding", "UpdatableImport", "DefaultImportKey",
     "RejectNullImport", "FormStartDateTime", "FormEndDateTime", "FormThanksMessage",
-    "FormUnavailableMessage", "AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault",                 # D47
+    "FormUnavailableMessage", "AddressBook", "MailToDefault", "MailCcDefault", "MailBccDefault",
+    "AllowMigrationMode",                                                                                         # D47
 })
 VERIFIED_DASHBOARD_TYPES = frozenset({1, 3, 4})
 DASHBOARD_TYPE_NAMES = {0: "quick access", 1: "timeline", 3: "HTML", 4: "calendar", 5: "kanban"}

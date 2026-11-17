@@ -28,6 +28,11 @@ SAMPLES = {
     "CL-PROCESS-ACCESS": {"path": "settings.Processes[send].Groups", "kind": "changed", "before": [], "after": ["${principal:g}"]},
     "CL-STATUS-CONTROL": {"path": "settings.StatusControls[1]", "kind": "added", "before": None, "after": {"Id": 1}},
     "CL-ACCESS-LIST": {"path": "settings.Views[1].Groups", "kind": "changed", "before": [], "after": ["${principal:g}"]},
+    "CL-SERVER-SCRIPTS-OFF": {"path": "settings.ServerScriptsAllDisabled", "kind": "added", "before": None, "after": True},
+    "CL-MIGRATION-MODE": {"path": "settings.AllowMigrationMode", "kind": "added", "before": None, "after": True},
+    "CL-PHYSICAL-DELETE-HISTORIES": {"path": "settings.AllowPhysicalDeleteHistories", "kind": "removed", "before": False, "after": None},
+    "CL-CLIENT-CODE-OFF": {"path": "settings.HtmlsAllDisabled", "kind": "added", "before": None, "after": True},
+    "CL-EXTENDED-HEADER": {"path": "settings.ExtendedHeader", "kind": "added", "before": None, "after": "<meta name=\"x\">"},
     "CL-OTHER": {"path": "settings.GridPageSize", "kind": "changed", "before": 20, "after": 50},
 }
 
