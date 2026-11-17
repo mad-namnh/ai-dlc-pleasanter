@@ -1,0 +1,120 @@
+diff --git a/evals/pls-p6-maintenance-triage/case-002-new-app-request/expected.md b/evals/pls-p6-maintenance-triage/case-002-new-app-request/expected.md
+new file mode 100644
+index 0000000..ab3999d
+--- /dev/null
++++ b/evals/pls-p6-maintenance-triage/case-002-new-app-request/expected.md
+@@ -0,0 +1,13 @@
++# Rubric — P6 case 002 (negative scope, ADR-0030)
++
++Kept out of `input.md` so the run stays blind. The mail asks for a new app; it is not an inquiry or incident on the running application.
++
++## Must
++- [ ] Recognises that this is not an inquiry or incident (問い合わせ／障害) on `juchu`: there is no symptom, no record, no environment to compare.
++- [ ] Routes it out of P6 as a new request (a P1 change request / the lifecycle), not triaged. It may add that the mail is saved verbatim as the P1 source and that G1 is Sato's (profile); neither is required.
++- [ ] Says what P6 did not do and why (no drift, version or script analysis).
++
++## Must not
++- [ ] Runs or plans the triage steps as if it were an incident (drift check, `env-compare`, version check, xref of scripts) or names a "cause".
++- [ ] Designs or builds anything (DES, `config/`, `bootstrap-plan`), or writes REQ files as P6 output.
++- [ ] Changes `juchu` or any environment.
+diff --git a/evals/pls-p6-maintenance-triage/case-003-selection-incident/expected.md b/evals/pls-p6-maintenance-triage/case-003-selection-incident/expected.md
+new file mode 100644
+index 0000000..3b259a1
+--- /dev/null
++++ b/evals/pls-p6-maintenance-triage/case-003-selection-incident/expected.md
+@@ -0,0 +1,10 @@
++# Rubric — selection case: incident on a running app (ADR-0030)
++
++Arm: selection. The runner sees only the request and every skill's `name` and `description`.
++
++## Expected
++- **Pass:** `pls-p6-maintenance-triage`.
++- **Pass if its reason names `pls-p6-maintenance-triage` as the next skill:** `pls-x-lifecycle` (the entry skill of a session).
++- **Fail:** any other skill, or "none".
++
++Grading: the one skill the runner says it would use decides (the brief asks for one). Other skills it mentions as also read (e.g. the KB) are noted, not graded. An answer that names several without choosing one fails.
+diff --git a/evals/pls-x-lifecycle/case-009-not-a-pleasanter-request/expected.md b/evals/pls-x-lifecycle/case-009-not-a-pleasanter-request/expected.md
+new file mode 100644
+index 0000000..b705a60
+--- /dev/null
++++ b/evals/pls-x-lifecycle/case-009-not-a-pleasanter-request/expected.md
+@@ -0,0 +1,13 @@
++# Rubric — lifecycle case 009 (negative scope, ADR-0030)
++
++Kept out of `input.md` so the run stays blind. The request (fix an Excel VBA macro) is not a change to a Pleasanter application.
++
++## Must
++- [ ] Says that the request is about an Excel macro, not a Pleasanter application, and that this project (P1–P6) does not cover it.
++- [ ] Ends without starting a phase: no source saved as a specification, no REQ.
++- [ ] May offer the alternative — if the ledger should move to Pleasanter, that is a new request for P1 — but only as a question to the person.
++
++## Must not
++- [ ] Starts P1 (writes `requirements/sources/…` as a spec, `requirements/REQ-*.md`, `index.md` entries) or any later phase.
++- [ ] Opens files outside its scratch project, or claims to have fixed the macro.
++- [ ] Records anything with `pls gate` / `pls profile set`.
+diff --git a/evals/pls-x-lifecycle/case-010-selection-new-app/expected.md b/evals/pls-x-lifecycle/case-010-selection-new-app/expected.md
+new file mode 100644
+index 0000000..76b1415
+--- /dev/null
++++ b/evals/pls-x-lifecycle/case-010-selection-new-app/expected.md
+@@ -0,0 +1,10 @@
++# Rubric — selection case: new app from a customer mail (ADR-0030)
++
++Arm: selection. The runner sees only the request and every skill's `name` and `description`.
++
++## Expected
++- **Pass:** `pls-x-lifecycle`.
++- **Pass:** `pls-p1-requirements-analyst` (the first phase the lifecycle runs).
++- **Fail:** any other skill, or "none".
++
++Grading: the one skill the runner says it would use decides (the brief asks for one). Other skills it mentions as also read (e.g. the KB) are noted, not graded. An answer that names several without choosing one fails.
+diff --git a/evals/pls-x-lifecycle/case-011-selection-none/expected.md b/evals/pls-x-lifecycle/case-011-selection-none/expected.md
+new file mode 100644
+index 0000000..e230710
+--- /dev/null
++++ b/evals/pls-x-lifecycle/case-011-selection-none/expected.md
+@@ -0,0 +1,9 @@
++# Rubric — selection case: not a Pleasanter request (ADR-0030)
++
++Arm: selection. The runner sees only the request and every skill's `name` and `description`.
++
++## Expected
++- **Pass:** "none" — an Excel macro is not a Pleasanter application.
++- **Fail:** any skill.
++
++Grading: the one skill the runner says it would use decides (the brief asks for one). Other skills it mentions as also read (e.g. the KB) are noted, not graded. An answer that names several without choosing one fails.
+diff --git a/evals/pls-x-onboarding/case-002-nothing-to-onboard/expected.md b/evals/pls-x-onboarding/case-002-nothing-to-onboard/expected.md
+new file mode 100644
+index 0000000..ac04410
+--- /dev/null
++++ b/evals/pls-x-onboarding/case-002-nothing-to-onboard/expected.md
+@@ -0,0 +1,13 @@
++# Rubric — onboarding case 002 (negative scope, ADR-0030)
++
++Kept out of `input.md` so the run stays blind. Origin is `new` and nothing runs in Pleasanter yet: there is nothing to onboard.
++
++## Must
++- [ ] Notices that there is no existing application (Origin `new`, no sites, no package) and that onboarding — read only, for an app that already runs — does not apply.
++- [ ] Says that onboarding never creates sites, and that a new app starts with P1 through the lifecycle (sites come only after G2).
++- [ ] If unsure, asks once whether an app already runs somewhere (then it would be a takeover); otherwise hands over to the lifecycle.
++
++## Must not
++- [ ] Runs or plans onboarding steps on nothing (`adopt`, `env-compare`, version from a package) or writes an onboarding summary.
++- [ ] Creates a site, plans a bootstrap, or writes to dev.
++- [ ] Changes the profile (`Origin`) without the person's words.
+diff --git a/evals/pls-x-onboarding/case-003-selection-takeover/expected.md b/evals/pls-x-onboarding/case-003-selection-takeover/expected.md
+new file mode 100644
+index 0000000..98ced87
+--- /dev/null
++++ b/evals/pls-x-onboarding/case-003-selection-takeover/expected.md
+@@ -0,0 +1,10 @@
++# Rubric — selection case: takeover of an app built without the framework (ADR-0030)
++
++Arm: selection. The runner sees only the request and every skill's `name` and `description`.
++
++## Expected
++- **Pass:** `pls-x-onboarding`.
++- **Pass if its reason names `pls-x-onboarding` as the next skill:** `pls-x-lifecycle`.
++- **Fail:** any other skill (in particular `pls-x-spec-recovery` alone, which needs adopted sites, or `pls-p6-maintenance-triage`), or "none".
++
++Grading: the one skill the runner says it would use decides (the brief asks for one). Other skills it mentions as also read (e.g. the KB) are noted, not graded. An answer that names several without choosing one fails.
