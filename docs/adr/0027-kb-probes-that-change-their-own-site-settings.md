@@ -52,6 +52,6 @@ Source of the routes: `Controllers/Api/ItemsController.cs` l.293 (`SynchronizeSu
 
 ## Open questions
 
-- [x] The request body of `updatesitesettings` on 1.5.2.0 and whether it replaces or merges `Columns` — source read 2026-11-17: upsert by Id of six lists, `Columns` not applied (As built); probe D51 checks the Process upsert on a server
+- [x] The request body of `updatesitesettings` on 1.5.2.0 and whether it replaces or merges `Columns` — source read 2026-11-17: upsert by Id of six lists, `Columns` not applied (As built); probe D51 passed on MADLAB dev 1.5.2.0 (kb-verify 2026-11-17: process renamed and added, column label kept)
 - [ ] Whether Pleasanter reads JSON property names without case, ignores unknown fields of a notification item (a recipient under an invented name, e.g. `MailTo`, is not checked) and never decodes a string twice (a double-encoded JSON string is not read by the file check) — *source read of `Jsons.Deserialize` and the Notification / Reminder models*
-- [ ] (probe D48 written 2026-11-17 checks the stored shape only) Whether `Disabled: true` on a notification is honoured for every type on 1.5.2 (source shows the flag; not probed) — *first notification probe, with mail `sink`*
+- [ ] (probe D48 passed 2026-11-17: the stored shape of six notification types and a mail reminder, all disabled) Whether `Disabled: true` on a notification is honoured for every type on 1.5.2 (source shows the flag; not probed) — *first notification probe, with mail `sink`*

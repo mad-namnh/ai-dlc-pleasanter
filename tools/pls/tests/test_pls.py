@@ -881,6 +881,7 @@ class PlsTest(unittest.TestCase):
             c = pls.classify([{"path": path, "kind": kind, "before": before, "after": after}])
             self.assertEqual(c["classification"], "data-impacting", kind)
             self.assertIn("SynchronizeFormulas", c["data_impacting"][0])
+            self.assertIn("observed on 1.5.2, KB D49", c["data_impacting"][0])   # kb-verify 2026-11-17: not recomputed
 
     def test_classify_multiple_selections_and_choice_control_are_data_impacting(self):
         # a multi-select column stores a JSON array, a single-select one the value (source-derived, Pleasanter_1.5.2.0)

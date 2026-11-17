@@ -113,10 +113,10 @@ RULES: tuple[dict, ...] = (
     # ---- formulas
     dict(area="Formulas", id="CL-FORMULAS", cls=DATA,
          trigger="adds, removes, reorders, enables or edits a **formula** (`Formulas[]`)",
-         design="stored values of existing records are not known to be recomputed: the recomputed values as data, or "
-                "同期 / SynchronizeFormulas on the screen (source-derived, not verified); nothing to convert only on an "
-                "empty site and never for production",
-         kb=["D41"], example=""),
+         design="existing records keep their stored values until each is next updated (observed, D49): the "
+                "recomputed values as data, or the screen's SynchronizeFormulas (source-derived, not verified); nothing "
+                "to convert only on an empty site and never for production",
+         kb=["D41", "D49"], example=""),
     # ---- processes
     dict(area="Processes", id="PR-PROCESS-ADD", cls=None,
          trigger="adds a **process / button**",

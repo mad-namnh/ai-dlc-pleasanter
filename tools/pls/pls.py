@@ -764,10 +764,11 @@ def classify(diffs: list[dict]) -> dict:
         elif re.match(r"settings\.Columns\[\w+\]\.DefaultInput", p):
             hit("CL-DEFAULT-INPUT", data, f"{p}: formula/default changed")
         elif re.match(r"settings\.Formulas(\[|$)", p):  # 1.5.2 keeps calculations in SiteSettings.Formulas, not in a column
-            hit("CL-FORMULAS", data, f"{p}: formula changed (added, removed, reordered, enabled or edited) — stored values of existing "
-                        "records are not known to be recomputed (the screen has 同期 / SynchronizeFormulas, no API route: "
-                        "source-derived, Pleasanter_1.5.2.0 SiteUtilities.cs); migration: the recomputed values as data, "
-                        "or 同期 on the screen; nothing to convert only on an empty site and never for production")
+            hit("CL-FORMULAS", data, f"{p}: formula changed (added, removed, reordered, enabled or edited) — existing "
+                        "records keep their stored values: the settings save does not recompute them, a record is "
+                        "recomputed only when it is next updated (observed on 1.5.2, KB D49); the screen also has "
+                        "SynchronizeFormulas (source-derived, no API route). Migration: the recomputed values as data, "
+                        "or the screen's synchronise; nothing to convert only on an empty site and never for production")
         elif p.startswith("settings.Summaries"):
             hit("CL-SUMMARIES", data, f"{p}: summary added/changed — existing destination values are NOT recalculated (D16); "
                         "after the release a user with the site's manage permission presses 同期 on the site's サマリ tab (Summaries, not "
