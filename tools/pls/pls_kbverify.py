@@ -139,24 +139,90 @@ def _mail_parts(o: Any, path: str = "", notices: bool = False) -> list[str]:
 
 
 PRINCIPAL_LISTS = ("users", "groups", "depts")
+# a permission entry written as text: "User,5,511", "Group,3", "Dept,2,31" (the shape of `pls principals` and of
+# permission lists); a probe names no principal that way either
+PERMISSION_TEXT = re.compile(r"(?i)^\s*(user|group|dept)\s*,\s*-?\d+\s*(,\s*\d+\s*)*$")
+PERMISSION_IN_TEXT = re.compile(r"(?i)(?<![a-z])(user|group|dept),-?\d+")     # written without spaces, inside a text
+# view filters on these record columns hold user ids (JSON text such as '["5"]'); a column whose choices are
+# [[Users*]] / [[Groups*]] / [[Depts*]] holds principal ids as well
+PRINCIPAL_FILTER_COLUMNS = ("owner", "manager", "creator", "updator")
+PRINCIPAL_CHOICES = re.compile(r"(?i)^\s*\[\[(users|groups|depts)")
 
 
-def literal_principals(o: Any, path: str = "") -> list[str]:
-    """Paths of principal lists (`Users`, `Groups`, `Depts`, any depth, case ignored) that hold anything but
-    `$admin_uid` / `$group_<role>` — a probe names no other principal (ADR-0027 item 3)."""
+def _principal_columns(o: Any) -> set[str]:
+    """Names (casefolded) of the columns of these settings whose choices are users, groups or departments."""
+    found: set[str] = set()
+    if (parsed := _json_text(o)) is not None:
+        return _principal_columns(parsed)
+    if isinstance(o, dict):
+        for k, v in o.items():
+            cols = _json_text(v) if isinstance(v, str) else v
+            if str(k).casefold() == "columns" and isinstance(cols, list):
+                for c in cols:
+                    if isinstance(c, dict):
+                        low = {str(x).casefold(): y for x, y in c.items()}       # keys compared without case
+                        if PRINCIPAL_CHOICES.match(str(low.get("choicestext") or "")):
+                            found.add(str(low.get("columnname")).casefold())
+            found |= _principal_columns(v)
+    elif isinstance(o, list):
+        for v in o:
+            found |= _principal_columns(v)
+    return found
+
+
+def _numbers(v: Any) -> list:
+    """Ids in a filter value: integers, digit strings, also inside JSON text."""
+    parsed = _json_text(v)
+    if parsed is not None:
+        return _numbers(parsed)
+    if isinstance(v, list):
+        return [x for y in v for x in _numbers(y)]
+    if isinstance(v, bool):
+        return []
+    if isinstance(v, (int, float)) or (isinstance(v, str) and re.fullmatch(r"\s*-?\d+(\.\d+)?\s*", v)):
+        return [v]
+    return []
+
+
+def literal_principals(o: Any, path: str = "", columns: frozenset = frozenset()) -> list[str]:
+    """Paths in probe settings that name a principal by id — a probe names none but `$admin_uid` / `$group_<role>`
+    as whole values of a `Users` / `Groups` / `Depts` list (ADR-0027 item 3). Found, at any depth and case ignored:
+    such a list or scalar holding anything else, a permission entry as text (`User,5,511`), an id in a view filter
+    on Owner / Manager / Creator / Updator or on a column whose choices are users, groups or departments, and the
+    same inside JSON text."""
     out = []
+    if not path:
+        columns = frozenset(PRINCIPAL_FILTER_COLUMNS) | _principal_columns(o)
     if isinstance(o, dict):
         for k, v in o.items():
             p = f"{path}.{k}" if path else str(k)
-            if str(k).casefold() in PRINCIPAL_LISTS and isinstance(v, list):
+            key = str(k).casefold()
+            if key in PRINCIPAL_LISTS and isinstance(v, list):
                 bad = [x for x in v if not (isinstance(x, str) and SETTINGS_VAR.fullmatch(x))]
                 if bad:
                     out.append(f"{p} holds {bad[:3]}")
                 continue
-            out += literal_principals(v, p)
+            if key in PRINCIPAL_LISTS and isinstance(v, dict) and v:
+                out.append(f"{p} is an object {list(v)[:3]}")                    # ids as keys, e.g. {"5": 1}
+                continue
+            if key in PRINCIPAL_LISTS and not isinstance(v, dict):
+                if v not in (None, "") and not (isinstance(v, str) and SETTINGS_VAR.fullmatch(v)):
+                    out.append(f"{p} is {v!r}")
+                continue
+            hash_ = v if isinstance(v, dict) else _json_text(v) if key == "columnfilterhash" else None
+            if key == "columnfilterhash" and isinstance(hash_, dict):
+                for col, val in hash_.items():
+                    if str(col).casefold() in columns and _numbers(val):
+                        out.append(f"{p}.{col} filters on ids {_numbers(val)[:3]}")
+            out += literal_principals(v, p, columns)
     elif isinstance(o, list):
         for i, v in enumerate(o):
-            out += literal_principals(v, f"{path}[{i}]")
+            out += literal_principals(v, f"{path}[{i}]", columns)
+    elif isinstance(o, str):
+        if PERMISSION_TEXT.match(o) or PERMISSION_IN_TEXT.search(o):
+            out.append(f"{path or 'value'} is a permission entry {o[:40]!r}")
+        elif (parsed := _json_text(o)) is not None:
+            out += literal_principals(parsed, f"{path}(json)", columns)
     return out
 
 

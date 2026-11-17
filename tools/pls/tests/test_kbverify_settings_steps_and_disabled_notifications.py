@@ -182,6 +182,38 @@ class ProbeFileTest(unittest.TestCase):
             {"Id": 1, "Name": "p", "Groups": ["$group_staff"], "Users": ["$admin_uid"]}]}},
             roles={"staff": 1}, teardown={"SiteSettings": {}}))
 
+    def test_no_principal_is_named_in_other_shapes(self):
+        """Ids in a scalar Users / Groups / Depts, a permission entry as text, a view filter on a user column, and any of
+        these inside JSON text are refused too; statuses and other filters are not principals."""
+        view = lambda h: {"Views": [{"Id": 1, "ColumnFilterHash": h}]}                     # noqa: E731
+        for settings in ({"Processes": [{"Id": 1, "Name": "p", "Users": 5}]},
+                         {"Views": [{"Id": 1, "Groups": "374"}]},
+                         {"Processes": [{"Id": 1, "Name": "p", "Permission": "User,5,511"}]},
+                         {"Exports": [{"Id": 1, "Header": ["Group,3,31"]}]},
+                         view({"Owner": "[\"5\"]"}),
+                         view({"manager": ["7"]}),
+                         view({"Updator": 9}),
+                         {"Columns": [{"ColumnName": "ClassD", "ChoicesText": "[[Users*]]"}], **view({"ClassD": "[\"12\"]"})},
+                         {"Columns": [{"ColumnName": "ClassD", "ChoicesText": "[[Groups]]"}], **view({"ClassD": "12"})},
+                         {"Processes": [{"Id": 1, "Name": "p", "View": "{\"Users\": [5]}"}]},
+                         {"Views": [{"Id": 1, "ColumnFilterHash": "{\"Owner\": \"[\\\"5\\\"]\"}"}]},
+                         view({"Owner": 5.0}),
+                         {"Views": [{"Id": 1, "Users": {"5": 1}}]},
+                         {"Processes": [{"Id": 1, "Name": "p", "Permission": "User,5,511,1"}]},
+                         {"Processes": [{"Id": 1, "Name": "p", "Note": "User,5,511;Group,3"}]},
+                         {"columns": [{"columnname": "ClassD", "choicestext": "[[Users*]]"}], **view({"ClassD": "[\"12\"]"})},
+                         {"Columns": "[{\"ColumnName\": \"ClassD\", \"ChoicesText\": \"[[Depts]]\"}]",
+                          **view({"ClassD": "[\"12\"]"})}):
+            with self.subTest(settings=settings):
+                self.refused(probe(site={"ReferenceType": "Results", "SiteSettings": settings}), "principals named by id")
+        self.refused(with_step({"op": "settings", "SiteSettings": view({"Creator": "[\"3\"]"})}), "principals named by id")
+        self.refused(probe(teardown={"SiteSettings": {"Views": [{"Id": 1, "Users": "Dept,2"}]}}), "teardown names principals")
+        # not principals: a status filter, a plain column, a scalar variable, a label text with a comma
+        self.ok(probe(site={"ReferenceType": "Results", "SiteSettings": {
+            "Columns": [{"ColumnName": "ClassA", "ChoicesText": "a\nb"}],
+            "Views": [{"Id": 1, "Name": "User, 5 rows", "ColumnFilterHash": {"Status": "[\"100\"]", "ClassA": "[\"1\"]"}}],
+            "Processes": [{"Id": 1, "Name": "p", "Users": "$admin_uid"}]}}, teardown={"SiteSettings": {}}))
+
     def test_a_teardown_names_no_principal_and_cleanup_saves_no_settings(self):
         self.refused(probe(teardown={"SiteSettings": {"Processes": [{"Id": 1, "Users": [5]}]}}), "teardown names principals")
         self.refused(probe(teardown={"SiteSettings": {"Views": [{"Id": 1, "Groups": ["$group_staff"]}]}}, roles={"staff": 1}),
