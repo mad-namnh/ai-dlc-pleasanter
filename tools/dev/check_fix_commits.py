@@ -18,6 +18,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 RULE_SINCE = "151d4d9"          # the rule holds for commits after this one; older fix commits are listed in the review (H3)
 CODE, TESTS = "tools/pls/", "tools/pls/tests/"
+# Fix commits that broke the rule and cannot be rewritten; each names the later commit that holds its test.
+# Added only with Nam's decision (2026-11-17, AskUserQuestion: "Named exemptions (Recommended)").
+EXEMPT = {
+    "b3be514": "wording of classify's summary note; test in 684d6b7",
+    "e30c963": "wording of classify's summary note; test in 684d6b7",
+}
 
 
 class GitError(Exception):
@@ -42,6 +48,8 @@ def fix_commits_without_a_test(repo: Path, since: str) -> list[tuple[str, str]]:
         head, *files = [line for line in block.splitlines() if line.strip()]
         short, subject = head.split("\t", 1)
         code = [f for f in files if f.startswith(CODE) and not f.startswith(TESTS)]
+        if any(short.startswith(k) for k in EXEMPT):     # a longer abbreviation later still starts with the key
+            continue
         if subject.lower().startswith("fix") and code and not any(f.startswith(TESTS) for f in files):
             found.append((short, subject))
     return found

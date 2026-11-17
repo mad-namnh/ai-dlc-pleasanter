@@ -64,6 +64,19 @@ class FixCommitsTest(unittest.TestCase):
         self.commit("fix(pls): with its test", {"tools/pls/pls.py": "2", "tools/pls/tests/test_y.py": "t"})
         self.assertEqual(CF.fix_commits_without_a_test(self.repo, start), [])
 
+    def test_a_named_exemption_is_skipped_and_nothing_else(self):
+        start = self.git("rev-parse", "HEAD")
+        first = self.commit("fix(pls): exempted", {"tools/pls/pls.py": "1"})
+        second = self.commit("fix(pls): not exempted", {"tools/pls/pls.py": "2"})
+        old = dict(CF.EXEMPT)
+        CF.EXEMPT.clear()
+        CF.EXEMPT[first[:7]] = "test in a later commit"
+        try:
+            self.assertEqual(CF.fix_commits_without_a_test(self.repo, start), [(second, "fix(pls): not exempted")])
+        finally:
+            CF.EXEMPT.clear()
+            CF.EXEMPT.update(old)
+
     def test_an_unknown_start_is_an_error_not_an_empty_result(self):
         with self.assertRaises(CF.GitError):
             CF.fix_commits_without_a_test(self.repo, "no-such-revision")
