@@ -8,6 +8,8 @@ Nam's reports (chat, verbatim):
 3. "tab サマリ co roi, dang thu" — Summaries are on the tab サマリ.
 4. "Buoc 4: van hien thi 0, Buoc 6: da thanh 30" — after adding the summary and saving the site, P's 数値A still showed 0; after the synchronise button it showed 30.
 
-Not recorded: the exact label of the synchronise button and of its confirmation; the account used (earlier screen checks were made as administrator).
+5. "nhan nut dong bo la 同期, user phai la admin moi bam duoc" — the button's label is 同期; only an administrator can press it.
+
+Not recorded: the text of the confirmation; whether "admin" means the tenant administrator or a user with site-manage permission.
 
 Reading: on 1.5.2.0, a summary added by a site save does not recalculate an existing parent (KB D16, now also seen on the screen); the サマリ tab's synchronise button recalculates it (observed once, one parent, two children, 合計).
