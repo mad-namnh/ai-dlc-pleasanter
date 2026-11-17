@@ -832,6 +832,8 @@ class PlsTest(unittest.TestCase):
         # the サマリ tab's synchronise button recalculates existing parents (ADR-0028 option C until pls summaries sync is built);
         # updating child records rewrites business data: it is named only as the observed fallback
         self.assertIn("サマリ", c["data_impacting"][0])
+        # observed by a person on 1.5.2.0 (KB D16): the button is 同期 and needs the site's manage permission
+        self.assertIn("a user with the site's manage permission presses 同期", c["data_impacting"][0])
         self.assertIn("ADR-0028", c["data_impacting"][0])
         self.assertNotIn("touch one child", c["data_impacting"][0])
 
