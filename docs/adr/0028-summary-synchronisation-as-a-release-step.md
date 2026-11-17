@@ -47,6 +47,6 @@ Pleasanter 1.5.2.0 has an API route for the recalculation: `POST /api/items/{id}
 ## Open questions
 
 - [ ] Request body and answer of `SynchronizeSummaries` on 1.5.2.0, and why the earlier call answered 400 (KB D16) — *source read of the item model, then a dev probe*
-- [x] Whether the screen's synchronise button recalculates existing parents on 1.5.2 — yes: Nam's screen check on MADLAB dev 1.5.2.0, 2026-11-17 (a summary added and saved left the parent at 0; the サマリ tab's 同期 button, which only an administrator can press, made it 30; `plans/2026-11-17-summary-sync-screen-check/evidence.md`)
+- [x] Whether the screen's synchronise button recalculates existing parents on 1.5.2 — yes: Nam's screen check on MADLAB dev 1.5.2.0, 2026-11-17 (a summary added and saved left the parent at 0; the サマリ tab's 同期 button, which only a user with the site's manage permission can press, made it 30; `plans/2026-11-17-summary-sync-screen-check/evidence.md`)
 - [ ] Whether it recalculates every summary of the site or one — *same*
 - [ ] Running time on many records — *first real release with a summary change (TD-27)*
