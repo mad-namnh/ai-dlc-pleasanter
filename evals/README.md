@@ -2,12 +2,13 @@
 
 Each skill has cases built from real work (slices). A case is:
 
-- `input.md` — what the skill receives (request, current configuration summary, approved inputs)
+- `input.md` — what the skill receives (request, current configuration summary, approved inputs) and nothing else. In every arm the Orchestrator copies it into the run's scratch folder as `request.md` — word for word, or the variant Nam approved for a baseline or selection batch (below); the runner reads that copy and no `evals/` path, because case folder names describe what a case tests
+- `setup.md` — for whoever runs the case only: how the scratch state is built and what is copied into it, a reference answer, what earlier runs did, what the case measures. The runner never opens it (its brief and definition say so once Nam applies the patches of `plans/2026-11-17-eval-inputs-setup-split/`). Until 2026-11-17 these notes were inside `input.md`; results before that date ran on those inputs (`tools/pls/tests/test_eval_inputs_do_not_reveal_the_answer.py` now keeps them apart)
 - `expected.md` — a **rubric**: must-have properties (pass/fail) and anti-patterns (fail if present). Not a golden text — wording may differ.
 
 ## Running (v0.1, manual)
 
-1. Create a scratch project repository (copy of `pls-demo-inquiry` at the stated baseline, or the files listed in `input.md`).
+1. Create a scratch project repository as the case's `setup.md` says (copy of `pls-demo-inquiry` at the stated baseline, or the files listed in `input.md`), including the files it copies into the scratch folder (e.g. `customer-mail.md`).
 2. Invoke the skill with the input.
 3. Grade the output against `expected.md`: every **Must** item passes and no **Must not** item appears → case passes.
 4. Record the result in `results/<skill>/<date>.md` with the model and skill version used, and — under ADR-0030 — each run's arm, grade and cost and the count `x / k` (template below).
@@ -18,7 +19,7 @@ Steps 2–3 are repeated k times per case in each arm that is run (section "Repe
 
 A case folder that holds an `interviewee.md` needs someone to answer the skill's questions. The answers come from a second subagent that plays the person:
 
-1. The agent under test gets `input.md` only, as always. It must not open `interviewee.md`, `expected.md` or the `plans/` folder, where a proposed rubric may lie (name them in its brief).
+1. The agent under test gets the copy of `input.md` (`request.md`) only, as always. It must not open anything under `evals/` (`interviewee.md`, `setup.md`, `expected.md`), any `expected.md` or `interviewee.md` elsewhere, or the `plans/` folder, where a proposed rubric may lie (name them in its brief).
 2. The person-role subagent gets `interviewee.md` only — not the skill, not `input.md`, not the rubric.
 3. Whoever runs the case relays: each message of the agent under test that ends with questions goes to the person-role subagent **unchanged**, and its reply goes back **unchanged**. The relay adds nothing, answers nothing and corrects nothing.
    When the agent under test is a subagent, its turn ends with a report to whoever runs the case, not with a chat message: its brief tells it to put the complete message for the person at the end, under a line `MESSAGE TO <name>:`, and only that part is relayed. Its next message is the person's reply.
@@ -38,7 +39,7 @@ The eval runner has no shell (on purpose: a shell could reach Pleasanter with th
 
 ## Repeats, the no-skill baseline, scope and selection cases, cost (ADR-0030)
 
-Rules in [ADR-0030](../docs/adr/0030-eval-repeats-no-skill-baseline-and-activation-cases.md); this section says how they are run. The files the Orchestrator and the runner obey — `.claude/skills/pls-x-dev-orchestrator/SKILL.md` and `references/eval-case-brief.md`, `.claude/agents/pls-x-eval-case-runner.md`, `docs/agent-rules.md` §3–§5 — carry these rules only once Nam applies the patches proposed in `plans/2026-11-17-adr-0030-build/`. Until then: with-skill runs only — k runs per case once Nam approves the batch (the unpatched `docs/agent-rules.md` §4 still says one call per case) — and the person running the case adds to each brief the extra paths not to open (`skills/README.md`, `HANDOFF.md`, `interviewee.md`, other run folders, `../_agent-scratch-held/`) and the request for the list of opened files and search roots; **baseline and selection runs wait** until the patches are applied (the runner's definition still tells it to read a skill).
+Rules in [ADR-0030](../docs/adr/0030-eval-repeats-no-skill-baseline-and-activation-cases.md); this section says how they are run. The files the Orchestrator and the runner obey — `.claude/skills/pls-x-dev-orchestrator/SKILL.md` and `references/eval-case-brief.md`, `.claude/agents/pls-x-eval-case-runner.md`, `docs/agent-rules.md` §3–§5 — carry these rules (patches of `plans/2026-11-17-adr-0030-build/`, applied by Nam in `a9deff5`).
 
 ### Repeated runs (k)
 
@@ -53,7 +54,7 @@ Rules in [ADR-0030](../docs/adr/0030-eval-repeats-no-skill-baseline-and-activati
 - **When:** (a) once per skill, to establish its lift on its current cases; (b) before trimming or removing skill text (below); (c) on Nam's request. Never on every eval. Each batch of baseline runs is asked of Nam with its k and number of runs (ADR-0029's eval approval does not cover it). Interview cases get a baseline only when Nam asks.
 - **Setup:** the same case input, model and scratch setup as the with-skill arm, except the skill: the brief names no skill, and in a scratch copy of a project every folder under `.claude/skills/` other than `pls-kb-pleasanter` is removed before the run. Same k as the with-skill arm.
 - **Allow-list:** the runner may open only its own scratch folder — the Orchestrator copies the case `input.md` there as `request.md`, so the brief names no `evals/<skill>/` path — and in the framework `skills/pls-kb-pleasanter/`, `CLAUDE.md`, `docs/` (not `docs/review-criteria.md`) and `templates/`. Anything else — another run's folder, `skills/README.md`, any other skill, a skill copy in a sibling project — **voids** the run; rerun it.
-- **In both arms** the runner lists every file it opened and the root of every Grep / Glob search (a search whose root or results include a path counts as opening it; in baseline and selection it searches only inside its allow-list), and never opens `skills/README.md` or `HANDOFF.md` (their notes say what earlier runs missed), `interviewee.md`, another run's folder or `../_agent-scratch-held/`. A run in either arm that opened one of them, or (baseline) anything outside its allow-list, is **void**: rerun it. The result states that the separation rests on the brief and that list.
+- **In both arms** the runner lists every file it opened and the root of every Grep / Glob search (a search whose root or results include a path counts as opening it; in baseline and selection it searches only inside its allow-list), and never opens anything under `evals/`, any `expected.md` or `interviewee.md`, `skills/README.md` or `HANDOFF.md` (their notes say what earlier runs missed), another run's folder, `../_agent-scratch-held/` or another project repository next to the framework. A run in either arm that opened one of them, or (baseline) anything outside its allow-list, is **void**: rerun it. The result states that the separation rests on the brief and that list.
 - **Lift** per case = Must items passed with the skill − Must items passed without it, each averaged over the k runs; report it with the Must-not hits of each arm, averaged the same way. The arms differ by the skill and everything it references (other skills' references, generated references such as P2's `impact-rules.md`); the KB and the framework rule files are in both.
 
 ### Scope and selection cases

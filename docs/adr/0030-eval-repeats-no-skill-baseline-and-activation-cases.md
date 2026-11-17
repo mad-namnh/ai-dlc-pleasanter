@@ -1,6 +1,6 @@
 # ADR-0030: Skill evals with repeated runs, a no-skill baseline, scope and selection cases and recorded cost
 
-- **Status:** Accepted (Nam, 2026-11-16: "chap nhan" before review round 2, and "ADR-0030 chap nhan" for the text revised after it) — option B; partly built 2026-11-17 (Nam: "Ghi 'partly built'"): `evals/README.md`, HANDOFF evals line, test `test_skills_hold_no_eval_data.py`; patches for protected paths (brief form, runner, `docs/agent-rules.md`, orchestrator skill) pending Nam in `plans/2026-11-17-adr-0030-build/`; scope / selection cases not built (later task)
+- **Status:** Accepted (Nam, 2026-11-16: "chap nhan" before review round 2, and "ADR-0030 chap nhan" for the text revised after it) — option B; partly built 2026-11-17 (Nam: "Ghi 'partly built'"): `evals/README.md`, HANDOFF evals line, test `test_skills_hold_no_eval_data.py`; runner definition, brief form, `docs/agent-rules.md` and orchestrator skill (patches of `plans/2026-11-17-adr-0030-build/`, applied by Nam in `a9deff5`); scope / selection cases not built (later task)
 - **Date:** 2026-11-16
 - **Deciders:** Nam
 - **Related:** I6, I9 (`docs/architecture.md` §2); ADR-0016 (agent team, eval case-runner); ADR-0022 (skills installed into project repositories); **amends ADR-0029** (its eval approval: what it covers under this ADR, Consequences); `evals/README.md`; HANDOFF "How we work" (evals line); TD-37 (skills without a current-version eval); plan `plans/2026-11-16-skillevaluator-adoption-analysis/` (risk analysis, Tier 1 trial, review)

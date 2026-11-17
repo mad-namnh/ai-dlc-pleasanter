@@ -1,8 +1,8 @@
-# Input — P5 case 001 (equipment loan, target stg, up to G4)
+# Input
 
 Dry run: no network. `pls` output is given below; do not invent other output. Describe each command you would run.
 
-Scratch project (fictional, based on `pls-demo-equipment` after G3): `templates/project/CLAUDE.md` with profile Release target `stg`, Approvers `G1, G4: Sato; G2, G3: Nam`, Operators `dev: Nam; stg: Nam`; `.claude/skills/` = KB, `pls-x-lifecycle`, `pls-p5-release-manager`.
+Scratch project (fictional equipment-loan app after G3): `templates/project/CLAUDE.md` with profile Release target `stg`, Approvers `G1, G4: Sato; G2, G3: Nam`, Operators `dev: Nam; stg: Nam`; `.claude/skills/` = KB, `pls-x-lifecycle`, `pls-p5-release-manager`.
 
 Present: `requirements/REQ-001…008` (G1 approved, records in `gates/`), `design/` (G2 approved), `releases/R-20261110-01/g3-verification.md` with a G3 record by Nam, sites `equipment` and `loans` with ids in `envs.stg`. One scheduled script `remind-overdue` changed in this release.
 

@@ -1,4 +1,4 @@
-# Input — lifecycle case 002 (fictional)
+# Input
 
 A project repository just created by `pls init juchu --origin existing --stage project --target stg --approver "Sato (G1, G4), Nam (G2, G3)"`. Its `CLAUDE.md` profile:
 

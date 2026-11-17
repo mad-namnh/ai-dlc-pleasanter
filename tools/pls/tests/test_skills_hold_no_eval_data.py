@@ -14,7 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 
 EVAL_FOLDER_NAMES = {"eval", "evals"}
-EVAL_FILE_NAMES = {"expected.md", "evals.json", "eval.md", "interviewee.md"}
+# `setup.md` is the eval case file for whoever runs a case; a skill reference needs another name.
+EVAL_FILE_NAMES = {"expected.md", "evals.json", "eval.md", "interviewee.md", "setup.md"}
 RUBRIC_TITLE = re.compile(r"^#\s+Rubric\b", re.M | re.I)
 MUST_HEADING = re.compile(r"^##\s+Must\s*$", re.M)
 MUST_NOT_HEADING = re.compile(r"^##\s+Must not\s*$", re.M)
@@ -52,6 +53,7 @@ class SkillsHoldNoEvalDataTest(unittest.TestCase):
             "pls-x-a/EVAL.md": "EVAL.md: an eval file name",
             "pls-x-a/evals.json": "evals.json: an eval file name",
             "pls-x-a/references/interviewee.md": "interviewee.md: an eval file name",
+            "pls-x-a/references/setup.md": "setup.md: an eval file name",
             "pls-x-a/references/notes.md": "notes.md: rubric headings",
             "pls-x-a/references/score.md": "score.md: rubric headings",
         }
