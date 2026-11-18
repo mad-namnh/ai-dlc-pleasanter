@@ -60,7 +60,7 @@ def grants(profile_text: str) -> dict[str, dict[str, date | None]]:
     Accepted forms (segments separated by ';'): `Nam (all gates)`, `Nam`, `Nam (G1, G2), Taro (G3, G4)`,
     `G1, G4: Nam; G2, G3: Taro`, `G1–G3: A, B; G4: Nam`, and a delegation with its last day (inclusive, the
     approver's local date): `G4 until 2026-12-05: B` or `B (G4 until 2026-12-05)`. Placeholders (`<…>`, empty,
-    "tbd") name no approver; a segment with a ":" whose head is not a list of gates grants nothing, and so does an
+    "tbd") name no approver, nor does a text with a date, a colon or the word "until" (a misplaced end date); a segment with a ":" whose head is not a list of gates grants nothing, and so does an
     "until" without a date. When a name is granted a gate twice, the longer grant counts.
     """
     m = _ROW.search(profile_text)
@@ -396,10 +396,15 @@ def lint(root: Path) -> list[dict]:
     except GateError as ex:            # a damaged record is itself the finding; the checks below would all refuse
         issues.append({"rule": "L-GATE-01", "site": "-", "msg": str(ex)})
         return issues
-    # every name the row grants now or any recorded Approvers value granted, ended or removed delegations included:
-    # a document approved during a delegation stays valid, as its gate record does (require judges it at its time)
+    # every name the row grants now (ended delegations still in the row included); a name the row no longer holds is
+    # accepted when it was an approver at the instant of the matching approval record (as `require` judges it)
     names = {n.casefold() for n in grants(PR.effective_profile_text(root))}
-    names |= {n.casefold() for v in PR.approvers_history(root) for n in grants(f"| Approvers | {v} |")}
+
+    def held_then(who: str, g: dict | None) -> bool:
+        if not g or g.get("decision") != "approved":
+            return False
+        then = approvers(PR.effective_profile_text(root, g["_t"]), g["_t"].date())
+        return who.casefold() in {n.casefold() for n in then}
 
     def who_of(rest: str) -> str | None:
         m = _WHO.match(rest)
@@ -407,9 +412,9 @@ def lint(root: Path) -> list[dict]:
 
     def check(path: Path, gate: str, who: str | None, item: str | None, release: str | None):
         rel = path.relative_to(root).as_posix()
-        if who is not None and who.strip().casefold() not in names:
-            issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: {gate} approved by {who.strip()!r}, who is not an approver in CLAUDE.md"})
         g = latest(root, gate, item=item, release=release)
+        if who is not None and who.strip().casefold() not in names and not held_then(who.strip(), g):
+            issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: {gate} approved by {who.strip()!r}, who is not an approver in CLAUDE.md"})
         if not g or g.get("decision") != "approved":
             issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: says {gate} approved but gates/ has no approval record "
                                                                     f"for {item or release} (`pls gate`)"})

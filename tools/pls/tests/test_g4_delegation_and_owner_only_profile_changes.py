@@ -172,9 +172,38 @@ class RoleFileAndRecordTest(TeamProfile, unittest.TestCase):
         (self.r / "design" / "roles.json").write_text(json.dumps({"roles": {}}), encoding="utf-8")
         with self.assertRaisesRegex(pls.Fail, "edited by hand"):          # groups are never created on it either
             pls.bind_principals(self.r, "stg", None, create=True)
+        with self.assertRaisesRegex(pls.Fail, "edited by hand"):          # nor are group ids bound into it
+            pls.bind_principals(self.r, "stg", None)
         envs["envs"]["stg"]["role"] = "stg"
         p.write_text(json.dumps(envs), encoding="utf-8")
         self.assertEqual(pls.env_conf(self.r, "stg")["role"], "stg")
+
+
+class HandEditedRowTest(TeamProfile, unittest.TestCase):
+    def test_a_backdated_record_is_judged_by_the_first_record_not_the_row(self):
+        # a hand edit of the row plus a hand-written record dated before the first Approvers record
+        p = self.r / "CLAUDE.md"
+        p.write_text(PR._row("Approvers").sub("| Approvers | Taro (all gates) |", p.read_text(encoding="utf-8"), count=1),
+                     encoding="utf-8")
+        with self.assertRaisesRegex(GT.GateError, "not G4"):
+            GT._approver_for(self.r, "Taro", "G4", at=datetime(2020, 1, 1).astimezone())
+
+
+class StatusLinesTest(TeamProfile, unittest.TestCase):
+    def test_a_status_line_by_a_removed_delegate_is_not_a_finding(self):
+        PR.set_field(self.r, "Approvers", f"{TEAM}; G2 until {NEXT_WEEK}: Ken", "Nam", "Ken designs while I am away")
+        time.sleep(0.05)
+        d = self.r / "design" / "decisions"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "DES-001-loans.md").write_text("# DES-001\n\nStatus: G2 approved by Ken\n", encoding="utf-8")
+        GT.record(self.r, "G2", "approved", "Ken", "approved", ["DES-001"], [], TODAY.isoformat())
+        time.sleep(0.05)
+        PR.set_field(self.r, "Approvers", TEAM, "Nam", "I am back")
+        msgs = [i["msg"] for i in GT.lint(self.r) if i["rule"] == "L-GATE-01"]
+        self.assertFalse([m for m in msgs if "Ken" in m], msgs)
+        # a name that never approved it stays a finding
+        (d / "DES-001-loans.md").write_text("# DES-001\n\nStatus: G2 approved by Mallory\n", encoding="utf-8")
+        self.assertTrue(any("Mallory" in i["msg"] for i in GT.lint(self.r) if i["rule"] == "L-GATE-01"))
 
 
 class NoOwnerTest(unittest.TestCase):

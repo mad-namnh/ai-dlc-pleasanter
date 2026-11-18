@@ -120,18 +120,21 @@ def latest(root: Path, field: str, env: str | None = None, at: datetime | None =
     return max(hits, key=lambda g: (g["_t"], g.get("value") != "on")) if hits else None
 
 
-def approvers_history(root: Path) -> list[str]:
-    """Every recorded Approvers value, oldest first (lint of approvals given under an earlier value)."""
-    return [g["value"] for g in sorted(_load(root, PROFILE_DIR), key=lambda g: g["_t"]) if g.get("field") == "Approvers"]
+def earliest(root: Path, field: str) -> dict | None:
+    """The first record of a profile row (fields recorded per environment are not looked up here)."""
+    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and field not in PER_ENV]
+    return min(hits, key=lambda g: g["_t"]) if hits else None
 
 
 def effective_profile_text(root: Path, at: datetime | None = None) -> str:
     """CLAUDE.md as pls reads it: each guarded row carries its recorded value when the field has a record — the value
     in force now, or at the instant `at` (an approval is judged by the profile it was given under, ADR-0020). A field
-    with no record at or before `at` keeps the row of the file."""
+    with no record at all keeps the row of the file; an instant before its first record reads that first record."""
     text = _profile_text(root)
     for field in FIELDS:
         rec = latest(root, field, at=at)
+        if rec is None and at is not None:
+            rec = earliest(root, field)          # before the first record: the first one, never the hand-editable row
         if rec is None:
             continue
         shown = f"`{rec['value']}`" if field in CODE_VALUES else rec["value"]

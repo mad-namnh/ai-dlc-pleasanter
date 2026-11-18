@@ -2963,10 +2963,10 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     roles = rj(rf).get("roles") or {}
     ev = rj(r / "environments.json")
     e = ev["envs"][env]
+    bad = role_record_problem(r, env, e)          # bound ids are written into this environment: never on a hand-edited role
+    if bad:
+        raise Fail(bad)
     if create:
-        bad = role_record_problem(r, env, e)
-        if bad:
-            raise Fail(bad)
         if e.get("role") != "dev" or e.get("sandbox_of") or e.get("connection"):
             raise Fail(f"principals --create: only on a dev environment that is not a sandbox ({env}: role "
                        f"{e.get('role')!r}, sandbox of {e.get('sandbox_of')!r}) — groups are tenant-wide; on stg and "

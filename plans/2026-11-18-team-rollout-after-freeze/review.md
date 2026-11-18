@@ -52,3 +52,16 @@ Review budget reached (2 rounds, agent-rules §5). Stopped; reported to Nam.
 | — | none | `grants()` also drops a name containing "until" (safer than R2-3's wording) | documented in the follow-up |
 
 Commit 2 is the reviewed tree, unchanged.
+
+## Follow-up L-1…L-3 — 2026-11-18 (Nam: "chon a")
+
+- Reviewer: `pls-x-reviewer`, opus, high. Change: working tree against `cc8a649`. `git status` before/after identical.
+- Verdict: **accept with fixes**, Low only. L-1 and L-3 correct and tested (both new tests fail on the parent `cc8a649`, run by the Orchestrator in `../_agent-scratch/parent-low`).
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| N-1 | Low | lint `held_then` accepts a name that held any gate, ADR says "the gate" (lint only; `require` checks per gate) | next commit: check the gate |
+| N-2 | Low | the L-2 narrowing has no test (the new test also passes on the parent) | next commit: tests for a historic name not in force and a holder of another gate |
+| N-3 | Low | ADR omits the "until" word rule; long docstring line | next commit: wording |
+
+The reviewed tree is committed unchanged.
