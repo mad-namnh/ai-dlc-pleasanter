@@ -159,3 +159,20 @@ The reviewed tree is committed unchanged.
 - Verdict: **accept**. Acceptance criteria 1–7 met; docs consistent.
 - L1 (Low) — the workflow test matched command text anywhere, so a commented-out command or one moved to another job passed. **Fixed:** comments dropped, each command / OS / Python version / node / fetch-depth checked inside its own job; mutations (node command commented out, `fetch-depth: 1`, Windows row removed) each fail the test; 5 of 5 fail on the parent `2e869bb`.
 - L2 (Low) — the workflow has not run on GitHub (Windows job, node 22, matrix unproven). **Disposition:** needs Nam's push (stop point 4); stated in HANDOFF and the report.
+
+# Review — phase 7 (`pls status`, golden path, docs)
+
+## Round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, model sonnet, effort medium (Standard). Change: working tree against `bb94661`. `git status` identical before and after.
+- Verdict: **accept with fixes**. Criteria 1, 2, 4, 5, 6 met; 3 met except the unfinished apply (H1). Every golden-path command checked with `-h`.
+- H1 (High) — `pls status` knew only `applying`; `uncertain`, `applied-unverified`, `recovery-required`, `rolled-back` gave "Nothing open" (reproduced by the reviewer in a scratch project); on stg `_release_step` took them as done after G4. **Fixed:** `RECOVERY` per state from `pls.OPEN_STATES` (a test keeps them equal) with the step of setup.md "When a release does not end applied"; `rolled-back` → new plan, open until a newer release of that environment exists; any unknown state is open, never "nothing open"; `_release_step` names recovery before G4 / apply. Tests per state for dev and stg.
+- M1 (Medium) — no test for `applied-differs`, `migrated`, `rolled-back`. **Fixed:** tests added.
+- L1 (Low) — "built on dev" counts any dev release after G2. **Disposition:** limit documented in the module docstring; `pls check p3 --des` reports the mismatch.
+- Not verified by the reviewer: the full suites (its piped run was unreadable) — run by the Orchestrator, see log.
+
+## Round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium. Change: working tree against `bb94661` (focus `pls_status.py` and its test). `git status` identical before and after.
+- Verdict: **accept**, no Critical / High / Medium. H1, M1, L1 confirmed fixed (recovery map equals `pls.OPEN_STATES`, unknown states open, stg after G4 covered). Full Python suite exit 0, node exit 0 (reviewer's own unpiped run).
+- Low, no fix: (1) a rolled-back stg release named by an approved G3 still shows as a P5 item after a newer release replaces it — kept: the replacement needs its own G3, so the prompt to rework is right; (2) a rolled-back release that is still open is listed twice (release and P5 line) — cosmetic, kept.

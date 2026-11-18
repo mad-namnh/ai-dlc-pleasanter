@@ -6,6 +6,8 @@ There are two parts:
 
 Nothing secret goes into git or into the chat.
 
+A developer joining a shared project follows the one-page [golden path](golden-path.md); this guide holds the details it links to.
+
 ## What you need
 
 | Item | Notes |

@@ -101,6 +101,7 @@ import pls_release_digest as RD                             # noqa: E402 — con
 import pls_log as LG                                        # noqa: E402 — run log and step markers (ADR-0013)
 import pls_usage as US                                      # noqa: E402 — LLM token usage per step (ADR-0013)
 import pls_spec as SP                                       # noqa: E402 — as-is specification skeleton
+import pls_status as ST                                     # noqa: E402 — where the project stands, next command
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
 import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
 import pls_secret_fields as SF                              # noqa: E402 — credential fields of notifications (I7)
@@ -4288,6 +4289,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
                       "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
     s.add_argument("action", choices=["pre", "post", "stop", "start", "model", "install"])
+    sp.add_parser("status", help="read only: open items of the project (profile, REQ / DES, gates, releases) and the next command")
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
     s.add_argument("--env", help="p3: target environment — with --des, the built change is compared with those DES")
@@ -4777,6 +4779,10 @@ def _main(argv=None) -> int:
         except ValueError as ex:
             raise Fail(str(ex))
         print(f".claude/settings.json: {'added ' + ', '.join(added) if added else 'hooks already there'} (ADR-0029)")
+        return 0
+
+    if a.cmd == "status":                               # read only: lifecycle section 1 from the records
+        print(ST.render(ST.collect(r)))
         return 0
 
     if a.cmd == "check":

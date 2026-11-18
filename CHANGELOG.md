@@ -7,6 +7,9 @@ Each entry: what changes for a project, and what a project must do after `pls sk
 
 ## Unreleased
 
+- **`pls status`** (read only): the open items of the project and the next command, from the profile, REQ / DES,
+  gate records and releases. The lifecycle skill (0.33) starts from it. After upgrading: `pls skills sync`. A one-page
+  team guide: `docs/golden-path.md` in the framework.
 - **One model per project (ADR-0031):** `pls init` / `pls hook install` write `"model": "opus"` into the project's
   `.claude/settings.json` when it names none, and a PreModelSwitch hook denies a switch to any other model. After
   upgrading: `pls hook install` in each project (needs Claude Code v2.1.251 or later for the switch check).

@@ -89,3 +89,14 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Review round 1 (pls-x-reviewer, sonnet, medium): accept; L1 fixed (job-scoped, comment-free checks; three mutations fail), L2 disposition (first GitHub run on Nam's push). Subagent calls 1/6, rounds 1/2.
 - Final suites: Windows 3.12 815 OK, 3.10 815 OK (2 skipped), node 16/16.
 - 2026-11-18 Nam (mid-task): "làm tuần tự cho đến hết các phase, khi gặp vấn đề cần confirm thì bạn phân tích và đưa ra quyết định hợp lý và làm tiếp, sáng mai tôi review report". Decisions from here are made by the Orchestrator and logged with their reasoning; hard stop points (push, protected paths, ADR acceptance, Pleasanter writes) stay open for Nam.
+- Phase 6 committed `bb94661`. REPORT for phase 6 goes into the overnight report.
+
+## Phase 7 — `pls status`, golden path, docs (2026-11-18, under Nam's "decide and continue")
+
+- Plan: `phase-07-status-golden-path.md` (Standard), decisions recorded there.
+- Built `pls_status.py` + `pls status`; tried on copies of `pls-demo-contracts` / `-equipment` / `-inquiry` (git-tracked files only, no `.pls/`): contracts → applied-differs dev release, then DES-001 awaiting G3; equipment / inquiry → Origin not recorded, then REQ / DES front-matter findings (TD-68). Two fixes from that run: traceability links count as design (17 REQs wrongly "no DES" on contracts), equal neighbouring states share one line.
+- Found while writing the golden path: a cloned project has no command that writes `.pls/connections.json` → TD-74, manual step in the golden path (no feature during the freeze).
+- HANDOFF: old file kept verbatim in `plans/handoff-history/2026-11-18-handoff-before-cleanup.md`; new HANDOFF = phases table, open items, recent changes, How we work, Rules that hold, What this is, Repositories.
+- Suites before review round 1: 3.12 and 3.10 failed only `test_every_subcommand_is_classified` (new command not classified) → `status` added to LOCAL in `test_write_guards.py`. New status test fails on parent `bb94661` (module missing).
+- Review round 1 (sonnet, medium): accept with fixes — H1 recovery states, M1 tests, L1 limit; fixed. Suites after the fix: 3.12 826 OK, 3.10 826 OK (2 skipped), node 16/16.
+- Review round 2 (sonnet, medium): accept, two Lows kept (review.md). Subagent calls on phase 7: 2/6, rounds 2/2.
