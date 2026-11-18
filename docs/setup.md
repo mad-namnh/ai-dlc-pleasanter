@@ -78,7 +78,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 `jobs` (`unknown`, `disabled`, `live`) is recorded the same way for scheduled server scripts (ADR-0012). The project declares them in `config/_tenant/scheduled-scripts/` (`<name>.js` + `_index.json`, a list of `{"name", "schedule", "enabled"}`). While the project declares any and `jobs` is `unknown`, `pls test` refuses tests that change records and `pls apply` refuses a release that changes a scheduled script; `live` gives a warning. Every release plan lists changed scheduled scripts with a manual deploy step (files resolved for the environment in `releases/<R>/scheduled-scripts/`); after copying them into tenant management, the person records the check with `pls jobs-verified <R> --by <name> --quote "…"` (an operator of that environment from the profile row `Operators`, or a G4 approver). A sandbox uses the riskier of its own and dev's values and never deploys scheduled scripts. The agent never changes these values. The demo app has no notifications, so the demo is not affected.
 
-**Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, `python pls.py sandbox refresh --name <you>`, `python pls.py apply <R-…>`.
+**Several developers (optional, ADR-0011).** Once per clone: `python pls.py merge-install` (semantic merge of `config/*/site.json`). Per developer: create a folder in Pleasanter, then `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, `python pls.py bootstrap <B-…>`, then `python pls.py sandbox sync --name <you>` whenever the sandbox should take the current git configuration (refresh + apply; refused while your UI edits are not harvested — run `python pls.py harvest --env dev-<you> --site <s>` and commit first). A sandbox's releases stay on your machine (gitignored); the shared dev receives only releases of merged git, one person at a time — a release plan made before you pulled a teammate's release is refused as drift: pull, then plan again.
 
 ## Environment variables
 
@@ -113,6 +113,22 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - tell the agent once: *"you may use --yes for dev in this session"*;
 - **for dev only, once per project:** tell the agent that it may write to dev without asking each time. It records your words with `python pls.py profile set dev-writes on --env dev --approver <you> --quote "<your words>"`, and from then on these three commands on that dev environment run without the question; each release names the record (`apply-log.json` → `confirmed`). A sandbox needs its own record; stg and prod always ask. Withdraw it with `python pls.py profile set dev-writes off --env dev --approver <you> --quote "…"` (ADR-0024).
 
+## A team on one project: approvers, delegation, the stg key
+
+- **Approvers.** Every dev approves G1–G3 (their own tasks included); G4 stays with its owner. The owner records it once: `python pls.py profile set Approvers "G1–G3: Nam, Taro, Hana; G4: Nam" --approver Nam --quote "<their words>"`.
+- **Delegating G4** while the owner is away, always with a last day: the owner adds `; G4 until 2026-12-05: Taro` with the same command. After that day Taro's G4 is gone by itself; a release Taro approved during the delegation stays approved, also after the owner removes the delegation from the row. To end it early, the owner records the row without it; to undo one of Taro's approvals, the owner records a later G4 decision (`rejected` or `changes-requested`) for that release.
+- **Only the owner** changes Approvers, Operators or an environment's `role` (a dev or a delegate is refused), and only the owner can delegate.
+- **The stg key is the real control.** Only the owner (or the delegate, for the delegation) has a stg key with `allow_write` in their own `.pls/connections.json`; devs have no stg key at all, so `http-check --env stg` on a dev's machine has nothing to connect with. Gate records in git are evidence, not a lock (ADR-0014 TB-3).
+
+- **What the shared repository keeps.** Everything `pls` or a gate reads on someone else's machine is committed — `tests/results/` (coverage for G3), `requirements/sources/` (`pls check p1`), `gates/`, `releases/`, `ops/onboarding/`, `ops/log/`, `ops/usage/`, `design/probes/`. Only `ops/xref/`, `ops/adopt/`, `ops/triage/` and `ops/env-compare/` stay on your machine (gitignored); after a fresh clone run `pls xref --site <site>` when a skill needs it. A project made before this: `pls skills check` reports that the template `.gitignore` changed — copy its last block into the project's `.gitignore`, then `git rm -r --cached --ignore-unmatch ops/xref ops/adopt ops/triage ops/env-compare` and commit.
+
+## Framework versions
+
+- **The team uses release tags only.** Clone the framework once and check out a tag: `git -C ai-dlc-pleasanter fetch --tags` then `git -C ai-dlc-pleasanter checkout v0.3.0`. Never work from a branch of the framework in a project.
+- **A project pins the framework** in `.claude/framework.lock` (commit and tag), written by `pls init` and `pls skills sync`. When the framework running is another commit or has uncommitted changes, `pls` refuses writes to stg (and `apply` / `bootstrap` / `migrate` warn on dev); `http-check` and the session-start hook say so.
+- **Upgrading a project:** read the new version's entry in `CHANGELOG.md`, check out that tag in the framework, then in the project `python pls.py skills sync` and `python pls.py hook install`, do what the entry says, and commit `.claude/` with the rest.
+- **A fix during the freeze (the framework owner):** branch `fix/<slug>` from the tag, fix with its regression test, both suites green, add the `CHANGELOG.md` entry, merge into `main`, tag that commit `v0.3.<n+1>` (annotated), push `main` and the tag; the team then upgrades as above. Developers report framework bugs to the owner instead of editing the framework.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -126,7 +142,10 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `principals --create`: `principals.admin is …` | Your own user is not bound. Create the project with a profile (`pls setup`, `pls init`) or add `"admin": "User,<your id>"` to the env's `principals`. |
 | `principals --create`: `not a group with a final name` | `design/roles.json` has a role that is not `principal: "Group"` or still has a placeholder `group_name`. The design is fixed first (P2). |
 | `principals --create`: `answered HTTP 403` | Your key is not a tenant administrator. Create the groups in Pleasanter instead. |
+| `REFUSED: the framework … — writes to stg run only the framework version the project pinned` | Check out the pinned tag in the framework (`git -C <framework> checkout <tag>`), or upgrade the project (Framework versions). Uncommitted changes in the framework's `tools/`, `skills/` or `templates/` also count. |
+| `REFUSED: the project's framework.lock …` | The lock does not name a clean framework commit (made by an older `pls`, or synced while git could not read the framework or it had changes). Check out the release tag in the framework, then `python pls.py skills sync` and commit `.claude/`. |
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
+| `envs.<env>.role is … but its record says …` | `environments.json` was edited by hand (e.g. stg turned into dev, which would drop G4). Restore the file from git, or the G4 owner records the role: `python pls.py profile set role <role> --env <env> --approver <owner> --quote "…"`. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |
 | `L-REF-04` from `lint` | An environment value that is a number or shorter than 6 characters is used inside longer text. Use it as the whole value of its field, or put the surrounding text into the value (`values` in `environments.json`). |
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |

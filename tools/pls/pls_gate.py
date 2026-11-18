@@ -20,7 +20,7 @@ import hashlib
 import json
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pls_profile_records as PR
@@ -29,6 +29,12 @@ import pls_release_digest as RD
 GATES = ("G1", "G2", "G3", "G4")
 DECISIONS = ("approved", "rejected", "changes-requested")
 _ROW = re.compile(r"^\|\s*Approvers\s*\|(.*)\|\s*$", re.M)
+_GATE_OR_RANGE = r"G[1-4](?:\s*[-–~]\s*G[1-4])?"
+# the head form: gates, an optional end date of a delegation, then ":" — "G1–G3: A", "G4 until 2026-12-05: B"
+_HEAD = re.compile(rf"^{_GATE_OR_RANGE}(?:\s*,\s*{_GATE_OR_RANGE})*(?:\s+until\s+[^:]*)?\s*:", re.I)
+_UNTIL = re.compile(r"\buntil\b", re.I)
+_UNTIL_DATE = re.compile(r"\buntil\s+(\d{4}-\d{2}-\d{2})\s*$", re.I)
+PERMANENT = None              # a grant without an end date
 _STATUS = re.compile(r"^.*\bStatus\b.*?\b(G[1-4])\b.*?\bapproved\b(.*)$", re.M | re.I)
 _WHO = re.compile(r"^\s*(?:\(\s*|by\s+)([^,()\d]+?)\s*(?:[,)]|\bon\b|$)", re.I)
 _ID = re.compile(r"^(REQ|DES)-\d+")
@@ -48,35 +54,84 @@ def des_digest(root: Path, did: str) -> str | None:
     return hashlib.sha256(hits[0].read_bytes().replace(b"\r\n", b"\n")).hexdigest() if len(hits) == 1 else None
 
 
-def approvers(profile_text: str) -> dict[str, set[str]]:
-    """Approver name → gates they may approve, from the profile row "Approvers".
+def grants(profile_text: str) -> dict[str, dict[str, date | None]]:
+    """Approver name → {gate: last day of the grant, or PERMANENT}, from the profile row "Approvers".
 
     Accepted forms (segments separated by ';'): `Nam (all gates)`, `Nam`, `Nam (G1, G2), Taro (G3, G4)`,
-    `G1, G4: Nam; G2, G3: Taro`. Placeholders (`<…>`, empty, "tbd") name no approver.
+    `G1, G4: Nam; G2, G3: Taro`, `G1–G3: A, B; G4: Nam`, and a delegation with its last day (inclusive, the
+    approver's local date): `G4 until 2026-12-05: B` or `B (G4 until 2026-12-05)`. Placeholders (`<…>`, empty,
+    "tbd") name no approver, nor does a text with a date, a colon or the word "until" (a misplaced end
+    date); a segment with a ":" whose head is not a list of gates grants nothing, and so does an
+    "until" without a date. When a name is granted a gate twice, the longer grant counts.
     """
     m = _ROW.search(profile_text)
     if not m:
         return {}
-    out: dict[str, set[str]] = {}
+    out: dict[str, dict[str, date | None]] = {}
 
-    def add(name: str, gates: set[str]):
+    def add(name: str, gates: set[str], until: date | None):
         name = name.strip()
-        if name and gates and "<" not in name and name.lower() not in ("tbd", "-", "none"):
-            out.setdefault(name, set()).update(gates)
+        if not (name and gates and "<" not in name and name.lower() not in ("tbd", "-", "none")):
+            return
+        # "Taro until 2026-12-05": a misplaced end date is never a name with a grant without an end date ("dev01" is a name)
+        if _UNTIL.search(name) or re.search(r"\d{4}-\d{1,2}-\d{1,2}|:", name):
+            return
+        have = out.setdefault(name, {})
+        for g in gates:
+            old = have.get(g, False)
+            if old is False or until is PERMANENT or (old is not PERMANENT and until > old):
+                have[g] = until
 
     for seg in m.group(1).split(";"):
         seg = seg.strip()
-        if re.match(r"^(G[1-4][\s,]*)+:", seg):                       # "G1, G4: Nam, Taro"
+        if _HEAD.match(seg):                                           # "G1, G4: Nam, Taro", "G1–G3: Nam"
             head, names = seg.split(":", 1)
+            gates, until = _gates_until(head)
             for n in re.split(r",|/|\band\b", names):
-                add(n, _gates(head))
+                add(n, gates, until)
+            continue
+        if ":" in seg:          # a head this parser does not read ("G1 to G3: A"): no name in it gets any gate
             continue
         for part in re.split(r",(?![^()]*\))", seg):                   # "Nam (G1, G2), Taro (all gates)"
             nm = re.match(r"\s*([^()]+?)\s*(?:\(([^)]*)\))?\s*$", part)
             if nm:
                 g = nm.group(2)
-                add(nm.group(1), set(GATES) if g is None else _gates(g))
+                gates, until = (set(GATES), PERMANENT) if g is None else _gates_until(g)
+                add(nm.group(1), gates, until)
     return out
+
+
+def approvers(profile_text: str, on: date | None = None) -> dict[str, set[str]]:
+    """Approver name → gates they may approve on the day `on` (default: today). A delegation after its last day
+    grants nothing; a name left without any gate is not an approver that day."""
+    on = on or date.today()
+    out = {}
+    for name, gs in grants(profile_text).items():
+        live = {g for g, until in gs.items() if until is PERMANENT or on <= until}
+        if live:
+            out[name] = live
+    return out
+
+
+def owners(profile_text: str) -> set[str]:
+    """The names that hold G4 without an end date: only they change Approvers, Operators and an environment's role
+    (pls_profile_records), so a G1–G3 approver or a time-boxed delegate cannot widen their own rights."""
+    return {n for n, gs in grants(profile_text).items() if "G4" in gs and gs["G4"] is PERMANENT}
+
+
+def _gates_until(text: str) -> tuple[set[str], date | None]:
+    """Gates and the last day of a grant text ("G4", "G4 until 2026-12-05"). An "until" without a valid date
+    grants nothing (never a permanent grant by mistake)."""
+    if not _UNTIL.search(text):
+        return _gates(text), PERMANENT
+    m = _UNTIL_DATE.search(text)
+    try:
+        until = date.fromisoformat(m.group(1)) if m else None
+    except ValueError:
+        until = None
+    if until is None:
+        return set(), PERMANENT
+    return _gates(text[:m.start()]), until
 
 
 def _gates(text: str) -> set[str]:
@@ -93,8 +148,11 @@ def _gates(text: str) -> set[str]:
     return out | set(re.findall(r"G[1-4]", text))
 
 
-def _approver_for(root: Path, name: str, gate: str) -> str:
-    names = approvers(PR.effective_profile_text(root))
+def _approver_for(root: Path, name: str, gate: str, at: datetime | None = None) -> str:
+    """The name as the profile lists it, when it may approve `gate` now — or, for a decision already recorded, at the
+    instant `at`: under the Approvers value in force then and on that day, so a delegate's approval made during the
+    delegation counts after the delegation ends or is removed from the row (to undo one, record a later decision)."""
+    names = approvers(PR.effective_profile_text(root, at), at.date() if at else None)
     if not names:
         raise GateError("the project profile names no approver: ask the person who approves this gate and add the name "
                         "to the Approvers row of CLAUDE.md after they say it")
@@ -130,24 +188,25 @@ def operators(profile_text: str) -> dict[str, set[str]] | None:
     return out
 
 
-def job_verifier(root: Path, name: str, env: str, approved_by: str | None = None) -> dict:
+def job_verifier(root: Path, name: str, env: str, approved_by: str | None = None, at: datetime | None = None) -> dict:
     """Who may confirm the manual deploy of scheduled scripts on `env`: an operator of that environment (profile row
     Operators) or a G4 approver. Without an Operators row only G4 approvers (older projects). `approved_by`, when
-    given, must be a G4 approver. Returns the record fields; raises GateError for a name the profile does not hold."""
-    ops = operators(PR.effective_profile_text(root))
+    given, must be a G4 approver. Returns the record fields; raises GateError for a name the profile does not hold.
+    `at`: judge a confirmation already recorded by the profile in force when it was made (as gate records)."""
+    ops = operators(PR.effective_profile_text(root, at))
     op = next((n for n in (ops or {}).get(env, set()) if n.casefold() == name.strip().casefold()), None)
     if op:
         rec = {"by": op, "role": "operator", "env": env}
     else:
         try:
-            rec = {"by": _approver_for(root, name, "G4"), "role": "g4-approver", "env": env}
+            rec = {"by": _approver_for(root, name, "G4", at), "role": "g4-approver", "env": env}
         except GateError as ex:
             if ops is None:
                 raise
             listed = ", ".join(sorted((ops or {}).get(env, set()))) or "nobody"
             raise GateError(f"{name!r} is neither an operator of {env} (Operators row: {listed}) nor a G4 approver ({ex})")
     if approved_by:
-        rec["approved_by"] = _approver_for(root, approved_by, "G4")
+        rec["approved_by"] = _approver_for(root, approved_by, "G4", at)
     return rec
 
 
@@ -280,7 +339,9 @@ def latest(root: Path, gate: str, *, item: str | None = None, release: str | Non
 def require(root: Path, gate: str, release: str, why: str) -> None:
     g = latest(root, gate, release=release)
     if g and g.get("decision") == "approved":
-        _approver_for(root, g.get("approver", ""), gate)      # a hand-written record by anyone else does not count
+        # a hand-written record by anyone else does not count; a delegate's approval counts when it was made inside
+        # the delegation (the profile and the day of the record), so a release approved during an absence is not lost
+        _approver_for(root, g.get("approver", ""), gate, at=g["_t"])
     if not g or g.get("decision") != "approved":
         raise GateError(f"{why} needs a recorded {gate} approval of {release} "
                         f"({'last decision: ' + g['decision'] if g else 'none recorded'}) — "
@@ -336,7 +397,16 @@ def lint(root: Path) -> list[dict]:
     except GateError as ex:            # a damaged record is itself the finding; the checks below would all refuse
         issues.append({"rule": "L-GATE-01", "site": "-", "msg": str(ex)})
         return issues
-    names = {n.casefold() for n in approvers(PR.effective_profile_text(root))}
+    # every name the row grants now (ended delegations still in the row included); a name the row no longer holds is
+    # accepted when it was an approver at the instant of the matching approval record (as `require` judges it)
+    names = {n.casefold() for n in grants(PR.effective_profile_text(root))}
+
+    def held_then(who: str, gate: str, g: dict | None) -> bool:
+        """`who` held `gate` under the profile in force at the instant of the approval record `g`."""
+        if not g or g.get("decision") != "approved":
+            return False
+        then = approvers(PR.effective_profile_text(root, g["_t"]), g["_t"].date())
+        return any(n.casefold() == who.casefold() and gate in gs for n, gs in then.items())
 
     def who_of(rest: str) -> str | None:
         m = _WHO.match(rest)
@@ -344,9 +414,9 @@ def lint(root: Path) -> list[dict]:
 
     def check(path: Path, gate: str, who: str | None, item: str | None, release: str | None):
         rel = path.relative_to(root).as_posix()
-        if who is not None and who.strip().casefold() not in names:
-            issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: {gate} approved by {who.strip()!r}, who is not an approver in CLAUDE.md"})
         g = latest(root, gate, item=item, release=release)
+        if who is not None and who.strip().casefold() not in names and not held_then(who.strip(), gate, g):
+            issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: {gate} approved by {who.strip()!r}, who is not an approver in CLAUDE.md"})
         if not g or g.get("decision") != "approved":
             issues.append({"rule": "L-GATE-01", "site": "-", "msg": f"{rel}: says {gate} approved but gates/ has no approval record "
                                                                     f"for {item or release} (`pls gate`)"})

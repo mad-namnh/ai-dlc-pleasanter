@@ -62,8 +62,9 @@ class ProfileRecordTest(unittest.TestCase):
             pls.main(["step", "P1", "new request"])
 
     def test_operators_come_from_the_record(self):
-        PR.set_field(self.r, "Approvers", "Nam (G1, G2, G3)", "Nam", "Nam approves G1 to G3")
-        PR.set_field(self.r, "Operators", "dev: Nam; stg: Nam", "Nam", "Nam deploys dev and stg")
+        # Nam without G4, so his right below comes from the Operators row only; Operators is stated by the G4 owner
+        edit_row(self.r, "Approvers", "Nam (G1, G2, G3), Sato (G4)")
+        PR.set_field(self.r, "Operators", "dev: Nam; stg: Nam", "Sato", "Nam deploys dev and stg")
         edit_row(self.r, "Operators", "dev: Nam; stg: Nam, Mallory")
         with self.assertRaisesRegex(GT.GateError, "neither an operator"):
             GT.job_verifier(self.r, "Mallory", "stg")

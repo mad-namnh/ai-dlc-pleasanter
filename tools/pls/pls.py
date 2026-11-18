@@ -90,6 +90,7 @@ import pls_gate as GT                                       # noqa: E402 — gat
 import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
 import pls_des_agreement as DA                              # noqa: E402 — built change vs its DES (ADR-0029 B)
 import pls_hooks as HK                                      # noqa: E402 — Claude Code hooks of a project (ADR-0029 C)
+import pls_framework_pin as FP                              # noqa: E402 — the framework version a project pinned (ADR-0022)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
@@ -249,7 +250,26 @@ def env_conf(r: Path, env: str) -> dict:
     bad = env_values_problem(e)
     if bad:
         raise Fail(f"environments.json envs.{env}.{bad}")
+    bad = role_record_problem(r, env, e)
+    if bad:
+        raise Fail(bad)
     return e
+
+
+def role_record_problem(r: Path, env: str, e: dict) -> str | None:
+    """A role that differs from its `pls profile set role` record: the file was edited by hand. The write guard and
+    the G4 requirement read the role, so a hand edit (stg → dev) would drop G4 — refuse until the person restores the
+    file or records the role (owner only, ADR-0020). An environment without a role record (dev entries made by setup,
+    init or sandbox create) is read from the file, as before."""
+    try:
+        rec = PR.latest(r, PR.ROLE, env)
+    except GT.GateError as ex:
+        return f"the role record of {env} cannot be read ({ex})"
+    if rec and e.get("role") != rec["value"]:
+        return (f"environments.json envs.{env}.role is {e.get('role')!r} but its record says {rec['value']!r} "
+                f"(edited by hand?) — restore the file, or the G4 owner records the role: pls profile set role "
+                f"<role> --env {env} --approver <owner> --quote \"<their words>\"")
+    return None
 
 
 def env_values_problem(e: dict) -> str | None:
@@ -1177,7 +1197,7 @@ def _jobs_verified_holds(r: Path, v, env: str) -> bool:
     if not isinstance(v, dict) or not isinstance(v.get("quote"), str) or not v["quote"].strip() or v.get("env") != env:
         return False
     try:
-        GT.job_verifier(r, str(v.get("by") or ""), env, v.get("approved_by"))
+        GT.job_verifier(r, str(v.get("by") or ""), env, v.get("approved_by"), at=GT._instant(v.get("at")))
     except GT.GateError:
         return False
     return True
@@ -1438,11 +1458,30 @@ def write_guard_now(r: Path, env: str, release: str, what: str = "applying") -> 
     except (Fail, ValueError, OSError) as ex:
         raise H.TransportError(f"environments.json cannot be checked ({ex})")
     H.assert_writable(e, H.load_connection(r, env), env)
+    pin_guard(r, e, env)
     if e.get("role") != "dev":
         try:
             GT.require(r, "G4", release, f"{what} in {env}")
         except (GT.GateError, Fail, ValueError, OSError) as ex:
             raise H.TransportError(str(ex))
+
+
+_PIN_WARNED: set = set()
+
+
+def pin_guard(r: Path, e: dict, env: str) -> None:
+    """The framework running must be the version the project pinned (ADR-0022, team rollout phase 4): outside dev a
+    difference refuses the write (TransportError); on dev it is a warning, once per run."""
+    import pls_http as H
+    bad = FP.problem(r, FRAMEWORK)
+    if not bad:
+        return
+    if e.get("role") != "dev":
+        raise H.TransportError(f"REFUSED: {bad} — writes to {env} run only the framework version the project pinned "
+                               "(ADR-0022)")
+    if bad not in _PIN_WARNED:
+        _PIN_WARNED.add(bad)
+        print(f"WARNING: {bad} — allowed on dev only")
 
 
 def not_planned_message(release: str, plan: dict) -> str:
@@ -2357,8 +2396,9 @@ def sandbox_sites(e: dict) -> dict:
     return {k: v for k, v in e["sites"].items() if v.get("sandbox")}
 
 
-def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> int:
-    """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written)."""
+def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> tuple[int, str]:
+    """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written).
+    Returns the exit code and the release id."""
     import pls_http as H
     env = f"dev-{name}"
     e = env_conf(r, env)
@@ -2388,7 +2428,25 @@ def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> in
         print(f"next: pls apply {release}   (asks for confirmation)")
     else:
         print(f"{env}: if the sandbox drifted, harvest it first: pls harvest --env {env} --site <site>")
-    return code
+    return code, release
+
+
+def sandbox_sync(r: Path, name: str, allow_shared_writes: bool = False, yes: bool = False) -> int:
+    """Bring the sandbox up to the current git configuration in one command (team rollout A3): `refresh` plans the
+    release — refused when the sandbox holds UI edits not harvested yet (drift), so they are never overwritten — then
+    `apply` writes it with its own confirmation (typed release id, --yes, or the sandbox's standing permission). Git
+    stays with the person: harvest, commit and merging the shared branch are not done here. Writes not allowed are
+    refused before the plan, so a refused sync leaves no planned release behind."""
+    import pls_http as H
+    env = f"dev-{name}"
+    try:
+        H.assert_writable(env_conf(r, env), H.load_connection(r, env), env)
+    except H.TransportError as ex:
+        raise Fail(str(ex))
+    code, release = sandbox_refresh(r, name, allow_shared_writes)
+    if code != 0:
+        return code
+    return main(["apply", release] + (["--yes"] if yes else []))
 
 
 def sandbox_drop(r: Path, name: str) -> int:
@@ -2631,8 +2689,8 @@ def _framework_skills(fw: Path) -> dict[str, Path]:
 def _framework_commit(fw: Path) -> str:
     import subprocess
     try:
-        return subprocess.run(["git", "-C", str(fw), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
-                              timeout=10).stdout.strip() or "unknown"
+        p = subprocess.run(["git", "-C", str(fw), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+        return p.stdout.strip() if p.returncode == 0 and FP.valid_commit(p.stdout.strip()) else "unknown"
     except (OSError, subprocess.SubprocessError):
         return "unknown"
 
@@ -2692,6 +2750,7 @@ def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
     vers, skills = _skill_versions(fw), {}
     lock_p = proj / ".claude" / "framework.lock"
     lock = rj(lock_p) if lock_p.exists() else {}
+    lock = lock if isinstance(lock, dict) else {}               # a damaged lock is rewritten by this sync
     fw_skills = _framework_skills(fw)
     for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
         if re.fullmatch(r"[a-z0-9-]+", name) and (dest / name).is_dir():   # a lock name never reaches outside
@@ -2708,8 +2767,10 @@ def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
         skills[name] = {"version": vers.get(name, "?"), "sha256": _tree_sha(tgt)}
     (proj / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
     notes = template_changes(lock, fw)
+    now = FP.state(fw)                  # the pin: commit, its release tag, and whether the shipped parts had changes
     lock.update({"framework": "ai-dlc-pleasanter", "path": lock.get("path") or _relpath(fw, proj),
-                 "commit": _framework_commit(fw), "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
+                 "commit": _framework_commit(fw), "tag": now.get("tag"), "dirty": now.get("dirty"),
+                 "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
                  "skills": skills, "template": _template_hashes(fw)})
     wj(lock_p, lock)
     return {**lock, "template_notes": notes}
@@ -2751,6 +2812,8 @@ def edited_skill_warning(r: Path) -> str | None:
 
 def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     lock = rj(proj / ".claude" / "framework.lock")
+    if not isinstance(lock, dict):
+        return [".claude/framework.lock is not a JSON object - restore it from git, or run `pls skills sync` to rewrite it"]
     fw_skills, problems = _framework_skills(fw), []
     for name, entry in sorted((lock.get("skills") or {}).items()):
         d = proj / ".claude" / "skills" / name
@@ -2944,6 +3007,9 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     roles = rj(rf).get("roles") or {}
     ev = rj(r / "environments.json")
     e = ev["envs"][env]
+    bad = role_record_problem(r, env, e)          # bound ids are written into this environment: never on a hand-edited role
+    if bad:
+        raise Fail(bad)
     if create:
         if e.get("role") != "dev" or e.get("sandbox_of") or e.get("connection"):
             raise Fail(f"principals --create: only on a dev environment that is not a sandbox ({env}: role "
@@ -3258,6 +3324,9 @@ def http_cmd(r: Path, a) -> int:
                     print(f"{a.env} key '{k}': {ex}")
             print(f"writes: {'allowed' if e.get('role') in H.WRITABLE_ROLES and conn.get('allow_write') is True else 'refused'} "
                   f"(role {e.get('role')!r}, allow_write {conn.get('allow_write')!r})")
+            pin = FP.problem(r, FRAMEWORK)
+            if pin:
+                print(f"framework: {pin} — {'writes refused' if e.get('role') != 'dev' else 'a warning on dev'} (ADR-0022)")
             try:
                 print(SE.describe(a.env, env_effects(r, e)))
             except ValueError as ex:
@@ -3302,6 +3371,7 @@ def http_cmd(r: Path, a) -> int:
             e = env_conf(r, plan["env"])
             H_, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"migrating data in {plan['env']}")
@@ -3408,6 +3478,7 @@ def http_cmd(r: Path, a) -> int:
             e = env_conf(r, plan["env"])
             H_, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"applying to {plan['env']}")
@@ -3540,6 +3611,7 @@ def http_cmd(r: Path, a) -> int:
                 return 0
             _, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"creating sites in {plan['env']}")
@@ -3627,6 +3699,7 @@ def http_cmd(r: Path, a) -> int:
             # Outside dev, records are created, changed and deleted (deletes cannot be undone) only with the person's
             # word: the G4 approval of the release under test, or their confirmation of this run.
             if e.get("role") != "dev" and any(SE.test_writes(sp_) for sp_ in specs):
+                pin_guard(r, e, a.env)
                 if a.release:
                     try:
                         GT.require(r, "G4", a.release, f"tests that change records in {a.env}")
@@ -4004,7 +4077,7 @@ def main(argv=None) -> int:
     """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
     tool call of Claude Code and is not logged (the run log would hold every edit)."""
     args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"]):
+    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"], ["start"]):
         return hook(args[1])
     return LG.run(root, args, lambda: _main(args))
 
@@ -4019,6 +4092,13 @@ def hook(event_name: str, stdin=None, stdout=None) -> int:
         proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or "") if os.environ.get("CLAUDE_PROJECT_DIR") else root()
         if not (proj / "environments.json").exists():
             return 0                                   # not a pls project: nothing to say
+        if event_name == "start":                      # SessionStart: plain text goes to Claude's context
+            notes = FP.session_notes(proj, FRAMEWORK)
+            if notes:
+                text = "pls framework version:\n" + "\n".join(f"- {n}" for n in notes) + "\n"
+                stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
+                stdout.flush()
+            return 0
         if event_name == "pre":
             out = HK.pre(proj, event)
         elif event_name == "post":
@@ -4124,8 +4204,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
     s.add_argument("--quote", help="the person's own words for --keep / --ref (never a relayed or paraphrased approval)")
-    s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")
-    s.add_argument("action", choices=["create", "refresh", "drop"])
+    s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | sync | drop")
+    s.add_argument("action", choices=["create", "refresh", "sync", "drop"],
+                   help="sync = refresh, then apply (refused while the sandbox holds UI edits not harvested)")
+    s.add_argument("--yes", action="store_true", help="sync: the person's confirmation of the apply, given on their instruction")
     s.add_argument("--name", required=True, help="developer name; the environment is dev-<name>")
     s.add_argument("--sites", help="create: logical sites to copy, comma separated")
     s.add_argument("--parent", type=int, help="create: id of the developer's folder")
@@ -4170,7 +4252,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV, help="quote a field with a space: \"Role tests\"")
     s.add_argument("value")
     s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
-    s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
+    s.add_argument("--approver", required=True, help="an approver of the profile; Approvers, Operators and role: a G4 approver without an end date "
+                   "(the first Approvers value: the person it makes one)")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s = sp.add_parser("review", help="record that the person reviewed an as-is document (I4); never record it yourself")
     s.add_argument("kind", choices=["as-is"])
@@ -4202,7 +4285,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--site", help="one site (default: every site in config/)")
     s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
                       "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
-    s.add_argument("action", choices=["pre", "post", "stop", "install"])
+    s.add_argument("action", choices=["pre", "post", "stop", "start", "install"])
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
     s.add_argument("--env", help="p3: target environment — with --des, the built change is compared with those DES")
@@ -4272,7 +4355,11 @@ def _main(argv=None) -> int:
     if a.cmd == "skills":
         if a.action == "sync":
             lock = sync_skills(r, FRAMEWORK)
-            print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit']})")
+            print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit'][:10]}"
+                  + (f", {lock['tag']}" if lock.get("tag") else "") + ")")
+            if lock.get("dirty") is not False or not FP.valid_commit(lock.get("commit")):
+                print("WARNING: the framework had uncommitted changes, or git could not read it — writes outside dev stay "
+                      "refused until the project is synced from a clean release tag (ADR-0022)")
             for line in lock["template_notes"]:
                 print(line)
             return 0
@@ -4324,8 +4411,11 @@ def _main(argv=None) -> int:
         try:                                             # a package is an approved release: G4 bound to its content
             GT.require(r, "G4", a.release, f"packaging {a.release}")
             g4 = GT.latest(r, "G4", release=a.release)
+            # the G4 approvers of the profile in force when G4 was given: a delegate's approval stays verifiable
+            # by the customer's verify.py after the delegation ends (ADR-0020)
             out, man = PK.build(r, a.release, plan, g4, sorted(
-                n for n, gates in GT.approvers(PR.effective_profile_text(r)).items() if "G4" in gates))
+                n for n, gates in GT.approvers(PR.effective_profile_text(r, g4["_t"]), g4["_t"].date()).items()
+                if "G4" in gates))
         except (GT.GateError, PK.PackageError, RD.DigestError) as ex:
             raise Fail(str(ex))
         wj(rel / "package-manifest.json", man)
@@ -4362,7 +4452,11 @@ def _main(argv=None) -> int:
                 raise Fail("sandbox create needs --sites and --parent (the developer's folder id)")
             return sandbox_create(r, a.name, [x.strip() for x in a.sites.split(",") if x.strip()], a.parent,
                                   allow_shared_writes=a.allow_shared_writes)
-        return sandbox_refresh(r, a.name, a.allow_shared_writes) if a.action == "refresh" else sandbox_drop(r, a.name)
+        if a.action == "refresh":
+            return sandbox_refresh(r, a.name, a.allow_shared_writes)[0]
+        if a.action == "sync":
+            return sandbox_sync(r, a.name, a.allow_shared_writes, a.yes)
+        return sandbox_drop(r, a.name)
 
     if a.cmd == "harvest":
         return harvest(r, a.env, a.site)

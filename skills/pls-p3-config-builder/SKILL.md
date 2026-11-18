@@ -49,7 +49,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
 
 ## Several developers (ADR-0011)
 
-When the project uses sandboxes (`dev-<name>` in `environments.json`): build and try changes in your sandbox, not in shared dev. Scripts are edited as files and deployed with `pls sandbox refresh` + `pls apply`; settings may be edited in the sandbox UI and brought back with `pls harvest --env dev-<name> --site <s>`. Commit on the ticket branch; shared dev only receives merged git. Run `pls merge-install` once per clone so `config/*/site.json` merges by element.
+When the project uses sandboxes (`dev-<name>` in `environments.json`): build and try changes in your sandbox, not in shared dev. Scripts are edited as files and deployed with `pls sandbox sync --name <you>` (refresh + apply, refused while UI edits are not harvested); settings may be edited in the sandbox UI and brought back with `pls harvest --env dev-<name> --site <s>`. Commit on the ticket branch; shared dev only receives merged git. Run `pls merge-install` once per clone so `config/*/site.json` merges by element.
 
 ## Checklist before P4
 

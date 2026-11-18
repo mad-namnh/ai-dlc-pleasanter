@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 FIELDS = ("Approvers", "Operators", "Origin", "Role tests")       # profile rows (CLAUDE.md)
@@ -31,6 +31,12 @@ ROLES = ("dev", "stg", "prod")
 DEV_WRITES = "dev-writes"                           # standing permission for writes to one dev environment (ADR-0024)
 DEV_WRITES_VALUES = ("on", "off")
 PER_ENV = (ROLE, DEV_WRITES)                        # fields recorded per environment
+OWNER_FIELDS = ("Approvers", "Operators", ROLE)     # changed only by a G4 approver without an end date (_check_owner)
+NO_OWNER_REPAIR = ("the team lead repairs it by hand once, keeping every earlier record (gate decisions are judged by "
+                   "the profile of their time): add one file gates/profile/<date>-Approvers-repair.json with "
+                   "{\"kind\": \"profile\", \"field\": \"Approvers\", \"value\": \"G1–G3: …; G4: <owner>\", "
+                   "\"approver\": \"<owner>\", \"quote\": \"<their words>\", \"at\": \"<now, ISO with offset>\", "
+                   "\"recorded_by\": \"hand repair\"} and commit it; the latest record is the one pls reads")
 PROFILE_DIR = "gates/profile"
 
 
@@ -106,17 +112,29 @@ def _write(root: Path, sub: str, stem: str, rec: dict, key: str = "value") -> Pa
 
 # ---------------------------------------------------------------- profile fields and environment roles
 
-def latest(root: Path, field: str, env: str | None = None) -> dict | None:
-    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and (field not in PER_ENV or g.get("env") == env)]
+def latest(root: Path, field: str, env: str | None = None, at: datetime | None = None) -> dict | None:
+    """The record of `field` in force now, or at the instant `at` (the last one recorded at or before it)."""
+    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and (field not in PER_ENV or g.get("env") == env)
+            and (at is None or g["_t"] <= at)]
     # two records at the same instant: the one that allows less wins (a withdrawn permission is never outranked)
     return max(hits, key=lambda g: (g["_t"], g.get("value") != "on")) if hits else None
 
 
-def effective_profile_text(root: Path) -> str:
-    """CLAUDE.md as pls reads it: each guarded row carries its recorded value when the field has a record."""
+def earliest(root: Path, field: str) -> dict | None:
+    """The first record of a profile row (fields recorded per environment are not looked up here)."""
+    hits = [g for g in _load(root, PROFILE_DIR) if g.get("field") == field and field not in PER_ENV]
+    return min(hits, key=lambda g: g["_t"]) if hits else None
+
+
+def effective_profile_text(root: Path, at: datetime | None = None) -> str:
+    """CLAUDE.md as pls reads it: each guarded row carries its recorded value when the field has a record — the value
+    in force now, or at the instant `at` (an approval is judged by the profile it was given under, ADR-0020). A field
+    with no record at all keeps the row of the file; an instant before its first record reads that first record."""
     text = _profile_text(root)
     for field in FIELDS:
-        rec = latest(root, field)
+        rec = latest(root, field, at=at)
+        if rec is None and at is not None:
+            rec = earliest(root, field)          # before the first record: the first one, never the hand-editable row
         if rec is None:
             continue
         shown = f"`{rec['value']}`" if field in CODE_VALUES else rec["value"]
@@ -168,20 +186,29 @@ def _check_value(root: Path, field: str, value: str, env: str | None) -> None:
 def set_field(root: Path, field: str, value: str, approver: str, quote: str, env: str | None = None,
               recorded_by: str = "pls profile set") -> Path:
     """Record the person's decision, then write the value. The approver must be an approver of the effective
-    profile; only the very first Approvers value may be stated by a person it names."""
+    profile; only the very first Approvers value may be stated by a person it names. Approvers, Operators and role
+    need a G4 approver without an end date (_check_owner)."""
     GT = _gt()
     value = _norm(field, value)
     _check_value(root, field, value, env)
     if not quote.strip():
         raise GT.GateError("--quote: the person's own words for this decision are required (I4)")
-    names = GT.approvers(effective_profile_text(root))
-    pool = names or (GT.approvers(f"| Approvers | {value} |") if field == "Approvers" else {})
+    current = effective_profile_text(root)
+    # the first value: no Approvers record yet and a row that grants nothing (the template placeholder). A row whose
+    # grants have all ended, or a recorded value, is never "first" — otherwise anyone could state one and own the row
+    first = latest(root, "Approvers") is None and not GT.grants(current)
+    names = GT.approvers(current)
+    pool = (GT.approvers(f"| Approvers | {value} |") if field == "Approvers" else {}) if first else names
     if not pool:
-        raise GT.GateError("the profile names no approver: record Approvers first (pls profile set Approvers …)")
+        raise GT.GateError("the profile names no approver: record Approvers first (pls profile set Approvers …)" if first
+                           else "the profile names no approver today (every grant has ended or names nobody) — "
+                           + NO_OWNER_REPAIR)
     who = next((n for n in pool if n.casefold() == approver.strip().casefold()), None)
     if who is None:
         raise GT.GateError(f"{approver!r} is not an approver ({', '.join(sorted(pool))})" +
-                           ("" if names else " — the first Approvers value must name the person who states it"))
+                           (" — the first Approvers value must name the person who states it" if first else ""))
+    if field in OWNER_FIELDS:
+        _check_owner(GT, field, value, who, current, first=first)
     rec = {"kind": "profile", "field": field, "value": value, "approver": who, "quote": quote.strip(), "recorded_by": recorded_by}
     if field in PER_ENV:
         rec["env"] = env
@@ -198,6 +225,41 @@ def set_field(root: Path, field: str, value: str, approver: str, quote: str, env
         shown = f"`{value}`" if field in CODE_VALUES else value
         p.write_text(_row(field).sub(lambda _m: f"| {field} | {shown} |", _profile_text(root), count=1), encoding="utf-8", newline="\n")
     return out
+
+
+def _check_owner(GT, field: str, value: str, who: str, current: str, first: bool) -> None:
+    """Approvers, Operators and an environment's role decide who may release outside dev: only a G4 approver without
+    an end date (an owner) changes them, so a G1–G3 approver or a time-boxed G4 delegate cannot widen their own
+    rights. A G4 grant in a new Approvers value has an end date unless its name is already an owner; the value keeps
+    at least one owner (nobody could change the row again otherwise) and no end date already past.
+    A profile with approvers but no owner refuses: nobody may decide, or a G1–G3 approver could make themselves the
+    owner (L-PRF-01 reports it; NO_OWNER_REPAIR says how the person repairs it)."""
+    owners = GT.owners(current)
+    if not first and not owners:
+        raise GT.GateError(f"the profile names no G4 approver without an end date, so nobody may change {field} — "
+                           + NO_OWNER_REPAIR)
+    if not first and who not in owners:
+        raise GT.GateError(f"{field} is changed only by a G4 approver without an end date ({', '.join(sorted(owners))}); "
+                           f"{who} is not one — ask them to state the change")
+    if field != "Approvers":
+        return
+    row = f"| Approvers | {value} |"
+    new_owners = GT.owners(row)
+    if first and who not in new_owners:
+        raise GT.GateError(f"the first Approvers value names the person who states it as a G4 approver without an end "
+                           f"date (e.g. 'G1–G3: A, B; G4: {who}'); {who} is not one in {value!r}")
+    if not new_owners:
+        raise GT.GateError(f"Approvers {value!r} names no G4 approver without an end date: nobody could change the row "
+                           "again — keep the owner (e.g. 'G4: Nam; G4 until 2026-12-05: Taro')")
+    added = sorted(n for n in new_owners if n not in owners) if owners and not first else []
+    if added:
+        raise GT.GateError(f"a new G4 approver needs an end date: write 'G4 until <YYYY-MM-DD>: {', '.join(added)}' "
+                           f"(a delegation ends by itself; only {', '.join(sorted(owners))} hold G4 without one)")
+    today = date.today()
+    past = sorted({f"{n} ({g} until {u.isoformat()})" for n, gs in GT.grants(row).items()
+                   for g, u in gs.items() if u is not GT.PERMANENT and u < today})
+    if past:
+        raise GT.GateError(f"Approvers {value!r} has a grant whose last day is already past: {', '.join(past)}")
 
 
 def _envs(root: Path) -> dict:
@@ -257,9 +319,13 @@ def lint(root: Path) -> list[dict]:
                            f"(`deferred` or `per-role keys`) and has no record — " + how.format(f=quoted(field), v="<value>", env="")})
         elif not rec and not _placeholder(field, m.group(1).strip()):
             issues.append({"rule": "L-PRF-01", "site": "-", "msg": f"CLAUDE.md {field} has no record — " + how.format(f=quoted(field), v=row, env="")})
+    current = effective_profile_text(root)
+    if GT.grants(current) and not GT.owners(current):
+        issues.append({"rule": "L-PRF-01", "site": "-", "msg": "Approvers names no G4 approver without an end date: "
+                       "Approvers, Operators and environment roles cannot be changed — " + NO_OWNER_REPAIR})
     p = root / "environments.json"
     envs = (json.loads(p.read_text(encoding="utf-8-sig")).get("envs") or {}) if p.exists() else {}
-    names = {n.casefold() for n in GT.approvers(effective_profile_text(root))}
+    names = {n.casefold() for n in GT.approvers(current)}
     for env in sorted({g.get("env") for g in _load(root, PROFILE_DIR) if g.get("field") == DEV_WRITES}):
         rec = latest(root, DEV_WRITES, env)
         if rec and rec.get("value") == "on" and str(rec.get("approver", "")).casefold() not in names:

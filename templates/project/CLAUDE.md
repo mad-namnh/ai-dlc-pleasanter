@@ -21,15 +21,15 @@ Filled in when the project is created; the lifecycle skill reads it.
 | Item | Value |
 |---|---|
 | Origin | `new` (the app is built by this project) / `existing` (the app already runs in Pleasanter and is taken over) |
-| Stage | `demo` (one person approves every gate; customer questions are answered with the `[assumed]` defaults unless the approver says otherwise) / `project` (customer owner approves G1 and G4) |
+| Stage | `demo` (one person approves every gate; customer questions are answered with the `[assumed]` defaults unless the approver says otherwise) / `project` (MADLAB devs approve G1–G3, their own tasks included; G4 only its owner or a time-boxed delegate; the customer approves no gate) |
 | Release target | `dev` (P5 records the dev state as released) / `stg` / `prod` (customer-side deploy, ADR-0003) |
-| Approvers | G1, G4: <name>; G2, G3: <name> |
-| Operators | dev: <name>; stg: <name>; prod: <customer operator> |
+| Approvers | G1–G3: <dev names>; G4: <owner> |
+| Operators | dev: <dev names>; stg: <owner>; prod: <customer operator> |
 | Role tests | `deferred` (one key, the operator's: restrictions are verified in the configuration, not as each role; demo stage) / `per-role keys` (a test user and key per restricted role, TD-11) |
 
 ## Hard rules
 
-1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`). The rows Origin, Approvers and Operators below and every environment `role` change only through `pls profile set … --quote "<their words>"`, never by hand.
+1. **You never approve a gate.** At G1–G4 you present the evidence, ask and wait. You record the decision only after the person states it, with `pls gate` (approver from this profile, their words as `--quote`). The rows Origin, Approvers and Operators below and every environment `role` change only through `pls profile set … --quote "<their words>"`, never by hand. Approvers, Operators and `role` are stated only by the G4 owner; a G4 delegation always names its last day (`G4 until <YYYY-MM-DD>: <name>`).
 2. **Writes only to environments `pls` allows:** `role: dev`, or stg after G4, with `allow_write: true` in the operator's `.pls/connections.json`. Never change roles or `allow_write` to get past a refusal. Never write to prod.
 3. **`pls apply` / `pls bootstrap` / `pls migrate`, and `pls test` outside dev, need the person:** they run the command in their terminal, or they tell you to add `--yes` for that target. Never add `--yes` on your own, and never pipe text into a confirmation (pls refuses it). Smoke tests after a stg release run with `--release <R>` under that release's G4.
 4. **No keys, secrets or business data in git or chat.**
@@ -61,8 +61,9 @@ Filled in when the project is created; the lifecycle skill reads it.
 | `dist/` | release packages for the customer (`pls package`, gitignored); the manifest stays in `releases/<R>/` |
 | `ops/drift/` | drift baselines and decisions |
 | `ops/log/`, `ops/usage/` | run log of every `pls` command; LLM token usage per session (`pls usage`) |
-| `ops/onboarding/`, `ops/adopt/`, `ops/xref/` | taking over an existing app: onboarding summary, adopt reports, which script uses which column and site |
-| `ops/triage/` | maintenance triage notes (P6) |
+| `ops/onboarding/` | taking over an existing app: onboarding summary (committed; pls requires it before P1) |
+| `ops/adopt/`, `ops/xref/`, `ops/env-compare/` | local, gitignored: adopt reports, which script uses which column and site, environment comparisons — regenerated with `pls adopt`, `pls xref`, `pls env-compare` |
+| `ops/triage/` | local, gitignored: maintenance triage notes of the person answering (P6) |
 | `traceability.json` | REQ → design → config → tests |
 | `.pls/` | gitignored: connection, exports, local files |
 

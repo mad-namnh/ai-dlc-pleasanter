@@ -155,6 +155,63 @@ class SandboxTest(unittest.TestCase):
         self.assertEqual(pls.main(["sandbox", "drop", "--name", "nam"]), 0)
         self.assertNotIn("dev-nam", json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"])
 
+    def sync(self, *extra):
+        """pls sandbox sync for nam with its output; release ids made per call, not per second (no id collision)."""
+        import contextlib
+        import io
+        from unittest import mock
+        self._n = getattr(self, "_n", 0) + 1
+        out = io.StringIO()
+        with mock.patch.object(pls, "_stamp", return_value=f"20261118-1200{self._n:02d}"), contextlib.redirect_stdout(out):
+            code = pls.main(["sandbox", "sync", "--name", "nam", *extra])
+        return code, out.getvalue()
+
+    def sandbox_ready(self) -> int:
+        self.prepare()
+        self.assertEqual(pls.main(["sandbox", "create", "--name", "nam", "--sites", "loans", "--parent", str(TH.FOLDER)]), 0)
+        boot = next((self.r / "releases").glob("B-*-dev-nam"))
+        self.assertEqual(pls.main(["bootstrap", boot.name, "--yes"]), 0)
+        sid = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))["envs"]["dev-nam"]["sites"]["loans"]["id"]
+        self.fake.sites[sid].setdefault("Body", "")      # a real getsite always returns Body; the fake's createsite does not
+        return sid
+
+    def updates(self, n):
+        return [p for p, _ in self.fake.calls[n:] if p.endswith("/updatesite")]
+
+    def test_sync_applies_git_to_the_sandbox_and_never_overwrites_unharvested_ui_edits(self):
+        # team rollout A3: refresh + apply in one command; a UI edit in the sandbox stops it (harvest first)
+        sid = self.sandbox_ready()
+        n = len(self.fake.calls)
+        code, out = self.sync("--yes")
+        self.assertEqual(code, 0, out)
+        self.assertIn("marked as applied to dev-nam", out)
+        self.assertEqual(set(self.updates(n)), {f"/api/items/{sid}/updatesite"})                # the copy only
+        n = len(self.fake.calls)
+        code, out = self.sync("--yes")                                                      # control: nothing edited
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("drifted", out)
+        self.assertEqual(set(self.updates(n)), {f"/api/items/{sid}/updatesite"})
+        plans = sorted(p.name for p in (self.r / "releases").glob("R-*-dev-nam"))
+        self.fake.sites[sid]["SiteSettings"]["Columns"] = [col("ClassC", "UIで追加")]          # edited in its UI
+        n = len(self.fake.calls)
+        code, out = self.sync("--yes")
+        self.assertNotEqual(code, 0)
+        self.assertIn("REFUSED — the environment drifted", out)
+        self.assertIn("harvest it first", out)
+        self.assertEqual(self.updates(n), [])                                                  # nothing overwritten
+        self.assertEqual(sorted(p.name for p in (self.r / "releases").glob("R-*-dev-nam")), plans)   # no plan written
+
+    def test_sync_sends_no_write_without_allow_write(self):
+        self.sandbox_ready()
+        c = json.loads((self.r / ".pls/connections.json").read_text(encoding="utf-8"))
+        c["dev"]["allow_write"] = False                                       # the sandbox uses the dev connection
+        (self.r / ".pls/connections.json").write_text(json.dumps(c), encoding="utf-8")
+        n = len(self.fake.calls)
+        with self.assertRaisesRegex(pls.Fail, "allow_write"):                # refused before any plan or write
+            self.sync("--yes")
+        self.assertEqual(self.updates(n), [])
+        self.assertEqual(list((self.r / "releases").glob("R-*-dev-nam")), [])  # no planned release left behind
+
     def set_dev_effects(self, **kw):
         envs = json.loads((self.r / "environments.json").read_text(encoding="utf-8"))
         envs["envs"]["dev"]["side_effects"] = kw

@@ -133,6 +133,24 @@ class MigrateTest(unittest.TestCase):
         self.assertEqual(pls.main(["migrate", R, "--yes"]), 0)
         self.assertEqual(len(self.bulk(n)), 1)
 
+    def test_stg_migrate_checks_the_pinned_framework_before_asking_the_person(self):
+        # ADR-0022: the pin is checked next to G4, before the confirmation and before any bulkupsert
+        import pls_framework_pin as FP
+        self.stg()
+        R = "R-20261108-01"
+        self.migration(R)
+        GT.record(self.r, "G4", "approved", "Nam", "G4 approved with the migration", [], [R], "2026-11-08")
+        p = self.r / ".claude" / "framework.lock"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"commit": "abc1234", "tag": "v0.3.0", "dirty": False}), encoding="utf-8")
+        n = len(self.fake.calls)
+        err = io.StringIO()
+        with mock.patch.object(FP, "state", return_value={"commit": "def5678", "tag": None, "dirty": False,
+                                                          "latest_tag": None}),                 mock.patch.object(pls, "_confirm", side_effect=AssertionError("asked before the pin check")),                 mock.patch.object(pls, "_confirm_write", side_effect=AssertionError("asked before the pin check")),                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(pls.main(["migrate", R]), 2)
+        self.assertIn("REFUSED: the framework checkout is def5678", err.getvalue())
+        self.assertEqual(self.bulk(n), [])
+
     def test_nothing_to_convert_on_an_empty_site_sends_nothing_and_lets_apply_run(self):
         # a data-impacting setting change (e.g. a renamed status) on a site that holds no record yet
         self.plan()

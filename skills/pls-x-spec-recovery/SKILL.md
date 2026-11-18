@@ -10,7 +10,7 @@ description: Writes the as-is specification (画面設計書, Japanese) of an ad
 
 ## Inputs
 
-- `config/<site>/` (site.json, scripts, permissions.json), the adoption report `ops/adopt/<date>-<env>-<site>.md` if there is one (not required), `ops/xref/<site>.json` (`pls xref --site <site>`).
+- `config/<site>/` (site.json, scripts, permissions.json), the adoption report `ops/adopt/<date>-<env>-<site>.md` if there is one (not required; local, gitignored), `ops/xref/<site>.json` (local and gitignored: run `pls xref --site <site>` when it is missing, e.g. in a fresh clone).
 - `pls-kb-pleasanter` for what each setting means (schema.md, D-entries).
 
 ## Output

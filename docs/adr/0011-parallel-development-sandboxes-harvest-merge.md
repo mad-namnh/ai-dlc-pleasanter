@@ -1,6 +1,6 @@
 # ADR-0011: Parallel development — sandboxes, harvest and semantic merge
 
-- **Status:** Proposed (2026-11-05) — implemented on branch `brownfield-adr` (plan BR6), waiting for Nam's review and a first team run
+- **Status:** Accepted (2026-11-18, Nam: "1a 2a 3a 4a") — option B as built; element ids not allocated (TD-72); first team run is phase 10 of the team rollout
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** I1, I2; ADR-0002 (slot ledger), ADR-0007 (creating sites); review-findings A2; plan Step 4c
@@ -18,8 +18,8 @@ How the team works today, and what that means here:
 
 ## Open questions
 
-- [ ] Are three extra copies of the actively changed sites acceptable on the customer's dev (size, licences, naming)? — *project lead / customer*.
-- [ ] Do element ids referenced elsewhere (e.g. a summary's `SourceCondition` = view `Id`) survive renumbering, or must ids be allocated like slots? — *design + probe*.
+- [x] Are three extra copies of the actively changed sites acceptable on the customer's dev (size, licences, naming)? — not asked: sandboxes run on MADLAB's dev; a customer's environments come with the customer deployment mechanism (team rollout N16).
+- [ ] Do element ids referenced elsewhere (e.g. a summary's `SourceCondition` = view `Id`) survive renumbering, or must ids be allocated like slots? — *design + probe*; until then the merge driver shows two elements with one id as a conflict (TD-72).
 - [ ] Does creating a sandbox by `createsite` + full `updatesite` (the verified bootstrap path, D26) reproduce every component the project uses, including `Htmls`/`Scripts`/`Styles` and dashboards? — *spike (plan BR3)*.
 
 ## Options
@@ -38,18 +38,20 @@ How the team works today, and what that means here:
 
 ## Decision
 
-**Option B (proposed).**
+**Option B** (accepted by Nam, 2026-11-18).
 
 1. **Environments.** Each developer gets an environment `dev-<name>` (`role: dev`, own parent folder, same principals as dev). Shared `dev` becomes the **integration** environment: it only receives releases built from merged git; manual edits there are drift and are reported.
-2. **`pls sandbox create|refresh|drop --name <name> --sites <a,b,…>`.** Creates the sites in the developer's folder (bootstrap path, ADR-0007) and deploys the current git configuration to them. `${site:x}` references make the different ids harmless. No business data is copied; tests create their own records.
+2. **`pls sandbox create|refresh|sync|drop --name <name> --sites <a,b,…>`** (`sync` added 2026-11-18, point 8). Creates the sites in the developer's folder (bootstrap path, ADR-0007) and deploys the current git configuration to them. `${site:x}` references make the different ids harmless. No business data is copied; tests create their own records.
 3. **Editing rule by component:**
    - server scripts, client scripts, HTML, CSS → edit the files in `config/`, deploy to the sandbox with `apply`;
    - columns, views, processes, notifications, standard layouts → edit in the sandbox UI, then harvest;
    - permissions → designed in P2 (`design/roles.json`), edited in `permissions.json`.
 4. **`pls harvest --env dev-<name> --site <s>`**: export → unpack → canon into the working tree on the ticket branch, refusing when the tree has uncommitted changes; prints the diff. The pull request description (Japanese summary for business reviewers) is written by the agent from the `pls` diff (I6).
 5. **Semantic merge driver** (`pls merge-site`, registered through `.gitattributes` for `config/*/site.json`): merges lists by stable keys (`ColumnName`, process `Name`, view and notification `Id`, script `Name`), as `pls diff` already compares them. A conflict remains only when both sides changed the **same** element; it is shown with both versions.
-6. **Allocation:** column slots stay in the slot ledger (ADR-0002), allocated in P2 and committed **before** building, so the first commit wins. Element ids follow the same rule (an `ids` section per site in the ledger), unless the open-question probe shows that renumbering is safe.
-7. **Daily drift check** on each sandbox and on integration dev: unharvested edits are reported early, not at release time.
+6. **Allocation:** column slots stay in the slot ledger (ADR-0002), allocated in P2 and committed **before** building, so the first commit wins. Element ids are **not** allocated (Nam, 2026-11-18, option 1a): two developers who add a view or notification with the same `Id` get a merge conflict naming both versions, and one of them renumbers by hand; an `ids` section in the ledger is built only if the open-question probe shows renumbering is unsafe (TD-72).
+7. **Daily drift check** on each sandbox and on integration dev: unharvested edits are reported early, not at release time (built as the team rollout's scheduled drift check, phase 9).
+8. **`pls sandbox sync --name <name>`** (2026-11-18, option 2a): `refresh` then `apply` in one command, refused while the sandbox holds UI edits not harvested (the plan's drift check), so they are never overwritten; harvest, commit and merging the shared branch stay with the person or the agent — `pls` does not run git.
+9. **A sandbox's releases and bootstraps stay on the developer's machine** (option 4a): the project template ignores `releases/R-*-dev-*/` and `releases/B-*-dev-*/`; they are only that sandbox's drift baseline. The sandbox entry in `environments.json` is committed. A developer who moves to another clone recreates the sandbox (`sandbox drop`, then `create`). The pattern goes by name: environment names `dev-<name>` are reserved for sandboxes, and a release id of a shared environment never ends in `-dev-<text>` (the documented form is `R-YYYYMMDD-NN-<env>`).
 
 ### Implementation notes (BR6, 2026-11-05)
 
