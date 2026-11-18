@@ -249,7 +249,26 @@ def env_conf(r: Path, env: str) -> dict:
     bad = env_values_problem(e)
     if bad:
         raise Fail(f"environments.json envs.{env}.{bad}")
+    bad = role_record_problem(r, env, e)
+    if bad:
+        raise Fail(bad)
     return e
+
+
+def role_record_problem(r: Path, env: str, e: dict) -> str | None:
+    """A role that differs from its `pls profile set role` record: the file was edited by hand. The write guard and
+    the G4 requirement read the role, so a hand edit (stg → dev) would drop G4 — refuse until the person restores the
+    file or records the role (owner only, ADR-0020). An environment without a role record (dev entries made by setup,
+    init or sandbox create) is read from the file, as before."""
+    try:
+        rec = PR.latest(r, PR.ROLE, env)
+    except GT.GateError as ex:
+        return f"the role record of {env} cannot be read ({ex})"
+    if rec and e.get("role") != rec["value"]:
+        return (f"environments.json envs.{env}.role is {e.get('role')!r} but its record says {rec['value']!r} "
+                f"(edited by hand?) — restore the file, or the G4 owner records the role: pls profile set role "
+                f"<role> --env {env} --approver <owner> --quote \"<their words>\"")
+    return None
 
 
 def env_values_problem(e: dict) -> str | None:
@@ -1177,7 +1196,7 @@ def _jobs_verified_holds(r: Path, v, env: str) -> bool:
     if not isinstance(v, dict) or not isinstance(v.get("quote"), str) or not v["quote"].strip() or v.get("env") != env:
         return False
     try:
-        GT.job_verifier(r, str(v.get("by") or ""), env, v.get("approved_by"))
+        GT.job_verifier(r, str(v.get("by") or ""), env, v.get("approved_by"), at=GT._instant(v.get("at")))
     except GT.GateError:
         return False
     return True
@@ -2945,6 +2964,9 @@ def bind_principals(r: Path, env: str, client, create: bool = False, conn: dict 
     ev = rj(r / "environments.json")
     e = ev["envs"][env]
     if create:
+        bad = role_record_problem(r, env, e)
+        if bad:
+            raise Fail(bad)
         if e.get("role") != "dev" or e.get("sandbox_of") or e.get("connection"):
             raise Fail(f"principals --create: only on a dev environment that is not a sandbox ({env}: role "
                        f"{e.get('role')!r}, sandbox of {e.get('sandbox_of')!r}) — groups are tenant-wide; on stg and "
@@ -4170,7 +4192,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("field", choices=PR.FIELDS + PR.PER_ENV, help="quote a field with a space: \"Role tests\"")
     s.add_argument("value")
     s.add_argument("--env", help="role, dev-writes: the environment in environments.json")
-    s.add_argument("--approver", required=True, help="an approver of the profile (the first Approvers value: a person it names)")
+    s.add_argument("--approver", required=True, help="an approver of the profile; Approvers, Operators and role: a G4 approver without an end date "
+                   "(the first Approvers value: the person it makes one)")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
     s = sp.add_parser("review", help="record that the person reviewed an as-is document (I4); never record it yourself")
     s.add_argument("kind", choices=["as-is"])
@@ -4324,8 +4347,11 @@ def _main(argv=None) -> int:
         try:                                             # a package is an approved release: G4 bound to its content
             GT.require(r, "G4", a.release, f"packaging {a.release}")
             g4 = GT.latest(r, "G4", release=a.release)
+            # the G4 approvers of the profile in force when G4 was given: a delegate's approval stays verifiable
+            # by the customer's verify.py after the delegation ends (ADR-0020)
             out, man = PK.build(r, a.release, plan, g4, sorted(
-                n for n, gates in GT.approvers(PR.effective_profile_text(r)).items() if "G4" in gates))
+                n for n, gates in GT.approvers(PR.effective_profile_text(r, g4["_t"]), g4["_t"].date()).items()
+                if "G4" in gates))
         except (GT.GateError, PK.PackageError, RD.DigestError) as ex:
             raise Fail(str(ex))
         wj(rel / "package-manifest.json", man)

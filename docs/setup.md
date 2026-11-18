@@ -113,6 +113,13 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - tell the agent once: *"you may use --yes for dev in this session"*;
 - **for dev only, once per project:** tell the agent that it may write to dev without asking each time. It records your words with `python pls.py profile set dev-writes on --env dev --approver <you> --quote "<your words>"`, and from then on these three commands on that dev environment run without the question; each release names the record (`apply-log.json` → `confirmed`). A sandbox needs its own record; stg and prod always ask. Withdraw it with `python pls.py profile set dev-writes off --env dev --approver <you> --quote "…"` (ADR-0024).
 
+## A team on one project: approvers, delegation, the stg key
+
+- **Approvers.** Every dev approves G1–G3 (their own tasks included); G4 stays with its owner. The owner records it once: `python pls.py profile set Approvers "G1–G3: Nam, Taro, Hana; G4: Nam" --approver Nam --quote "<their words>"`.
+- **Delegating G4** while the owner is away, always with a last day: the owner adds `; G4 until 2026-12-05: Taro` with the same command. After that day Taro's G4 is gone by itself; a release Taro approved during the delegation stays approved, also after the owner removes the delegation from the row. To end it early, the owner records the row without it; to undo one of Taro's approvals, the owner records a later G4 decision (`rejected` or `changes-requested`) for that release.
+- **Only the owner** changes Approvers, Operators or an environment's `role` (a dev or a delegate is refused), and only the owner can delegate.
+- **The stg key is the real control.** Only the owner (or the delegate, for the delegation) has a stg key with `allow_write` in their own `.pls/connections.json`; devs have no stg key at all, so `http-check --env stg` on a dev's machine has nothing to connect with. Gate records in git are evidence, not a lock (ADR-0014 TB-3).
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -127,6 +134,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `principals --create`: `not a group with a final name` | `design/roles.json` has a role that is not `principal: "Group"` or still has a placeholder `group_name`. The design is fixed first (P2). |
 | `principals --create`: `answered HTTP 403` | Your key is not a tenant administrator. Create the groups in Pleasanter instead. |
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
+| `envs.<env>.role is … but its record says …` | `environments.json` was edited by hand (e.g. stg turned into dev, which would drop G4). Restore the file from git, or the G4 owner records the role: `python pls.py profile set role <role> --env <env> --approver <owner> --quote "…"`. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |
 | `L-REF-04` from `lint` | An environment value that is a number or shorter than 6 characters is used inside longer text. Use it as the whole value of its field, or put the surrounding text into the value (`values` in `environments.json`). |
 | `L-REF-02` from `lint` | A role used in the configuration has no group id yet. Create the group and run `python pls.py principals --env dev`. |

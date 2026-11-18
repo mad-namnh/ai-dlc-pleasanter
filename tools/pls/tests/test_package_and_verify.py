@@ -86,6 +86,26 @@ class PackageTest(unittest.TestCase):
         self.assertIn("VERIFIED", out)
         self.assertIn(rec["digest"]["sha256"], out)
 
+    def test_a_delegate_g4_still_verifies_after_the_delegation_is_removed(self):
+        # the manifest lists the G4 approvers of the profile in force when G4 was given (ADR-0020), so the customer's
+        # verify.py accepts a release a delegate approved during the delegation
+        import time
+        from datetime import date, timedelta
+        import pls_profile_records as PR
+        self.stg()
+        base = PR.effective_profile_text(self.r)
+        row = GT._ROW.search(base).group(1).strip()
+        until = (date.today() + timedelta(days=7)).isoformat()
+        PR.set_field(self.r, "Approvers", f"{row}; G4 until {until}: Ken", "Nam", "Ken releases while I am away")
+        time.sleep(0.05)
+        GT.record(self.r, "G4", "approved", "Ken", "G4 approved for stg", [], [R], date.today().isoformat())
+        time.sleep(0.05)
+        PR.set_field(self.r, "Approvers", row, "Nam", "I am back")
+        rec = json.loads((self.package().parent.parent / "releases" / R / "package-manifest.json").read_text(encoding="utf-8"))
+        self.assertIn("Ken", rec["approvers"])
+        code, out = self.verify(self.unzip(self.r / "dist" / f"{R}-stg.zip"))
+        self.assertEqual(code, 0, out)
+
     def test_verify_refuses_every_altered_package(self):
         self.stg()
         self.g4()
