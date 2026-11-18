@@ -1,0 +1,69 @@
+# Framework CI: the same checks a commit needs locally (HANDOFF.md "How we work"), on every push and pull request.
+# Kept in step with tools/pls/tests/test_framework_ci_workflow.py, which fails when a command or Python version is dropped.
+name: framework-ci
+
+on:
+  push:
+    branches: [main, brownfield-adr]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read            # read-only: the jobs never push, tag or comment
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-suite:
+    name: python ${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.10"}       # minimum Python of pls (pls.py start-up check)
+          - {os: ubuntu-latest, python: "3.12"}
+          - {os: windows-latest, python: "3.12"}      # the team's machines; Git Bash runs the hook tests
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # full history: the suite's fix-commit check skips on a shallow clone
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"    # script syntax check (lint L-SCR-02) and its tests skip without node
+      - name: Python suite
+        run: python -m unittest discover -s tools/pls/tests
+
+  node-suite:
+    name: node runner suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser runner tests
+        run: node --test tools/pls/tests/test_runner.mjs
+
+  impact-rules-fresh:
+    name: impact rules up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate and compare
+        run: |
+          python tools/pls/pls_impact_rules.py --write
+          git diff --exit-code -- skills/pls-p2-solution-designer/references/impact-rules.md \
+            || { echo "::error::impact-rules.md is stale - run: python tools/pls/pls_impact_rules.py --write"; exit 1; }

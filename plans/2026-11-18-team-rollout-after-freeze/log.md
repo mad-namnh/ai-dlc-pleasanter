@@ -76,3 +76,16 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Phase 5 round 1: accept with fixes (M1 lockout on `opusplan` / `opus[1m]`, L1, L2 fixed; L3 kept). Python 3.10 not verified (interpreter removed, as in phase 4).
 - Phase 5 round 2: accept, no findings. Committed. Phase 5 done.
 - 2026-11-18: Nam continues phase 6 from another account; HANDOFF "Next" line written.
+
+## Phase 6 — CI (2026-11-18, Nam: "làm phase 6", new account)
+
+- Plan: `phase-06-ci.md` (Standard). Parent `2e869bb`. No `.github/` before.
+- Linux check before building: WSL Ubuntu 24.04, Python 3.12, clone of `2e869bb`: 810 OK (3 skipped — all "node not installed"). Hence node in every Python job.
+- OS choice (decided, reported): Ubuntu 3.10 + 3.12, Windows 3.12 (team machines; Git Bash hook tests). Actions pinned by major tag, not SHA (SHAs not verifiable offline) — limit in the report.
+- Built: `.github/workflows/framework-ci.yml`, `tools/pls/tests/test_framework_ci_workflow.py`; docs: architecture §7 portability, ADR-0016 Limits (3.10 bullet, not Decision/Status), HANDOFF.
+- Suites: Windows Python 3.12 815 OK; Python 3.10.21 (uv, `../_agent-scratch/py310`) 815 OK (2 skipped); node pass, 0 fail. New test: 5 of 5 fail on parent `2e869bb` (worktree, removed).
+- Freshness step on Linux: passes on the commit; fails (`git diff --exit-code`) when the committed impact-rules.md is stale.
+- Not verifiable here: the workflow on GitHub runners (needs Nam's push, stop point 4).
+- Review round 1 (pls-x-reviewer, sonnet, medium): accept; L1 fixed (job-scoped, comment-free checks; three mutations fail), L2 disposition (first GitHub run on Nam's push). Subagent calls 1/6, rounds 1/2.
+- Final suites: Windows 3.12 815 OK, 3.10 815 OK (2 skipped), node 16/16.
+- 2026-11-18 Nam (mid-task): "làm tuần tự cho đến hết các phase, khi gặp vấn đề cần confirm thì bạn phân tích và đưa ra quyết định hợp lý và làm tiếp, sáng mai tôi review report". Decisions from here are made by the Orchestrator and logged with their reasoning; hard stop points (push, protected paths, ADR acceptance, Pleasanter writes) stay open for Nam.

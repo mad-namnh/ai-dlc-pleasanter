@@ -150,3 +150,12 @@ The reviewed tree is committed unchanged.
 ## Phase 5, round 2 — 2026-11-18
 
 - Reviewer: `pls-x-reviewer`, sonnet, medium. `git status` before/after identical. Verdict: **accept**, no findings; M1, L1, L2 fixed, L3 kept.
+
+# Review — phase 6 (CI)
+
+## Round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, model sonnet, effort medium (Standard). Change: working tree against `2e869bb`. `git status` identical before and after the call.
+- Verdict: **accept**. Acceptance criteria 1–7 met; docs consistent.
+- L1 (Low) — the workflow test matched command text anywhere, so a commented-out command or one moved to another job passed. **Fixed:** comments dropped, each command / OS / Python version / node / fetch-depth checked inside its own job; mutations (node command commented out, `fetch-depth: 1`, Windows row removed) each fail the test; 5 of 5 fail on the parent `2e869bb`.
+- L2 (Low) — the workflow has not run on GitHub (Windows job, node 22, matrix unproven). **Disposition:** needs Nam's push (stop point 4); stated in HANDOFF and the report.
