@@ -5,6 +5,12 @@ never a branch. How to upgrade a project and how a hotfix is made: `docs/setup.m
 
 Each entry: what changes for a project, and what a project must do after `pls skills sync`.
 
+## Unreleased
+
+- **One model per project (ADR-0031):** `pls init` / `pls hook install` write `"model": "opus"` into the project's
+  `.claude/settings.json` when it names none, and a PreModelSwitch hook denies a switch to any other model. After
+  upgrading: `pls hook install` in each project (needs Claude Code v2.1.251 or later for the switch check).
+
 ## v0.3.0 — 2026-11-18
 
 First release for the team (team rollout, `plans/2026-11-18-team-rollout-after-freeze/`).

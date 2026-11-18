@@ -122,6 +122,10 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 - **What the shared repository keeps.** Everything `pls` or a gate reads on someone else's machine is committed — `tests/results/` (coverage for G3), `requirements/sources/` (`pls check p1`), `gates/`, `releases/`, `ops/onboarding/`, `ops/log/`, `ops/usage/`, `design/probes/`. Only `ops/xref/`, `ops/adopt/`, `ops/triage/` and `ops/env-compare/` stay on your machine (gitignored); after a fresh clone run `pls xref --site <site>` when a skill needs it. A project made before this: `pls skills check` reports that the template `.gitignore` changed — copy its last block into the project's `.gitignore`, then `git rm -r --cached --ignore-unmatch ops/xref ops/adopt ops/triage ops/env-compare` and commit.
 
+## The project's model
+
+Every phase of a project runs on the model its skills were evaluated on (ADR-0031): `.claude/settings.json` names it (`"model": "opus"`, written by `pls init` and `pls hook install`), and switching to another model in a session (`/model`, the picker, `/config`) is denied with the reason. The project changes its model by a commit to that file, decided by the G4 owner. Requires Claude Code v2.1.251 or later for the switch check.
+
 ## Framework versions
 
 - **The team uses release tags only.** Clone the framework once and check out a tag: `git -C ai-dlc-pleasanter fetch --tags` then `git -C ai-dlc-pleasanter checkout v0.3.0`. Never work from a branch of the framework in a project.

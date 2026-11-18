@@ -134,3 +134,19 @@ Stopped (agent-rules §1 stop point 8). Nam: "a" — drop A4, commit the sandbox
 - Low findings L1 (migrate up-front pin check untested), L2 (malformed lock values traceback), L3 (`git status` without `-uall`, skip-worktree), L4 (sync warning and http-check line untested; "HEAD" from a repo without commits), L5 (stale doc lines, setup troubleshooting for lock problems), L6 (observations) — fixed in the follow-up commit with its own review.
 
 The reviewed tree is committed unchanged.
+
+## Phase 5, round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium (Standard: a Claude Code guardrail and its settings). `git status` before/after identical. Verdict: **accept with fixes**. The reviewer's full suite did not finish in its time limit; the Orchestrator ran it (Python 3.12 808 OK, node 16/16).
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| M1 | Medium | `opusplan`, `best` or `opus[1m]` as the setting denied every model (lockout) | fixed: context suffix stripped on both sides; only family aliases and model IDs are checked, any other form is not checked (no lockout); tests |
+| L1 | Low | a model ID allowed longer IDs with the same prefix (`claude-opus-5` → `claude-opus-5-5`) | fixed: a model ID allows only itself, its context suffix and a date suffix; test |
+| L2 | Low | an empty / non-string `model` was kept and switched the check off | fixed: install writes `opus` then; test |
+| L3 | Low | install reports the pseudo-event "model" | docstring says so; kept |
+
+
+## Phase 5, round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium. `git status` before/after identical. Verdict: **accept**, no findings; M1, L1, L2 fixed, L3 kept.

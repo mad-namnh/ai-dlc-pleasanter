@@ -4077,7 +4077,7 @@ def main(argv=None) -> int:
     """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
     tool call of Claude Code and is not logged (the run log would hold every edit)."""
     args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"], ["start"]):
+    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"], ["start"], ["model"]):
         return hook(args[1])
     return LG.run(root, args, lambda: _main(args))
 
@@ -4099,7 +4099,9 @@ def hook(event_name: str, stdin=None, stdout=None) -> int:
                 stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
                 stdout.flush()
             return 0
-        if event_name == "pre":
+        if event_name == "model":
+            out = HK.model_switch(proj, event)
+        elif event_name == "pre":
             out = HK.pre(proj, event)
         elif event_name == "post":
             site = HK.edited_site(proj, event)
@@ -4285,7 +4287,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--site", help="one site (default: every site in config/)")
     s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
                       "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
-    s.add_argument("action", choices=["pre", "post", "stop", "start", "install"])
+    s.add_argument("action", choices=["pre", "post", "stop", "start", "model", "install"])
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
     s.add_argument("--env", help="p3: target environment — with --des, the built change is compared with those DES")
