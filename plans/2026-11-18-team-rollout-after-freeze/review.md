@@ -65,3 +65,9 @@ Commit 2 is the reviewed tree, unchanged.
 | N-3 | Low | ADR omits the "until" word rule; long docstring line | next commit: wording |
 
 The reviewed tree is committed unchanged.
+
+## Follow-up N-1…N-3 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium (Standard: lint and wording only). Change: working tree against `29ac7e8`. `git status` before/after identical.
+- Verdict: **accept**. Low-1 cosmetic (one blank line before a class) — left as is. N-1 test fails on the parent `29ac7e8`; the N-2 test fails on `cc8a649` (before the L-2 narrowing) — both run by the Orchestrator.
+- Note from the reviewer: the tests order records with `time.sleep(0.05)`; passed on Windows.

@@ -206,6 +206,32 @@ class StatusLinesTest(TeamProfile, unittest.TestCase):
         self.assertTrue(any("Mallory" in i["msg"] for i in GT.lint(self.r) if i["rule"] == "L-GATE-01"))
 
 
+    def des(self, did: str, who: str) -> None:
+        d = self.r / "design" / "decisions"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{did}-x.md").write_text(f"# {did}\n\nStatus: G2 approved by {who}\n", encoding="utf-8")
+
+    def ken_findings(self) -> list:
+        return [i["msg"] for i in GT.lint(self.r) if i["rule"] == "L-GATE-01" and "Ken" in i["msg"]]
+
+    def test_a_name_from_an_earlier_value_not_in_force_at_the_approval_is_a_finding(self):
+        PR.set_field(self.r, "Approvers", f"{TEAM}; G2 until {NEXT_WEEK}: Ken", "Nam", "Ken designs this week")
+        time.sleep(0.05)
+        PR.set_field(self.r, "Approvers", TEAM, "Nam", "Ken's delegation ends")
+        time.sleep(0.05)
+        self.des("DES-002", "Ken")
+        GT.record(self.r, "G2", "approved", "Nam", "approved", ["DES-002"], [], TODAY.isoformat())
+        self.assertTrue(self.ken_findings())
+
+    def test_a_holder_of_another_gate_is_a_finding(self):
+        PR.set_field(self.r, "Approvers", f"{TEAM}; G3 until {NEXT_WEEK}: Ken", "Nam", "Ken verifies this week")
+        time.sleep(0.05)
+        self.des("DES-003", "Ken")
+        GT.record(self.r, "G2", "approved", "Nam", "approved", ["DES-003"], [], TODAY.isoformat())
+        time.sleep(0.05)
+        PR.set_field(self.r, "Approvers", TEAM, "Nam", "Ken's delegation ends")
+        self.assertTrue(self.ken_findings())
+
 class NoOwnerTest(unittest.TestCase):
     tearDown = TP.PlsTest.tearDown
 
