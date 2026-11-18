@@ -16,12 +16,14 @@
 | 4 version pinning, hotfix, changelog | done (N23, ADR-0022 accepted); released `v0.3.0` |
 | 5 one model per project | done (N24, ADR-0031) |
 | 6 CI | done (`bb94661`): `.github/workflows/framework-ci.yml`; runs first on Nam's next push |
-| 7 `pls status`, golden path, docs | see the rollout `log.md` |
-| 8 evals, 9 drift job, 10 trial | see the rollout `log.md` |
+| 7 `pls status`, golden path, docs | done (`a3cd70d`): `pls status`, `docs/golden-path.md`, lifecycle 0.33 |
+| 8 evals | partly done (`65301a7`): lifecycle 0.33 k/k on 001–009; P2 0.14 3/3 on both cases; P1 0.8 001 3/3, **002 2/3**, 003 one run. Not run: P1 003 runs 2–3, k = 1 of onboarding, P3 ×2, P5 (two usage limits in the night) |
+| 9 drift job | not started |
+| 10 trial | Nam (two accounts), then one dev |
 
 **Nam (2026-11-18, mid phase 6):** "làm tuần tự cho đến hết các phase, khi gặp vấn đề cần confirm thì bạn phân tích và đưa ra quyết định hợp lý và làm tiếp, sáng mai tôi review report" — the Orchestrator decides and logs each decision with its reasoning; hard stop points (push, protected paths, ADR acceptance, Pleasanter writes) stay open for Nam.
 
-**Open for Nam:** push `brownfield-adr` (CI runs then) and decide when to tag the next `v0.3.x`; required checks on `main` (GitHub setting); the patch `plans/2026-11-18-team-rollout-after-freeze/proposed-templates-project-CLAUDE-layout.patch` (and `proposed-templates-project-CLAUDE.md.patch` if not applied yet); the waiting lists of 2026-11-10 and 2026-11-13 in the history file were not re-checked in this clean-up. Scratch worktrees under `../_agent-scratch/` can be removed (`git worktree prune` after deleting them). Untracked `plans/2026-11-12-permission-allow-list/` and `plans/2026-11-16-d42-screen-check/` are Nam's.
+**Open for Nam:** the decisions in the overnight report of 2026-11-19 (P1 0.9 text, rubric updates, runner command list — `plans/2026-11-18-team-rollout-after-freeze/proposed-eval-runner-local-commands.patch`, TD-75); push `brownfield-adr` (CI runs then) and decide when to tag the next `v0.3.x`; required checks on `main` (GitHub setting); the patch `plans/2026-11-18-team-rollout-after-freeze/proposed-templates-project-CLAUDE-layout.patch` (and `proposed-templates-project-CLAUDE.md.patch` if not applied yet); the waiting lists of 2026-11-10 and 2026-11-13 in the history file were not re-checked in this clean-up. Scratch worktrees under `../_agent-scratch/` can be removed (`git worktree prune` after deleting them). Untracked `plans/2026-11-12-permission-allow-list/` and `plans/2026-11-16-d42-screen-check/` are Nam's.
 
 **Recent framework changes (newest first; detail in the plan folders):**
 **Build checked against its DES at G3 (2026-11-18, TD-67 closed):** `pls check p3 --env <target> --des DES-…` compares the built change (git against the last release applied on the target before the DES were approved at G2) with the DES: classification, an impact row per `classify` rule, an `unverified` entry (new DES field: probe or decision record) per `pls scope` component. `pls gate G3` needs `--env` and `--item DES-…` and refuses on findings unless `--accept-findings`; G2 records bind the DES content (an edited DES needs G2 again; older G2 records ask for it once), and `release-plan` refuses a G3 recorded for another target. P2 0.14, P3 0.11, P4 0.10, lifecycle 0.31 — evaluations pending. `plans/2026-11-18-td67-des-agreement-at-g3/`.
