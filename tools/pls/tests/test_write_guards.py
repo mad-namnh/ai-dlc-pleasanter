@@ -22,8 +22,9 @@ import pls  # noqa: E402
 import test_http as TH  # noqa: E402
 
 WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals",       # principals: only with --create (ADR-0017)
-          "test-users"}                                                        # ADR-0018, ADR-0019
-NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest", "sandbox"}
+          "test-users",                                                        # ADR-0018, ADR-0019
+          "sandbox"}                                                           # sandbox sync runs apply (ADR-0011)
+NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
          "skills", "gate", "step", "usage", "spec-skeleton", "jobs-verified", "profile", "review", "package", "scope",
@@ -115,6 +116,20 @@ class StaticTest(unittest.TestCase):
                         calls[attr].add(short)
         for helper, allowed in {**CLIENT_WRITERS, **WRITE_RUNNERS}.items():
             self.assertEqual(calls[helper] - allowed, set(), f"{helper} called from a new place")
+
+    def test_a_writing_command_run_from_inside_pls_is_known(self):
+        # main(["apply", …]) inside pls reaches the writes through the command's own guards; a new such place is a
+        # new write path and must be classified (sandbox sync, ADR-0011)
+        found = set()
+        for m in modules():
+            for name, fn in functions(m):
+                for node in ast.walk(fn):
+                    if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "main" and node.args:
+                        arg = node.args[0]
+                        first = arg.left if isinstance(arg, ast.BinOp) else arg
+                        if isinstance(first, ast.List) and first.elts and text_of(first.elts[0]) in WRITES:
+                            found.add((m.stem, name, text_of(first.elts[0])))
+        self.assertEqual(found, {("pls", "sandbox_sync", "apply")})
 
 
 class DynamicTest(unittest.TestCase):

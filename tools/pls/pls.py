@@ -2376,8 +2376,9 @@ def sandbox_sites(e: dict) -> dict:
     return {k: v for k, v in e["sites"].items() if v.get("sandbox")}
 
 
-def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> int:
-    """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written)."""
+def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> tuple[int, str]:
+    """Plan a release of the current git configuration to the sandbox sites (exports read, nothing written).
+    Returns the exit code and the release id."""
     import pls_http as H
     env = f"dev-{name}"
     e = env_conf(r, env)
@@ -2407,7 +2408,25 @@ def sandbox_refresh(r: Path, name: str, allow_shared_writes: bool = False) -> in
         print(f"next: pls apply {release}   (asks for confirmation)")
     else:
         print(f"{env}: if the sandbox drifted, harvest it first: pls harvest --env {env} --site <site>")
-    return code
+    return code, release
+
+
+def sandbox_sync(r: Path, name: str, allow_shared_writes: bool = False, yes: bool = False) -> int:
+    """Bring the sandbox up to the current git configuration in one command (team rollout A3): `refresh` plans the
+    release — refused when the sandbox holds UI edits not harvested yet (drift), so they are never overwritten — then
+    `apply` writes it with its own confirmation (typed release id, --yes, or the sandbox's standing permission). Git
+    stays with the person: harvest, commit and merging the shared branch are not done here. Writes not allowed are
+    refused before the plan, so a refused sync leaves no planned release behind."""
+    import pls_http as H
+    env = f"dev-{name}"
+    try:
+        H.assert_writable(env_conf(r, env), H.load_connection(r, env), env)
+    except H.TransportError as ex:
+        raise Fail(str(ex))
+    code, release = sandbox_refresh(r, name, allow_shared_writes)
+    if code != 0:
+        return code
+    return main(["apply", release] + (["--yes"] if yes else []))
 
 
 def sandbox_drop(r: Path, name: str) -> int:
@@ -4146,8 +4165,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reason")
     s.add_argument("--by", help="the person who decided")
     s.add_argument("--quote", help="the person's own words for --keep / --ref (never a relayed or paraphrased approval)")
-    s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | drop")
-    s.add_argument("action", choices=["create", "refresh", "drop"])
+    s = sp.add_parser("sandbox", help="per-developer copies of sites on dev (ADR-0011): create | refresh | sync | drop")
+    s.add_argument("action", choices=["create", "refresh", "sync", "drop"],
+                   help="sync = refresh, then apply (refused while the sandbox holds UI edits not harvested)")
+    s.add_argument("--yes", action="store_true", help="sync: the person's confirmation of the apply, given on their instruction")
     s.add_argument("--name", required=True, help="developer name; the environment is dev-<name>")
     s.add_argument("--sites", help="create: logical sites to copy, comma separated")
     s.add_argument("--parent", type=int, help="create: id of the developer's folder")
@@ -4388,7 +4409,11 @@ def _main(argv=None) -> int:
                 raise Fail("sandbox create needs --sites and --parent (the developer's folder id)")
             return sandbox_create(r, a.name, [x.strip() for x in a.sites.split(",") if x.strip()], a.parent,
                                   allow_shared_writes=a.allow_shared_writes)
-        return sandbox_refresh(r, a.name, a.allow_shared_writes) if a.action == "refresh" else sandbox_drop(r, a.name)
+        if a.action == "refresh":
+            return sandbox_refresh(r, a.name, a.allow_shared_writes)[0]
+        if a.action == "sync":
+            return sandbox_sync(r, a.name, a.allow_shared_writes, a.yes)
+        return sandbox_drop(r, a.name)
 
     if a.cmd == "harvest":
         return harvest(r, a.env, a.site)

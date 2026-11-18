@@ -16,3 +16,8 @@ ops/xref/
 ops/adopt/
 ops/triage/
 ops/env-compare/
+
+# A developer's sandbox releases and bootstraps (environment dev-<name>, ADR-0011): the drift baseline of that
+# sandbox only, on that developer's machine. Releases of the shared environments stay in git.
+releases/R-*-dev-*/
+releases/B-*-dev-*/

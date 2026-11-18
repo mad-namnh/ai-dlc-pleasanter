@@ -26,6 +26,7 @@ Source: readiness review in the session of 2026-11-17/18 (criteria: stable, team
 | N17 | Automation group A accepted: scheduled drift check (A1), version check at session start (A2), one sandbox sync command (A3), one command for `principals --create` + `test-users` (A4) |
 | N18 | Group B stays manual for now: 同期 on the サマリ tab (ADR-0028 not built), screen save after a JSON-link deploy (D40), app version from `/versions` |
 | N19 | The drift check runs on the **personal machine of the person doing the task**; its purpose is to tell them the UI was edited and help decide whether to bring the UI change into git |
+| N22 | Phase 3 (Nam: "1a 2a 3a 4a"): ADR-0011 accepted, element ids not allocated (TD-72); `pls sandbox sync` = refresh + apply, git stays with the person; a sandbox's releases and bootstraps gitignored. A4 (`principals --create --test-users`) **dropped** after review (Nam: "a"): its one confirmation could not list every change before the test-users plan exists — the two commands stay separate, each with its own listing confirmation |
 | N21 | Phase 2 correction of N11 (Nam: "chon a"): `tests/results/` and `requirements/sources/` stay in git (pls coverage and pls check p1 read them on the approver's machine), and so do `ops/log/`, `ops/usage/`, `design/probes/` (audit, design evidence); only `ops/xref/`, `ops/adopt/`, `ops/triage/`, `ops/env-compare/` are gitignored |
 | N20 | A dev's machine checks the dev sites only (shared + own sandbox); stg drift runs with the same job on Nam's machine (stg key, N12). Devs get no stg key, not even read-only |
 
@@ -68,7 +69,7 @@ Source: readiness review in the session of 2026-11-17/18 (criteria: stable, team
 - ADR-0011 decided (Nam). Golden path: `sandbox create` → work → `harvest` → merge to the shared branch → release to the shared dev sites by one person at a time.
 - The slot ledger and drift baseline of the shared sites live only in the shared repository.
 - A3: one command (`pls sandbox sync`) for refresh → harvest → merge, stopping at the first refusal.
-- A4: one command for Nam after G2 that runs `principals --create` then `test-users` under one typed confirmation (N15).
+- ~~A4: one command for Nam after G2 that runs `principals --create` then `test-users` under one typed confirmation (N15).~~ Dropped (N22): the two commands stay separate.
 - Covered by the two-account trial (phase 10) before a real dev uses it.
 
 ### 4. Version pinning, hotfix, changelog

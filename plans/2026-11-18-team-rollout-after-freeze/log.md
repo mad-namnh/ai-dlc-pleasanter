@@ -46,3 +46,13 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Asked Nam with options; Nam: "chon a" → N21 (plan updated).
 - Phase 2 built: template `.gitignore` (four folders), test `test_project_gitignore_keeps_what_pls_reads.py` (fails before the change: the four folders not ignored), architecture §3.2, setup.md, skills P6 0.4 / lifecycle 0.32 / spec-recovery 0.5, layout patch for the protected template. Suites: Python 3.12 777 OK, 3.10 777 OK (2 skipped), node 16/16; with the patch applied 777 OK. Review: accept with fixes (`review.md` "Phase 2").
 - P2-2 (Light, wording): onboarding 0.8 — adopt report local; Python 777 OK, node 16/16; no review (Light). Phase 2 done; pending Nam: apply proposed-templates-project-CLAUDE-layout.patch.
+
+## Phase 3 — per-developer sandboxes (2026-11-18, Nam: "bat dau phase 3")
+
+- Read ADR-0011 and `sandbox_*`, `harvest`, `principals`, `test-users`: create / refresh / drop / harvest / merge built; refresh's release plan already refuses unharvested sandbox edits (drift). Asked four decisions; Nam: "1a 2a 3a 4a" → N22.
+- Built: `sandbox sync` (refresh + apply), `principals --create --test-users` (one confirmation), template ignores `releases/R-*-dev-*/`, `releases/B-*-dev-*/`; ADR-0011 accepted; TD-72; architecture, setup, skills lifecycle 0.33 / script-engineer 0.7 / config-builder 0.12.
+- New tests fail on the parent `00271c0` (sync, A4, gitignore: 3 of 3), pass after.
+- Round 1 of phase 3: accept with fixes (H1, H2, M1 fixed; L1–L3 dispositions in review.md). Suites: 3.12 782 OK, 3.10 782 OK (2 skipped), node 16/16; the 5 new tests fail on the parent 00271c0.
+- Phase 3 round 2: accept with fixes; R2-1 High open in the combined principals/test-users confirmation → stop point 8; asked Nam. Uncommitted.
+- Nam: "a" → A4 dropped (code, tests, docs reverted to HEAD for principals / test-users; lifecycle skill back to 0.32); R2-3, R2-5 fixed; R2-4 kept as documentation.
+- Final: suites 3.12 780 OK, 3.10 780 OK (2 skipped), node 16/16; sync tests fail on parent 00271c0. Committed. Phase 3 done.

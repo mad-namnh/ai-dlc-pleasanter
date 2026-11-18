@@ -82,3 +82,30 @@ The reviewed tree is committed unchanged.
 | P2-1 | Medium | setup.md says `pls skills check` reports a changed template `.gitignore` — unverified | verified by code: `_template_hashes` hashes every file of `templates/project` (`rglob("*")` includes dotfiles) and the check reports `templates/project/<file>: changed` against the lock (`tools/pls/pls.py:2667-2681`); no change |
 | P2-2 | Low | `pls-x-onboarding` step 3 still reads like the adopt report is committed | next Light commit: "(local, gitignored)", version 0.8 |
 | P2-3 | Low | template `CLAUDE.md` layout table contradicts `.gitignore` until Nam applies the patch | pending Nam; `git apply --check` OK and full suite with the patch applied 777 OK (`../_agent-scratch/p2-tpl`) |
+
+## Phase 3, round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, opus, high. Change: working tree against `00271c0`. `git status` before/after identical. Verdict: **accept with fixes**.
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| H1 | High | the sync drift test passed through a release-id collision (ids per second), not the drift check | fixed: `_stamp` patched per call; asserts the drift refusal text, no new plan, no updatesite; control sync without an edit applies (exit 0); found and fixed on the way: the fake's createsite site had no `Body` (a real getsite always has one), which made every second plan a false drift |
+| H2 | High | the one confirmation of `principals --create --test-users` listed nothing and came before several refusals (ADR-0017 rules 2, 4; ADR-0018) | fixed: `test_users_guards` (dev, sandbox, roles, allow_write, connections file) run first; the confirmation of `bind_principals` lists the groups and the test-user logins; when no group is missing, test-users' own listing confirmation is the one; terminal test: one prompt, names shown, wrong answer writes nothing, a test-users refusal comes before the prompt |
+| M1 | Medium | `sandbox` classified as a network read although `sync` writes | fixed: `sandbox` in WRITES / `pls_log.WRITING`; static lock for `main([...])` of a writing command inside pls; `sync` with `allow_write` off sends nothing |
+| L1 | Low | ignore pattern by name; prod release not in the test | ADR-0011 point 9 reserves `dev-<name>` for sandboxes; prod release added to KEPT |
+| L2 | Low | test-users skipped silently when principals are missing; wrong code comment | fixed: message "test-users not run: … missing"; comment corrected |
+| L3 | Low | TD-72 deadline is a condition | kept: same form as the other condition deadlines |
+
+## Phase 3, round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, opus, high (resumed once after a usage limit). `git status` before/after identical. Verdict: **accept with fixes**. Round 1: H1, M1, L2 fixed; H2 partly fixed.
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| R2-1 | High | the one confirmation of `principals --create --test-users` lists groups and user logins but not every change: joins of existing groups (with other members), key issue, `keys.<role>` in connections.json (ADR-0019 "listing every change") | Nam: "a" — A4 dropped: the code, tests and docs of `principals --create --test-users` removed; the two commands keep their own listing confirmations |
+| R2-2 | Medium | refusals of `TU.plan_roles` that need no write (keys reference, login lookup, password / key files, group shape) come after the prompt and after groups are created; `TestUsersError` / `TransportError` outside the `try` | gone with A4 |
+| R2-3 | Low | the sync-without-allow_write test does not assert the reason; a refused sync leaves a planned sandbox release | fixed: `sandbox_sync` checks `assert_writable` before the plan; the test asserts the `allow_write` refusal and that no release folder is left |
+| R2-4 | Low | `dev-<name>` reserved for sandboxes only by documentation | kept as documentation (ADR-0011 point 9); a shared environment named `dev-<x>` is not expected |
+| R2-5 | Low | ADR-0011 point 2 still lists create / refresh / drop | fixed |
+
+Stopped (agent-rules §1 stop point 8). Nam: "a" — drop A4, commit the sandbox part with the Low fixes.
