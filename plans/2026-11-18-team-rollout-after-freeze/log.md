@@ -114,3 +114,5 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - P2 0.14: 001 3/3, 002 3/3 (rubric item 4 predates ADR-0028, graded met; proposal). Orchestrator relay error on r-80e5 (xref relayed before running it there) — corrected, noted in the result.
 - P1 0.8: 001 3/3, 002 2/3 (r-cffb FAIL: 対応回数 not protected by an AC/derived REQ), 003 1 run PASS (note), runs 2–3 not run. Found TD-75 (interview source list split at the comma → `check p1` findings). Second usage limit ~08:00.
 - Not run in phase 8: P1 case 003 runs 2–3; k = 1 evals of onboarding, P3 config-builder, P3 script-engineer, P5 — stopped for the usage limits and the morning review.
+- Eval results committed `65301a7`; HANDOFF and runner-list patch `9e0cd04`. Phase 9 not started (stopped for the morning review and the usage limits). Subagent calls: reviewers 3 (phase 6: 1, phase 7: 2), eval runners 46 incl. resumes, person-role 1.
+- REPORT SENT (2026-11-19 overnight report).
