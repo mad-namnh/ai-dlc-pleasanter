@@ -100,3 +100,17 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Suites before review round 1: 3.12 and 3.10 failed only `test_every_subcommand_is_classified` (new command not classified) → `status` added to LOCAL in `test_write_guards.py`. New status test fails on parent `bb94661` (module missing).
 - Review round 1 (sonnet, medium): accept with fixes — H1 recovery states, M1 tests, L1 limit; fixed. Suites after the fix: 3.12 826 OK, 3.10 826 OK (2 skipped), node 16/16.
 - Review round 2 (sonnet, medium): accept, two Lows kept (review.md). Subagent calls on phase 7: 2/6, rounds 2/2.
+- Phase 7 committed `a3cd70d`.
+
+## Phase 8 — evals (2026-11-18/19, under Nam's "decide and continue")
+
+- Decision (Orchestrator, Nam delegated decisions): run the with-skill arm only, as phase 8 lists — k = 3 for lifecycle 0.33 (cases 001–009; 010/011 are selection cases, a separate batch kind, not run), P1 0.8 (001, 002; 003 interview last), P2 0.14 (001, 002); k = 1 for onboarding, P3 config-builder, script-engineer, P5. No baseline / selection batch (ADR-0030 requires Nam per batch; not needed by the plan).
+- Runner model: inherited, claude-opus-5-5 (ADR-0031 project model).
+- Relay rule applied: `pls status`, `check p1`, `step` refused — they are not on the runner's local-only list (finding: the list predates `pls status`; proposal for Nam).
+- Lifecycle 0.33 rounds 1–3 graded (scratchpad notes → result file): 001–007, 009 3/3 PASS; 008 2/3 — run 3 (r-2577) wrote `gates/` records with invented quotes to build the premise (Must-not). Case 008 input clarified (gate records and `.pls/connections.json` stay premises; setup.md note); 008 rerun ×3 started (r-bc1a, …).
+- P1 / P2 round 1 started (r-99e8, r-03c4, r-1693, r-1e30) from templates built under `../_agent-scratch/tpl/` from `pls-demo-inquiry` commits per each case's setup.md (`539b61f`, `b70c810`, `3cf2c45`, `021a0d0`, rollback payloads of R-20261105-01 / -05 unpacked).
+- 2026-11-19 ~03:00: usage limit hit (5-hour); runs resumed after reset.
+- Lifecycle 0.33 batch done (k = 3 on 001–009, 008 rerun ×3 on the clarified input): `evals/results/pls-x-lifecycle/2026-11-19-v033.md`.
+- P2 0.14: 001 3/3, 002 3/3 (rubric item 4 predates ADR-0028, graded met; proposal). Orchestrator relay error on r-80e5 (xref relayed before running it there) — corrected, noted in the result.
+- P1 0.8: 001 3/3, 002 2/3 (r-cffb FAIL: 対応回数 not protected by an AC/derived REQ), 003 1 run PASS (note), runs 2–3 not run. Found TD-75 (interview source list split at the comma → `check p1` findings). Second usage limit ~08:00.
+- Not run in phase 8: P1 case 003 runs 2–3; k = 1 evals of onboarding, P3 config-builder, P3 script-engineer, P5 — stopped for the usage limits and the morning review.
