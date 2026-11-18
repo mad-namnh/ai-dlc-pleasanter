@@ -16,6 +16,7 @@ of the wrong shape refuses every gate check until a person repairs or removes it
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -36,6 +37,15 @@ _G4_ROW = re.compile(r"^\|\s*G4\s*\|\s*approved", re.M)
 
 class GateError(Exception):
     pass
+
+
+def des_digest(root: Path, did: str) -> str | None:
+    """sha256 of design/decisions/<did>-*.md (or <did>.md), line ends as LF (a checkout with CRLF is the same design);
+    None when there is not exactly one such file."""
+    d = root / "design" / "decisions"
+    hits = [p for p in (d.iterdir() if d.is_dir() else []) if p.is_file()
+            and re.fullmatch(rf"{re.escape(did)}(?:-.*)?\.md", p.name)]
+    return hashlib.sha256(hits[0].read_bytes().replace(b"\r\n", b"\n")).hexdigest() if len(hits) == 1 else None
 
 
 def approvers(profile_text: str) -> dict[str, set[str]]:
@@ -167,6 +177,11 @@ def _record_problem(g, now: datetime) -> str | None:
         return f"decision {g.get('decision')!r} is not one of {', '.join(DECISIONS)}"
     if not isinstance(g.get("approver"), str) or not g["approver"].strip():
         return "approver is not a name"
+    bd = g.get("bound_des", {})
+    if not isinstance(bd, dict) or not all(isinstance(v, (str, type(None))) for v in bd.values()):
+        return "bound_des is not a map of DES id → sha256"
+    if not isinstance(g.get("env", ""), str):
+        return "env is not an environment name"
     for k in ("items", "releases"):        # a string would match ids by substring ("R-30" contains "R-3")
         v = g.get(k, [])
         if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
@@ -232,8 +247,11 @@ def record(root: Path, gate: str, decision: str, approver: str, quote: str, item
     at = now.isoformat(timespec="microseconds")
     rec = {"gate": gate, "decision": decision, "approver": who, "date": today, "at": at,
            "quote": quote.strip(), "items": items, "releases": releases, "recorded_by": "pls gate"}
-    if extra:                    # G1 / G2 findings of pls check the approver accepted, with the reason (ADR-0029)
-        rec.update({k: v for k, v in extra.items() if k in ("accepted_findings", "accept_reason")})
+    if extra:     # G1 / G2 / G3 findings of pls check the approver accepted, with the reason; G3 also its target (ADR-0029)
+        rec.update({k: v for k, v in extra.items() if k in ("accepted_findings", "accept_reason", "env")})
+    if gate == "G2" and decision == "approved":
+        # what the person approved: the content of each DES, so a later edit is not taken for the approved design
+        rec["bound_des"] = {i: des_digest(root, i) for i in items}
     if gate == "G4" and decision == "approved":
         # what the person approved: the content of each planned release (unplanned ids stay unbound → apply refuses)
         bound = {}

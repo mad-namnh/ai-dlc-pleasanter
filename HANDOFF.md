@@ -3,6 +3,7 @@
 > Next session may run on another Claude account: everything needed is in the repositories; nothing lives only in the chat.
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
+**Build checked against its DES at G3 (2026-11-18, TD-67 closed):** `pls check p3 --env <target> --des DES-…` compares the built change (git against the last release applied on the target before the DES were approved at G2) with the DES: classification, an impact row per `classify` rule, an `unverified` entry (new DES field: probe or decision record) per `pls scope` component. `pls gate G3` needs `--env` and `--item DES-…` and refuses on findings unless `--accept-findings`; G2 records bind the DES content (an edited DES needs G2 again; older G2 records ask for it once), and `release-plan` refuses a G3 recorded for another target. P2 0.14, P3 0.11, P4 0.10, lifecycle 0.31 — evaluations pending. `plans/2026-11-18-td67-des-agreement-at-g3/`.
 
 **Summary sync on the screen (2026-11-17):** Nam on MADLAB dev 1.5.2.0: a summary added by a site save left the parent at 0; the サマリ tab's synchronise button recalculated it (30). Summaries are on the tab サマリ, not 集計 (grid aggregation) — names fixed in classify, impact rules, KB D16, ADR-0028. `plans/2026-11-17-summary-sync-screen-check/`.
 
@@ -10,7 +11,7 @@
 
 **Project hooks (2026-11-17, ADR-0029 C):** `pls init` writes `.claude/settings.json` hooks (`pls hook pre|post|stop`): file edits under `releases/`, `gates/`, `ops/log/`, `.pls/` (and the hooks' own settings) denied, the person asked before `pls … --yes`, lint after a config edit, check findings shown at stop. Older projects' REQ / DES need front matter (TD-68). Existing projects: `python pls.py hook install`. `plans/2026-11-16-deterministic-phase-checks/`.
 
-**Phase checks (2026-11-16, ADR-0029 B):** `pls check p1|p2|p3`; REQ / DES front matter (templates); `pls gate G1` / `G2` refuse while a finding names an approved item, unless `--accept-findings "<reason>"`. Not yet: agreement of a DES with the built change (TD-67). Evals of P1 / P2 / P3 / lifecycle pending (approved by Nam). `plans/2026-11-16-deterministic-phase-checks/`.
+**Phase checks (2026-11-16, ADR-0029 B):** `pls check p1|p2|p3`; REQ / DES front matter (templates); `pls gate G1` / `G2` refuse while a finding names an approved item, unless `--accept-findings "<reason>"`. Agreement of a DES with the built change: at G3 since 2026-11-18 (TD-67). Evals of P1 / P2 / P3 / lifecycle pending (approved by Nam). `plans/2026-11-16-deterministic-phase-checks/`.
 
 **KB probes change their own settings (2026-11-16, ADR-0027 built):** probe steps `settings` / `settings_partial` on the probe's own sites, `$admin_uid` / `$group_<role>` in probe site settings, disabled notifications and reminders (example.invalid only, no credentials; guarded). No probe uses them yet — WS3c / notification probes next, run on dev by a person. `plans/2026-11-16-probe-settings-steps/`.
 

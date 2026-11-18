@@ -15,7 +15,8 @@ Commands:
   unpack   <export.json> --env E --site S       export → config/S (IDs and env values → references)
   pack     --env E --site S [--out F]           config/S → updatesite payload for env E (mail address settings excepted)
   canon    --site S                             apply Pleasanter's save-time normalisation to config/S (D8)
-  gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4)
+  gate G1..G4 --approver N --quote Q            record a gate decision the person stated (I4); G3 also --env E and
+                                                --item DES-… (the designs the release ships, compared with the build)
   profile set FIELD VALUE [--env E] --approver N --quote Q
                                                 set Approvers / Operators / Origin / Role tests (CLAUDE.md), role (environments.json)
                                                 or dev-writes on|off (standing permission for apply / bootstrap /
@@ -25,7 +26,8 @@ Commands:
   hook install                                  add the project's Claude Code hooks to .claude/settings.json (pre / post / stop
                                                 run from there; ADR-0029)
   check p1|p2|p3                                REQ / DES front matter and body complete (p1, p2); p3 = lint, scope and
-                                                traceability config paths; exit 1 on findings (ADR-0029)
+                                                traceability config paths, and with --env E --des DES-… the build against
+                                                those DES; exit 1 on findings (ADR-0029)
   lint                                          rule catalogue: the rules are listed in docs/architecture.md §7.2 (kept equal to the code by a test)
   diff     <export.json> --env E --site S       export (live) vs config (git HEAD), deterministic
   drift    <export.json> --env E --site S [--baseline P]
@@ -86,6 +88,7 @@ import pls_kbverify as KV                                   # noqa: E402 — exe
 import pls_kbverify_guarded as KG                           # noqa: E402 — script and test-user probes (ADR-0025)
 import pls_gate as GT                                       # noqa: E402 — gate decisions as records (I4)
 import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
+import pls_des_agreement as DA                              # noqa: E402 — built change vs its DES (ADR-0029 B)
 import pls_hooks as HK                                      # noqa: E402 — Claude Code hooks of a project (ADR-0029 C)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
@@ -1279,13 +1282,40 @@ def baseline(r: Path, e: dict, env: str, site: str, explicit: str | None) -> tup
         applied = releases_for(r, env, site, "applied")
         if not applied:
             return read_tree(r / "config" / site), "git HEAD (no applied release recorded for this env/site)"
-        rel_dir, rel_plan = applied[-1]
-        src = rel_dir / ((rel_plan.get("per_site") or {}).get(site, {}).get("payload_file") or "payload.json")
-        live_f = rel_dir / f"live-{site}.json"
-        if rel_plan.get("status") == "applied-differs" and live_f.exists():
-            src = live_f       # what the environment really holds after that release (S2)
+        src = release_source(*applied[-1], site)
     pl = rj(src)
     return payload_model(pl, e, site), str(src.relative_to(r) if src.is_absolute() and r in src.parents else src)
+
+
+def release_source(rel_dir: Path, rel_plan: dict, site: str) -> Path:
+    """The file that holds what an applied release gave the site: its payload, or what the environment really held
+    after it when the read-back differed (S2)."""
+    src = rel_dir / ((rel_plan.get("per_site") or {}).get(site, {}).get("payload_file") or "payload.json")
+    live_f = rel_dir / f"live-{site}.json"
+    return live_f if rel_plan.get("status") == "applied-differs" and live_f.exists() else src
+
+
+def des_agreement(r: Path, env: str, des_ids: list[str], releases: list[str]) -> list[dict]:
+    """Findings of the built change against the named DES (ADR-0029 B, TD-67): per site of config/, the change from the
+    last release applied on `env` before the earliest G2 approval of these DES (never one of `releases`, the releases a
+    G3 approves) to git, classified, and the components `pls scope` reports — compared by pls_des_agreement."""
+    e = env_conf(r, env)
+    des, since, out = DA.designs(r, des_ids)
+    cfg = r / "config"
+    for d in sorted(cfg.iterdir() if cfg.is_dir() else []):
+        if not (d / "site.json").exists():
+            continue
+        git = read_tree(d)
+        before = [x for x in releases_for(r, env, d.name, "applied") if x[1].get("release") not in releases
+                  and (since is None or _applied_key(x[1].get("applied_at")) < since.timestamp())]
+        change, label = None, None
+        if before:
+            src = release_source(*before[-1], d.name)
+            label = f"{before[-1][1].get('release')} on {env}"
+            diffs = flat_diff(same_meta(payload_model(rj(src), e, d.name), git), git)
+            change = classify(diffs) if diffs else None
+        out += DA.compare(r, d.name, change, label, SC.unverified(git["settings"] | git["scripts"]), des)
+    return out
 
 
 def _now() -> str:
@@ -1696,6 +1726,10 @@ def release_plan(r: Path, env: str, release: str, exports: dict, accept_drift: s
     if e.get("role") != "dev":
         try:
             GT.require(r, "G3", release, f"a release plan for {env}")
+            g3_env = (GT.latest(r, "G3", release=release) or {}).get("env")
+            if g3_env and g3_env != env:      # the build was compared with the designs for another target
+                raise GT.GateError(f"the G3 approval of {release} compared the build for {g3_env}, not {env} — "
+                                   f"record G3 again with --env {env}")
         except GT.GateError as ex:
             gate_error = str(ex)
     results, failed = {}, False
@@ -4124,9 +4158,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--decision", choices=GT.DECISIONS, default="approved")
     s.add_argument("--approver", required=True, help="name as listed in the profile row Approvers")
     s.add_argument("--quote", required=True, help="the person's own words for this decision")
-    s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id (repeat)")
-    s.add_argument("--accept-findings", metavar="REASON", help="G1/G2: approve although pls check p1/p2 reports findings "
-                   "for these items; the findings and the reason are kept in the gate record (ADR-0029)")
+    s.add_argument("--item", action="append", default=[], help="G1: REQ id, G2: DES id, G3: DES id the release ships (repeat)")
+    s.add_argument("--env", help="G3: the release's target environment — its build is compared with the --item DES")
+    s.add_argument("--accept-findings", metavar="REASON", help="G1/G2/G3: approve although pls check p1/p2/p3 reports "
+                   "findings for these items; the findings and the reason are kept in the gate record (ADR-0029)")
     s.add_argument("--release", action="append", default=[], help="G3/G4: release id; G4 also a bootstrap id (repeat)")
     s = sp.add_parser("package", help="zip a G4-approved release for the customer's operator, with a stdlib verify.py (ADR-0003)")
     s.add_argument("release")
@@ -4170,6 +4205,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("action", choices=["pre", "post", "stop", "install"])
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
+    s.add_argument("--env", help="p3: target environment — with --des, the built change is compared with those DES")
+    s.add_argument("--des", action="append", default=[], help="p3: DES id the release ships (repeat; needs --env)")
     s = sp.add_parser("lint")
     s.add_argument("--summary", action="store_true", help="counts per rule and site instead of every issue")
     s = sp.add_parser("coverage", help="REQ → design → config → tests; covered only when every linked test passed in --env")
@@ -4409,22 +4446,37 @@ def _main(argv=None) -> int:
     if a.cmd == "gate":
         need_onboarding(r, f"gate {a.gate}")
         extra = None
-        if a.accept_findings is not None and a.gate not in ("G1", "G2"):
-            raise Fail("--accept-findings belongs to G1 / G2 (pls check p1 / p2, ADR-0029)")
-        if a.gate in ("G1", "G2") and a.decision == "approved":      # completeness decided by pls check (ADR-0029)
+        if a.accept_findings is not None and a.gate not in ("G1", "G2", "G3"):
+            raise Fail("--accept-findings belongs to G1 / G2 / G3 (pls check p1 / p2 / p3, ADR-0029)")
+        if a.env is not None and a.gate != "G3":
+            raise Fail("--env belongs to G3: the release's target environment (ADR-0029 B)")
+        if a.gate == "G3" and a.decision == "approved" and not a.env:
+            raise Fail("G3 approval needs --env <target>: the build is compared with its designs for that environment, "
+                       "and release-plan holds the approval to it (ADR-0029 B)")
+        if a.gate in ("G1", "G2", "G3") and a.decision == "approved":   # completeness decided by pls check (ADR-0029)
             try:
                 GT.validate(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release)   # who decides comes first
-                mine = PC.for_gate(r, a.gate, a.item)
+                if a.gate != "G3":
+                    mine = PC.for_gate(r, a.gate, a.item)
+                elif a.item:
+                    mine = des_agreement(r, a.env, a.item, a.release)
+                else:     # an approval is never recorded without comparing the build with its design
+                    mine = [{"phase": "p3", "item": ", ".join(a.release), "msg": "G3 names no --item DES-… — the build "
+                             "cannot be compared with the designs it ships"}]
             except GT.GateError as ex:
                 raise Fail(str(ex))
             if mine and not (a.accept_findings or "").strip():
                 for x in mine:
                     print(f"{x['phase'].upper()} {x['item']}: {x['msg']}")
-                raise Fail(f"{a.gate} REFUSED: pls check {'p1' if a.gate == 'G1' else 'p2'} reports {len(mine)} finding(s) "
-                           "for these items — fix them, or let the approver accept them: --accept-findings \"<reason>\"")
+                what = {"G1": "pls check p1 reports", "G2": "pls check p2 reports",
+                        "G3": "the build against its designs (pls check p3 --env --des) gives"}[a.gate]
+                raise Fail(f"{a.gate} REFUSED: {what} {len(mine)} finding(s) for these items — fix them, or let the "
+                           "approver accept them: --accept-findings \"<reason>\"")
             if mine:
                 extra = {"accepted_findings": [f"{x['item']}: {x['msg']}" for x in mine],
                          "accept_reason": a.accept_findings.strip()}
+        if a.gate == "G3" and a.env:          # the target the build was compared for; release-plan holds it to that
+            extra = dict(extra or {}, env=a.env)
         try:
             out = GT.record(r, a.gate, a.decision, a.approver, a.quote, a.item, a.release,
                             datetime.now().astimezone().date().isoformat(), extra=extra)
@@ -4632,6 +4684,8 @@ def _main(argv=None) -> int:
         return 0
 
     if a.cmd == "check":
+        if a.phase != "p3" and (a.env or a.des):
+            raise Fail(f"check {a.phase}: --env and --des belong to p3 (the build against its DES, ADR-0029 B)")
         if a.phase == "p3":
             found = [{"phase": "p3", "item": i["site"], "msg": f"{i['rule']} {i['msg']}"} for i in lint(r)]
             cfg = r / "config"
@@ -4644,6 +4698,16 @@ def _main(argv=None) -> int:
                 for ref in (links or {}).get("config") or []:
                     if not config_path_exists(r, ref):
                         found.append({"phase": "p3", "item": req, "msg": f"traceability config path {ref} does not exist"})
+            if bool(a.env) != bool(a.des):
+                raise Fail("check p3: --env and --des go together — the built change for that environment is compared "
+                           "with those DES (ADR-0029 B)")
+            if a.env:
+                try:
+                    found += des_agreement(r, a.env, a.des, [])
+                except GT.GateError as ex:
+                    raise Fail(str(ex))
+            else:
+                print("note: the build was not compared with its DES — give --env <target> --des DES-… (G3 does)")
         else:
             try:
                 found = PC.CHECKS[a.phase](r)

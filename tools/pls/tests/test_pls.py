@@ -40,7 +40,8 @@ class PlsTest(unittest.TestCase):
         os.chdir(self.r)
         # a stg release plan needs a recorded G3 of its release (I4); the fixture release R1 has one
         (self.r / "CLAUDE.md").write_text("| Approvers | Nam (all gates) |\n", encoding="utf-8")
-        assert pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]) == 0
+        assert pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]) == 0
 
     def tearDown(self):
         os.chdir(self.cwd)
@@ -382,7 +383,8 @@ class PlsTest(unittest.TestCase):
         self.assertIn("the --migration folder is incomplete", out.getvalue())
         self.assertFalse((self.r / "releases/R1/plan.json").exists())
         self._migration("load")
-        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]), 0)
         self.assertEqual(rp("R2", "load"), 0)
         plan = json.loads((self.r / "releases/R2/plan.json").read_text(encoding="utf-8"))
         self.assertNotEqual(plan["classification"], "data-impacting")
@@ -396,7 +398,8 @@ class PlsTest(unittest.TestCase):
         (d / "nightly.js").write_text("const id = ${site:b};", encoding="utf-8")
         (d / SE.JOBS_INDEX).write_text(json.dumps([{"name": "nightly", "schedule": "毎日", "enabled": True}]), encoding="utf-8")
         for rel in ("R2", "R3", "R4", "R5"):
-            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", rel, "--quote", "G3 approved"]), 0)
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", rel, "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]), 0)
         plan_of = lambda rel: json.loads((self.r / f"releases/{rel}/plan.json").read_text(encoding="utf-8"))   # noqa: E731
         rp = lambda rel: pls.main(["release-plan", "--env", "stg", "--release", rel, "--export", f"a={sa}", "--export", f"b={sb}"])  # noqa: E731
         import contextlib
@@ -696,7 +699,8 @@ class PlsTest(unittest.TestCase):
         Path(sa).write_text(json.dumps(live), encoding="utf-8")
         self.assertFalse({"AddressBook", "MailBccDefault"} & set(pls.logical(live, ENVS["envs"]["stg"])["settings"]))
         site = json.loads((self.r / "config/a/site.json").read_text(encoding="utf-8"))
-        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved"]), 0)
+        self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R1", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]), 0)
         rp = ["release-plan", "--env", "stg", "--release", "R1", "--export", f"a={sa}", "--export", f"b={sb}"]
         site_hand = dict(site, MailToDefault="hand@example.com")   # a hand-typed copy would reach the raw diff
         (self.r / "config/a/site.json").write_text(json.dumps(site_hand), encoding="utf-8")
@@ -1115,7 +1119,8 @@ class PlsTest(unittest.TestCase):
         self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
         err = io.StringIO()
         with mock.patch.object(pls, "FRAMEWORK", fw), contextlib.redirect_stderr(err):
-            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"]), 0)
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]), 0)
         self.assertIn("WARNING: project copies of pls-a were edited", err.getvalue())
         self.assertTrue((self.r / "gates").exists())                                  # the gate was recorded
 
@@ -1127,7 +1132,8 @@ class PlsTest(unittest.TestCase):
         (self.r / ".claude/framework.lock").write_text("{}", encoding="utf-8")
         with mock.patch.object(pls, "skills_check", side_effect=OSError("disk")), contextlib.redirect_stderr(err):
             self.assertEqual(pls.main(["step", "P6", "check fails"]), 0)
-            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R3", "--quote", "G3 approved"]), 0)
+            self.assertEqual(pls.main(["gate", "G3", "--approver", "Nam", "--release", "R3", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"]), 0)
         self.assertNotIn("WARNING", err.getvalue())
 
     def test_coverage_checks_the_element_not_only_the_file(self):

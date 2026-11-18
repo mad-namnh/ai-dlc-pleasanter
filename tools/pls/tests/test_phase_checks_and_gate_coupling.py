@@ -248,10 +248,12 @@ class ReviewFindingsTest(ProjectTest):
         self.req(REQ.replace("acceptance: 2", "acceptance: true"))
         self.assertTrue(any("front matter acceptance True" in m for m in self.msgs("p1")))
 
-    def test_accept_findings_is_for_g1_and_g2_only_and_a_broken_gate_record_is_a_refusal(self):
-        code, _ = self.gate("gate", "G3", "--approver", "Nam", "--quote", "ok", "--release", "R1",
+    def test_accept_findings_is_for_g1_to_g3_only_and_a_broken_gate_record_is_a_refusal(self):
+        code, _ = self.gate("gate", "G4", "--approver", "Nam", "--quote", "ok", "--release", "R1",
                             "--accept-findings", "x")
-        self.assertIn("--accept-findings belongs to G1 / G2", code)
+        self.assertIn("--accept-findings belongs to G1 / G2 / G3", code)
+        code, _ = self.gate("gate", "G4", "--approver", "Nam", "--quote", "ok", "--release", "R1", "--env", "dev")
+        self.assertIn("--env belongs to G3", code)
         self.req()
         (self.r / "gates").mkdir(exist_ok=True)
         (self.r / "gates/bad.json").write_text("{", encoding="utf-8")
