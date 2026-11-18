@@ -1,6 +1,6 @@
 # ADR-0012: Scope of scheduled (background) server scripts
 
-- **Status:** Accepted (2026-11-05, Nam) — option **B**: no API (BR3 probe), so files in git, manual deploy, verification by a person
+- **Status:** Accepted (2026-11-05, Nam) — option **B**: no API (BR3 probe), so files in git, manual deploy, verification by a person. Its "Implementation notes (2026-11-09)" are replaced by ADR-0020 "Manual deploy of scheduled scripts" (ADR-0020 accepted 2026-11-18)
 - **Date:** 2026-11-05
 - **Deciders:** Nam
 - **Related:** ADR-0001 (configuration scope, option B), ADR-0010 (job safety), D3, D7; plan Step 4c

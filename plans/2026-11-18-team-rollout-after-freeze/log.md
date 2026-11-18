@@ -36,3 +36,4 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - **Stopped, not committed.** Round 3 brief: `review-brief-round-3.md`. After an accept: commit 2 (code + tests + docs + plan files), then Nam applies the template patch.
 - Correction (review L-4): on the parent `8aebd8a`, 18 of the 21 tests of the new file fail; 3 pass as regression guards (`test_an_approval_dated_after_the_delegation_does_not`, `test_a_name_with_digits_is_a_name`, `test_a_recorded_value_is_never_replaced_as_a_first_value`). Earlier "20 of 21" counted subtests.
 - Round 3 (Nam allowed it in this session): accept with fixes, Low only (`review.md`). Commit 2 = the reviewed tree. Reviewer calls: 3 (third allowed by Nam).
+- ADR-0020 accepted by Nam (verbatim "chap nhan ADR20"): Status, Decision (option C, team rules), ADR-0012 Status pointer, ADR index, architecture §4 gate table (review L-4), TD-35. Suites: Python 771 OK, node 16/16.

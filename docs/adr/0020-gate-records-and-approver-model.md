@@ -1,6 +1,6 @@
 # ADR-0020: Gate records, approvers and profile records
 
-- **Status:** Proposed (2026-11-11) — describes what `pls` does today; Nam accepts, changes or rejects it. Once accepted it replaces the "Implementation notes (2026-11-09)" of ADR-0012, which were added after that ADR was accepted
+- **Status:** Accepted (2026-11-18, Nam: "chấp nhận ADR20") — option C, with the team rules of "As built" (2026-11-18). Replaces the "Implementation notes (2026-11-09)" of ADR-0012
 - **Date:** 2026-11-11
 - **Deciders:** Nam
 - **Related:** I4 (`docs/architecture.md` §2), §4 gate table; ADR-0004, ADR-0012, ADR-0014 (TB-1, TB-2, TB-3); design review 2026-11-09 A2 items 1–3, A3, A4 item 1 (`docs/reviews/design-review-2026-11-09/ws-1-architecture.md`); roadmap P0-1, P0-3, P0-4, P2-6
@@ -46,7 +46,7 @@ One approver per record. The profile decides who may approve which gate (`Nam (a
 
 ## Open questions
 
-- [ ] Who approves G4 for a customer staging environment and for production: one approver named in the profile (as built), or two (customer business owner **and** operator, as the gate table of `docs/architecture.md` §4 has said since v0.1)? — *Nam, before the first `cstg` project*
+- [ ] Who approves G4 for a customer staging environment and for production: one approver named in the profile (as built), or two (customer business owner **and** operator, the earlier target of `docs/architecture.md` §4)? — *Nam, with the customer deployment mechanism (N16)*
 - [ ] Are gate records protected beyond git for `cstg` / `prod` (ADR-0014 open question 1)? — *Nam, before the first `cstg` project*
 
 ## Options
@@ -65,11 +65,11 @@ One approver per record. The profile decides who may approve which gate (`Nam (a
 
 ## Decision
 
-**Proposed: option C.** The model "As built" holds for stage `demo`. The approver rule for `cstg` and `prod` is the first open question and is decided before the first `cstg` project.
+**Accepted: option C** (Nam, 2026-11-18). The model "As built" holds for stage `demo` and for MADLAB's own dev and stg in stage `project`: every dev approves G1–G3, their own tasks included; G4 has one owner who delegates it only with a last day; the customer approves no gate (team rollout decisions N3–N8, `plans/2026-11-18-team-rollout-after-freeze/plan.md`). The approver rule for a customer's `cstg` and `prod` stays the first open question; it is decided with the customer deployment mechanism, built only when Nam asks (N16).
 
-When accepted:
+With the acceptance:
 - this ADR is the source for gate records, approvers, profile records, `jobs-verified` roles and the onboarding-first refusal; `docs/architecture.md` I4 and §4 point here;
-- the "Implementation notes (2026-11-09)" of ADR-0012 are replaced by the section "Manual deploy of scheduled scripts" above (ADR-0012's Status line then names this ADR — a change Nam makes).
+- the "Implementation notes (2026-11-09)" of ADR-0012 are replaced by the section "Manual deploy of scheduled scripts" above (ADR-0012's Status line names this ADR, recorded with this acceptance).
 
 ## Consequences
 
