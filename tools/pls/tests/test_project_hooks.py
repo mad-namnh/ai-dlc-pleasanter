@@ -99,7 +99,7 @@ class PureTest(unittest.TestCase):
         f = self.root / ".claude/settings.json"
         f.parent.mkdir()
         f.write_bytes(b"\xef\xbb\xbf" + json.dumps({"permissions": {}}).encode())
-        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop"])
+        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop", "SessionStart"])
         before = f.read_bytes()
         self.assertEqual(HK.install(f), [])
         self.assertEqual(f.read_bytes(), before)
@@ -115,7 +115,7 @@ class PureTest(unittest.TestCase):
         old = {"matcher": "Edit|Write", "hooks": [{"type": "command", "command": 'python "${CLAUDE_PROJECT_DIR}/pls.py" hook pre'}]}
         other = {"matcher": "Bash", "hooks": [{"type": "command", "command": "my-own-check"}]}
         f.write_text(json.dumps({"hooks": {"PreToolUse": [old, other]}}), encoding="utf-8")
-        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop"])
+        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop", "SessionStart"])
         pre = json.loads(f.read_text(encoding="utf-8"))["hooks"]["PreToolUse"]
         self.assertIn(other, pre)
         self.assertNotIn(old, pre)
@@ -135,7 +135,7 @@ class PureTest(unittest.TestCase):
         f.write_text(json.dumps({"permissions": {"allow": ["Read"]},
                                  "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "x"}]}]}}),
                      encoding="utf-8")
-        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop"])
+        self.assertEqual(HK.install(f), ["PreToolUse", "PostToolUse", "Stop", "SessionStart"])
         self.assertEqual(HK.install(f), [])
         data = json.loads(f.read_text(encoding="utf-8"))
         self.assertEqual(data["permissions"], {"allow": ["Read"]})
@@ -165,7 +165,7 @@ class ProjectHookTest(unittest.TestCase):
 
     def test_init_installs_the_hooks(self):
         data = json.loads((self.r / ".claude/settings.json").read_text(encoding="utf-8"))
-        self.assertEqual(set(data["hooks"]), {"PreToolUse", "PostToolUse", "Stop"})
+        self.assertEqual(set(data["hooks"]), {"PreToolUse", "PostToolUse", "Stop", "SessionStart"})
         with contextlib.redirect_stdout(io.StringIO()) as out:
             self.assertEqual(pls.main(["hook", "install"]), 0)
         self.assertIn("hooks already there", out.getvalue())

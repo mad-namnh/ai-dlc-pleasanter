@@ -109,3 +109,28 @@ The reviewed tree is committed unchanged.
 | R2-5 | Low | ADR-0011 point 2 still lists create / refresh / drop | fixed |
 
 Stopped (agent-rules §1 stop point 8). Nam: "a" — drop A4, commit the sandbox part with the Low fixes.
+
+## Phase 4, round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, opus, high. Change: working tree against `cc098e8`. `git status` before/after identical. Verdict: **accept with fixes**.
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| F1 | High | a lock with commit "unknown" / no commit turned the check off; unreadable git recorded as clean | fixed: only a project with no lock is unchecked; no commit, "unknown", < 7 hex, `dirty` not `false` (older lock, git unreadable, dirty sync) → refused outside dev; sync records `dirty: null` when git cannot tell and warns; the test that locked the old behaviour replaced by ones that expect the refusal |
+| F2 | Medium | only stg apply tested end to end | fixed: stg bootstrap, apply and record-changing `test` refused with `_confirm` patched to fail if asked first (no write); migrate through the shared `write_guard_now`; dev apply writes and warns once |
+| F3 | Medium | ADR-0022 contradicts itself; ADR-0014 TB-6 stale | fixed the As-built sentence and "above"; Decision section of ADR-0022 and TB-6 row: stop point 1 → asked Nam |
+| F4 | Medium | project `CLAUDE.md` vs template not compared on upgrade | deferred: TD-73; CHANGELOG names the rows to merge by hand |
+| F5 | Low | prefix of any length matched | fixed: full hash in lock and state; ≥ 7 hex required |
+| F6 | Low | pin refusal after the confirmation | fixed: `pin_guard` next to each up-front G4 check (apply, bootstrap, migrate) |
+| F7 | Low | other dev writes do not warn | docs narrowed to apply / bootstrap / migrate (ADR-0022, setup, CHANGELOG) |
+| F8 | Low | weak newer-release / hook tests | fixed: `_git` and `merge-base` patched; newer, ahead-of-tag and same-commit cases |
+| F9 | Low | hotfix order: tag before changelog | fixed: changelog entry, merge into main, tag, push |
+| F10 | Low | lock comment in architecture | fixed |
+| F11 | Low | gitignored files / assume-unchanged / untagged local pin | one sentence in ADR-0022 (limits) |
+
+## Phase 4, round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, opus, high. `git status` before/after identical. Verdict: **accept with fixes**, Low only; F1, F2 (except migrate end to end), F5–F11 fixed; F3 As-built fixed, Decision / TB-6 for Nam (Nam: "a" — accept ADR-0022 option B, update TB-6); F4 → TD-73.
+- Low findings L1 (migrate up-front pin check untested), L2 (malformed lock values traceback), L3 (`git status` without `-uall`, skip-worktree), L4 (sync warning and http-check line untested; "HEAD" from a repo without commits), L5 (stale doc lines, setup troubleshooting for lock problems), L6 (observations) — fixed in the follow-up commit with its own review.
+
+The reviewed tree is committed unchanged.

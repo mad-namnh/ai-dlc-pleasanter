@@ -56,3 +56,10 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Phase 3 round 2: accept with fixes; R2-1 High open in the combined principals/test-users confirmation → stop point 8; asked Nam. Uncommitted.
 - Nam: "a" → A4 dropped (code, tests, docs reverted to HEAD for principals / test-users; lifecycle skill back to 0.32); R2-3, R2-5 fixed; R2-4 kept as documentation.
 - Final: suites 3.12 780 OK, 3.10 780 OK (2 skipped), node 16/16; sync tests fail on parent 00271c0. Committed. Phase 3 done.
+
+## Phase 4 — version pinning, hotfix, changelog (2026-11-18, Nam: "bat dau"; decisions "1a 2a 3a" → N23)
+
+- Found: the lock already records the commit; `skills check` already reports skill and template drift. Built: `pls_framework_pin.py` (state, problem, newer release, session notes); lock `tag` and `dirty`; `pin_guard` in `write_guard_now` and before tests that change records outside dev; `http-check` line; SessionStart hook `pls hook start` (docs checked by a `claude-code-guide` agent, haiku: event and matchers exist, plain stdout goes to the context, failure behaviour not documented → `|| true`, advisory). Pin notes kept out of `skills check` so the suite does not depend on this checkout's git state.
+- Docs: `CHANGELOG.md` (v0.3.0), ADR-0022 "Pinned framework" + open question 1 answered (Status left Proposed — Nam's), architecture, setup "Framework versions".
+- Phase 4 round 1: accept with fixes (F1 High fixed; F2–F11 fixed or disposed; F3 Decision/TB-6 asked of Nam; F4 → TD-73).
+- Phase 4 round 2: accept with fixes, Low only. Reviewed tree committed; L1–L5 and ADR-0022 acceptance (Nam: "a") in a follow-up.

@@ -122,6 +122,13 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 
 - **What the shared repository keeps.** Everything `pls` or a gate reads on someone else's machine is committed — `tests/results/` (coverage for G3), `requirements/sources/` (`pls check p1`), `gates/`, `releases/`, `ops/onboarding/`, `ops/log/`, `ops/usage/`, `design/probes/`. Only `ops/xref/`, `ops/adopt/`, `ops/triage/` and `ops/env-compare/` stay on your machine (gitignored); after a fresh clone run `pls xref --site <site>` when a skill needs it. A project made before this: `pls skills check` reports that the template `.gitignore` changed — copy its last block into the project's `.gitignore`, then `git rm -r --cached --ignore-unmatch ops/xref ops/adopt ops/triage ops/env-compare` and commit.
 
+## Framework versions
+
+- **The team uses release tags only.** Clone the framework once and check out a tag: `git -C ai-dlc-pleasanter fetch --tags` then `git -C ai-dlc-pleasanter checkout v0.3.0`. Never work from a branch of the framework in a project.
+- **A project pins the framework** in `.claude/framework.lock` (commit and tag), written by `pls init` and `pls skills sync`. When the framework running is another commit or has uncommitted changes, `pls` refuses writes to stg (and `apply` / `bootstrap` / `migrate` warn on dev); `http-check` and the session-start hook say so.
+- **Upgrading a project:** read the new version's entry in `CHANGELOG.md`, check out that tag in the framework, then in the project `python pls.py skills sync` and `python pls.py hook install`, do what the entry says, and commit `.claude/` with the rest.
+- **A fix during the freeze (the framework owner):** branch `fix/<slug>` from the tag, fix with its regression test, both suites green, add the `CHANGELOG.md` entry, merge into `main`, tag that commit `v0.3.<n+1>` (annotated), push `main` and the tag; the team then upgrades as above. Developers report framework bugs to the owner instead of editing the framework.
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -135,6 +142,7 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 | `principals --create`: `principals.admin is …` | Your own user is not bound. Create the project with a profile (`pls setup`, `pls init`) or add `"admin": "User,<your id>"` to the env's `principals`. |
 | `principals --create`: `not a group with a final name` | `design/roles.json` has a role that is not `principal: "Group"` or still has a placeholder `group_name`. The design is fixed first (P2). |
 | `principals --create`: `answered HTTP 403` | Your key is not a tenant administrator. Create the groups in Pleasanter instead. |
+| `REFUSED: the framework … — writes to stg run only the framework version the project pinned` | Check out the pinned tag in the framework (`git -C <framework> checkout <tag>`), or upgrade the project (Framework versions). Uncommitted changes in the framework's `tools/`, `skills/` or `templates/` also count. |
 | `pls not found at …` | The launcher cannot find the framework. Fix `path` in `.claude/framework.lock`, or set `PLS_HOME` to the `ai-dlc-pleasanter` folder. |
 | `envs.<env>.role is … but its record says …` | `environments.json` was edited by hand (e.g. stg turned into dev, which would drop G4). Restore the file from git, or the G4 owner records the role: `python pls.py profile set role <role> --env <env> --approver <owner> --quote "…"`. |
 | `L-ENV-01` from `lint` | The project was made without a profile. Run `pls setup`, then create the project again (or fill `environments.json` by hand). |

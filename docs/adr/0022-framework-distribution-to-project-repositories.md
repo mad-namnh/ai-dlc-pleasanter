@@ -11,7 +11,7 @@ The framework (this repository) and each customer project are separate git repos
 
 ## As built (2026-11-11, `tools/pls/pls.py`)
 
-**Launcher.** `pls init` writes `pls.py` at the project root (`LAUNCHER`). It runs `<framework>/tools/pls/pls.py`, where `<framework>` is the environment variable `PLS_HOME`, else `path` in `.claude/framework.lock` (relative to the project). The **tool code is not copied and not pinned**: a project runs whatever the framework checkout at that path holds.
+**Launcher.** `pls init` writes `pls.py` at the project root (`LAUNCHER`). It runs `<framework>/tools/pls/pls.py`, where `<framework>` is the environment variable `PLS_HOME`, else `path` in `.claude/framework.lock` (relative to the project). The **tool code is not copied**: a project runs whatever the framework checkout at that path holds — since 2026-11-18 checked against the pin in the lock (section "Pinned framework"): writes outside dev are refused when it differs.
 
 **Skills.** `pls skills sync` (also run by `pls init`) copies every framework skill folder (`skills/<name>/` with a `SKILL.md`) into `<project>/.claude/skills/<name>/`, replacing the previous copy, and writes `.claude/framework.lock`: `framework`, `path`, `commit` (short hash of the framework checkout), `synced`, and per skill its version (from `skills/README.md`) and a sha256 of the copied tree (line endings normalised). Skills are pinned per project; an upgrade is a sync and a commit in the project.
 
@@ -21,9 +21,16 @@ The framework (this repository) and each customer project are separate git repos
 
 **Not distributed:** `.claude/skills/pls-x-dev-orchestrator` and `.claude/agents/` of the framework (they are for developing the framework, ADR-0016); the project `CLAUDE.md` comes from `templates/project/` once, at `pls init`, and is not synced afterwards.
 
+## Pinned framework (built 2026-11-18, team rollout phase 4)
+
+- `pls skills sync` records in the lock the full framework commit, its `v*` release tag (if the commit has one) and `dirty` — whether `tools/`, `skills/` or `templates/` had uncommitted changes, `null` when git could not tell (`tools/pls/pls_framework_pin.py`); it warns when the result cannot pin.
+- Before every write of `apply`, `bootstrap` and `migrate`, and before tests that change records outside dev, `pls` compares the framework checkout with the pin (`pls.py` `pin_guard`): another commit, uncommitted changes in the shipped parts, or a lock that does not name a clean commit (synced from such a tree, by an older `pls`, or while git could not read the framework; a commit id shorter than 7 hex digits) → **refused outside dev** before the person is asked to confirm, a warning on dev (once per run) for `apply`, `bootstrap` and `migrate`. Only a project with no `framework.lock` at all is not checked; a framework that git cannot read counts as not pinned. Other dev writes (`test` on dev, `principals --create`, `test-users`, `kb-verify`) do not check the pin. Limits: `git status` does not see gitignored files or `assume-unchanged` entries in the shipped parts, and a pin to a local commit without a tag is accepted — the stg key holder (team rollout N12) syncs from tags.
+- `pls http-check` prints the difference; the project hook `pls hook start` (SessionStart, `startup|resume`) prints it as plain text into the session's context, with a note when a release tag newer than the pinned commit exists. The hook is advisory and never blocks (`|| true`).
+- Releases are annotated tags `v<major>.<minor>.<patch>` (first: `v0.3.0`); fixes are `v0.3.x`; every tag has a `CHANGELOG.md` entry, committed before the tag. The Orchestrator creates a tag locally after the release commit; Nam pushes it. Teams check out tags only.
+
 ## Open questions
 
-- [ ] Should the tool be pinned like the skills (the lock's `commit` checked against the framework checkout, or a copy of `tools/pls` per project), so that a framework change cannot alter a project's guards silently (TB-6)? — *Nam, before the first `cstg` project*
+- [x] Should the tool be pinned like the skills (the lock's `commit` checked against the framework checkout, or a copy of `tools/pls` per project), so that a framework change cannot alter a project's guards silently (TB-6)? — answered 2026-11-18 (team rollout phase 4, Nam "1a 2a 3a"): pinned by commit, see the section "Pinned framework" above. The Decision section below still names option A; aligning it (and ADR-0014 TB-6) is Nam's change.
 - [ ] How does a customer-side operator get the tool for production (ADR-0003, `pls package` hands over a release and a stdlib `verify.py`, not `pls`)? — *ADR-0003*
 
 ## Options

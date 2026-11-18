@@ -90,6 +90,7 @@ import pls_gate as GT                                       # noqa: E402 — gat
 import pls_phase_check as PC                                # noqa: E402 — phase outputs complete (ADR-0029 B)
 import pls_des_agreement as DA                              # noqa: E402 — built change vs its DES (ADR-0029 B)
 import pls_hooks as HK                                      # noqa: E402 — Claude Code hooks of a project (ADR-0029 C)
+import pls_framework_pin as FP                              # noqa: E402 — the framework version a project pinned (ADR-0022)
 import pls_profile_records as PR                            # noqa: E402 — profile records (I4)
 import pls_as_is_review_records as AR                       # noqa: E402 — as-is review records (I4, I5)
 import pls_migrate as MI                                    # noqa: E402 — data migrations over HTTP (ADR-0004)
@@ -1457,11 +1458,30 @@ def write_guard_now(r: Path, env: str, release: str, what: str = "applying") -> 
     except (Fail, ValueError, OSError) as ex:
         raise H.TransportError(f"environments.json cannot be checked ({ex})")
     H.assert_writable(e, H.load_connection(r, env), env)
+    pin_guard(r, e, env)
     if e.get("role") != "dev":
         try:
             GT.require(r, "G4", release, f"{what} in {env}")
         except (GT.GateError, Fail, ValueError, OSError) as ex:
             raise H.TransportError(str(ex))
+
+
+_PIN_WARNED: set = set()
+
+
+def pin_guard(r: Path, e: dict, env: str) -> None:
+    """The framework running must be the version the project pinned (ADR-0022, team rollout phase 4): outside dev a
+    difference refuses the write (TransportError); on dev it is a warning, once per run."""
+    import pls_http as H
+    bad = FP.problem(r, FRAMEWORK)
+    if not bad:
+        return
+    if e.get("role") != "dev":
+        raise H.TransportError(f"REFUSED: {bad} — writes to {env} run only the framework version the project pinned "
+                               "(ADR-0022)")
+    if bad not in _PIN_WARNED:
+        _PIN_WARNED.add(bad)
+        print(f"WARNING: {bad} — allowed on dev only")
 
 
 def not_planned_message(release: str, plan: dict) -> str:
@@ -2669,7 +2689,7 @@ def _framework_skills(fw: Path) -> dict[str, Path]:
 def _framework_commit(fw: Path) -> str:
     import subprocess
     try:
-        return subprocess.run(["git", "-C", str(fw), "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+        return subprocess.run(["git", "-C", str(fw), "rev-parse", "HEAD"], capture_output=True, text=True,
                               timeout=10).stdout.strip() or "unknown"
     except (OSError, subprocess.SubprocessError):
         return "unknown"
@@ -2746,8 +2766,10 @@ def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
         skills[name] = {"version": vers.get(name, "?"), "sha256": _tree_sha(tgt)}
     (proj / "pls.py").write_text(LAUNCHER, encoding="utf-8", newline="\n")
     notes = template_changes(lock, fw)
+    now = FP.state(fw)                  # the pin: commit, its release tag, and whether the shipped parts had changes
     lock.update({"framework": "ai-dlc-pleasanter", "path": lock.get("path") or _relpath(fw, proj),
-                 "commit": _framework_commit(fw), "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
+                 "commit": _framework_commit(fw), "tag": now.get("tag"), "dirty": now.get("dirty"),
+                 "synced": datetime.now().astimezone().isoformat(timespec="seconds"),
                  "skills": skills, "template": _template_hashes(fw)})
     wj(lock_p, lock)
     return {**lock, "template_notes": notes}
@@ -3299,6 +3321,9 @@ def http_cmd(r: Path, a) -> int:
                     print(f"{a.env} key '{k}': {ex}")
             print(f"writes: {'allowed' if e.get('role') in H.WRITABLE_ROLES and conn.get('allow_write') is True else 'refused'} "
                   f"(role {e.get('role')!r}, allow_write {conn.get('allow_write')!r})")
+            pin = FP.problem(r, FRAMEWORK)
+            if pin:
+                print(f"framework: {pin} — {'writes refused' if e.get('role') != 'dev' else 'a warning on dev'} (ADR-0022)")
             try:
                 print(SE.describe(a.env, env_effects(r, e)))
             except ValueError as ex:
@@ -3343,6 +3368,7 @@ def http_cmd(r: Path, a) -> int:
             e = env_conf(r, plan["env"])
             H_, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"migrating data in {plan['env']}")
@@ -3449,6 +3475,7 @@ def http_cmd(r: Path, a) -> int:
             e = env_conf(r, plan["env"])
             H_, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"applying to {plan['env']}")
@@ -3581,6 +3608,7 @@ def http_cmd(r: Path, a) -> int:
                 return 0
             _, conn, c = _client(r, plan["env"])
             H.assert_writable(e, conn, plan["env"])
+            pin_guard(r, e, plan["env"])                  # before the confirmation: the pinned framework (ADR-0022)
             if e.get("role") != "dev":
                 try:
                     GT.require(r, "G4", a.release, f"creating sites in {plan['env']}")
@@ -3668,6 +3696,7 @@ def http_cmd(r: Path, a) -> int:
             # Outside dev, records are created, changed and deleted (deletes cannot be undone) only with the person's
             # word: the G4 approval of the release under test, or their confirmation of this run.
             if e.get("role") != "dev" and any(SE.test_writes(sp_) for sp_ in specs):
+                pin_guard(r, e, a.env)
                 if a.release:
                     try:
                         GT.require(r, "G4", a.release, f"tests that change records in {a.env}")
@@ -4045,7 +4074,7 @@ def main(argv=None) -> int:
     """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
     tool call of Claude Code and is not logged (the run log would hold every edit)."""
     args = list(sys.argv[1:] if argv is None else argv)
-    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"]):
+    if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"], ["start"]):
         return hook(args[1])
     return LG.run(root, args, lambda: _main(args))
 
@@ -4060,6 +4089,13 @@ def hook(event_name: str, stdin=None, stdout=None) -> int:
         proj = Path(os.environ.get("CLAUDE_PROJECT_DIR") or "") if os.environ.get("CLAUDE_PROJECT_DIR") else root()
         if not (proj / "environments.json").exists():
             return 0                                   # not a pls project: nothing to say
+        if event_name == "start":                      # SessionStart: plain text goes to Claude's context
+            notes = FP.session_notes(proj, FRAMEWORK)
+            if notes:
+                text = "pls framework version:\n" + "\n".join(f"- {n}" for n in notes) + "\n"
+                stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
+                stdout.flush()
+            return 0
         if event_name == "pre":
             out = HK.pre(proj, event)
         elif event_name == "post":
@@ -4246,7 +4282,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--site", help="one site (default: every site in config/)")
     s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
                       "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
-    s.add_argument("action", choices=["pre", "post", "stop", "install"])
+    s.add_argument("action", choices=["pre", "post", "stop", "start", "install"])
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
     s.add_argument("--env", help="p3: target environment — with --des, the built change is compared with those DES")
@@ -4316,7 +4352,11 @@ def _main(argv=None) -> int:
     if a.cmd == "skills":
         if a.action == "sync":
             lock = sync_skills(r, FRAMEWORK)
-            print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit']})")
+            print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit'][:10]}"
+                  + (f", {lock['tag']}" if lock.get("tag") else "") + ")")
+            if lock.get("dirty") is not False or lock.get("commit") == "unknown":
+                print("WARNING: the framework had uncommitted changes, or git could not read it — writes outside dev stay "
+                      "refused until the project is synced from a clean release tag (ADR-0022)")
             for line in lock["template_notes"]:
                 print(line)
             return 0

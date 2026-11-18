@@ -1,7 +1,7 @@
 """Claude Code hooks of a project repository (ADR-0029 C1): rules applied by the machine, not remembered by the model.
 
 `pls init` writes them into `<project>/.claude/settings.json`; `pls hook install` adds them to an existing one. Each
-hook runs `python "$CLAUDE_PROJECT_DIR/pls.py" hook <pre|post|stop>` with the event's JSON on stdin (contract read in
+hook runs `python "$CLAUDE_PROJECT_DIR/pls.py" hook <pre|post|stop|start>` with the event's JSON on stdin (contract read in
 the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-16 — see the plan folder of ADR-0029):
 
 - pre (PreToolUse, Read|Edit|Write|NotebookEdit|MultiEdit|Bash): denies a file edit under the paths only `pls` writes
@@ -12,7 +12,11 @@ the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-16 — see
 - post (PostToolUse, Edit|Write): after an edit under `config/<site>/`, runs `pls lint` and returns the issues of that
   site next to the tool result (`decision: "block"` + `reason`; the edit itself stays);
 - stop (Stop): runs `pls check p1` and `p2` and shows the findings to the person (`systemMessage`); it never keeps the
-  agent going (advisory, ADR-0029; the gates decide).
+  agent going (advisory, ADR-0029; the gates decide);
+- start (SessionStart, startup|resume): prints, as plain text that Claude Code adds to the session's context, when the
+  framework running is not the version the project pinned or a newer release tag exists (ADR-0022; contract read in
+  the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-18). Advisory: writes outside dev are refused
+  by `pls` itself.
 
 A hook that cannot decide (unreadable input, an error inside pls, the launcher missing, python not found, the
 variable not set) allows and stays silent — it fails open: the command ends in `|| true`, so it never exits 2, which
@@ -40,6 +44,8 @@ SETTINGS = {
     "PostToolUse": [{"matcher": "Edit|Write|MultiEdit",
                      "hooks": [{"type": "command", "command": HOOK_CMD + "post || true", "timeout": 120}]}],
     "Stop": [{"hooks": [{"type": "command", "command": HOOK_CMD + "stop || true", "timeout": 120}]}],
+    "SessionStart": [{"matcher": "startup|resume",
+                      "hooks": [{"type": "command", "command": HOOK_CMD + "start || true", "timeout": 60}]}],
 }
 
 
