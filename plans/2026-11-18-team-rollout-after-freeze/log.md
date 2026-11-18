@@ -75,3 +75,4 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Built: `HK.model_switch`, `HK.project_model`, `DEFAULT_MODEL = "opus"`, PreModelSwitch entry, `pls hook model`; install writes `model` when absent. Tests `test_project_model.py`; `test_project_hooks.py` expectations extended with the new event and the `model` entry.
 - Phase 5 round 1: accept with fixes (M1 lockout on `opusplan` / `opus[1m]`, L1, L2 fixed; L3 kept). Python 3.10 not verified (interpreter removed, as in phase 4).
 - Phase 5 round 2: accept, no findings. Committed. Phase 5 done.
+- 2026-11-18: Nam continues phase 6 from another account; HANDOFF "Next" line written.
