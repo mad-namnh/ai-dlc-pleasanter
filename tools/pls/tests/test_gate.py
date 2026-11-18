@@ -30,6 +30,19 @@ class ApproversTest(unittest.TestCase):
         self.assertEqual(GT.approvers("| Approvers | Nam (all gates except G4) |"), {})
         self.assertEqual(GT.approvers("| Approvers | Nam (G1-G3) |"), {"Nam": {"G1", "G2", "G3"}})
 
+    def test_a_range_before_the_colon_grants_only_that_range(self):
+        # "G1–G3: A, B; G4: Nam" once fell through to the name form: B got all four gates (G4 too)
+        for dash in ("-", "–", "~"):
+            with self.subTest(dash=dash):
+                self.assertEqual(GT.approvers(f"| Approvers | G1{dash}G3: A, B; G4: Nam |"),
+                                 {"A": {"G1", "G2", "G3"}, "B": {"G1", "G2", "G3"}, "Nam": {"G4"}})
+        self.assertEqual(GT.approvers("| Approvers | G1–G3, G4: A |"), {"A": set(GT.GATES)})
+
+    def test_a_text_with_a_colon_is_never_a_name(self):
+        # a head the parser does not understand grants nothing to anyone in its segment, never all gates
+        self.assertEqual(GT.approvers("| Approvers | G1 to G3: A, B; G4: Nam |"), {"Nam": {"G4"}})
+        self.assertEqual(GT.approvers("| Approvers | PM: A |"), {})
+
 
 class RecordTest(unittest.TestCase):
     def setUp(self):

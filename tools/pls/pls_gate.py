@@ -29,6 +29,8 @@ import pls_release_digest as RD
 GATES = ("G1", "G2", "G3", "G4")
 DECISIONS = ("approved", "rejected", "changes-requested")
 _ROW = re.compile(r"^\|\s*Approvers\s*\|(.*)\|\s*$", re.M)
+_GATE_OR_RANGE = r"G[1-4](?:\s*[-–~]\s*G[1-4])?"
+_HEAD = re.compile(rf"^{_GATE_OR_RANGE}(?:\s*,\s*{_GATE_OR_RANGE})*\s*:")      # the head form: gates, then ":"
 _STATUS = re.compile(r"^.*\bStatus\b.*?\b(G[1-4])\b.*?\bapproved\b(.*)$", re.M | re.I)
 _WHO = re.compile(r"^\s*(?:\(\s*|by\s+)([^,()\d]+?)\s*(?:[,)]|\bon\b|$)", re.I)
 _ID = re.compile(r"^(REQ|DES)-\d+")
@@ -52,7 +54,8 @@ def approvers(profile_text: str) -> dict[str, set[str]]:
     """Approver name → gates they may approve, from the profile row "Approvers".
 
     Accepted forms (segments separated by ';'): `Nam (all gates)`, `Nam`, `Nam (G1, G2), Taro (G3, G4)`,
-    `G1, G4: Nam; G2, G3: Taro`. Placeholders (`<…>`, empty, "tbd") name no approver.
+    `G1, G4: Nam; G2, G3: Taro`, `G1–G3: A, B; G4: Nam`. Placeholders (`<…>`, empty, "tbd") name no approver;
+    a segment with a ":" whose head is not a list of gates grants nothing.
     """
     m = _ROW.search(profile_text)
     if not m:
@@ -66,10 +69,12 @@ def approvers(profile_text: str) -> dict[str, set[str]]:
 
     for seg in m.group(1).split(";"):
         seg = seg.strip()
-        if re.match(r"^(G[1-4][\s,]*)+:", seg):                       # "G1, G4: Nam, Taro"
+        if _HEAD.match(seg):                                           # "G1, G4: Nam, Taro", "G1–G3: Nam"
             head, names = seg.split(":", 1)
             for n in re.split(r",|/|\band\b", names):
                 add(n, _gates(head))
+            continue
+        if ":" in seg:          # a head this parser does not read ("G1 to G3: A"): no name in it gets any gate
             continue
         for part in re.split(r",(?![^()]*\))", seg):                   # "Nam (G1, G2), Taro (all gates)"
             nm = re.match(r"\s*([^()]+?)\s*(?:\(([^)]*)\))?\s*$", part)

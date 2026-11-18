@@ -4,6 +4,8 @@
 
 ## Resume here — 2026-11-14 (read first; the 2026-11-13 section below still holds)
 
+**Feature freeze and team rollout (2026-11-18):** Nam froze feature work; the work now follows `plans/2026-11-18-team-rollout-after-freeze/plan.md` (decisions N1–N20, log in the same folder). Phase 1 fix: an Approvers row with a gate range before the colon (`G1–G3: A, B; G4: Nam`) gave A and B all four gates; it now grants only the range, and a segment whose head is not a list of gates grants nothing.
+
 **Build checked against its DES at G3 (2026-11-18, TD-67 closed):** `pls check p3 --env <target> --des DES-…` compares the built change (git against the last release applied on the target before the DES were approved at G2) with the DES: classification, an impact row per `classify` rule, an `unverified` entry (new DES field: probe or decision record) per `pls scope` component. `pls gate G3` needs `--env` and `--item DES-…` and refuses on findings unless `--accept-findings`; G2 records bind the DES content (an edited DES needs G2 again; older G2 records ask for it once), and `release-plan` refuses a G3 recorded for another target. P2 0.14, P3 0.11, P4 0.10, lifecycle 0.31 — evaluations pending. `plans/2026-11-18-td67-des-agreement-at-g3/`.
 
 **Summary sync on the screen (2026-11-17):** Nam on MADLAB dev 1.5.2.0: a summary added by a site save left the parent at 0; the サマリ tab's synchronise button recalculated it (30). Summaries are on the tab サマリ, not 集計 (grid aggregation) — names fixed in classify, impact rules, KB D16, ADR-0028. `plans/2026-11-17-summary-sync-screen-check/`.
