@@ -8,7 +8,7 @@ At a gate, send the person **one short message**:
 
 Then wait. Do not continue to the next phase in the same turn.
 
-When they decide, record it exactly as said, with the approver's name and the date: `pls gate G<n> --approver <name> --quote "<their words>"` with `--item REQ-…` (G1) / `--item DES-…` (G2) for every id decided, or `--release <id>` (G3, G4; G4 also names the bootstrap id when the release creates sites) writes `gates/<date>-G<n>-NN.json`; then update the status lines and commit both. Then commit (`docs(gN): …`). For "approve with changes", make the changes first, show them, and ask again if they alter what was approved.
+When they decide, record it exactly as said, with the approver's name and the date: `pls gate G<n> --approver <name> --quote "<their words>"` with `--item REQ-…` (G1) / `--item DES-…` (G2) for every id decided, or `--release <id>` (G3, G4; G4 also names the bootstrap id when the release creates sites; G3 also `--env <target>` and `--item DES-…` for each design the release ships, whose agreement with the build it checks) writes `gates/<date>-G<n>-NN.json`; then update the status lines and commit both. Then commit (`docs(gN): …`). For "approve with changes", make the changes first, show them, and ask again if they alter what was approved.
 
 | Gate | Present | Approver (demo stage: the project owner for all) | Record in |
 |---|---|---|---|

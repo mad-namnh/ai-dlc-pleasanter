@@ -8,6 +8,7 @@ findings with a reason (ADR-0029, gate coupling).
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -22,6 +23,8 @@ REQ_FILE = re.compile(r"^(REQ-\d+)(?:-.*)?\.md$")
 DES_FILE = re.compile(r"^(DES-\d+)(?:-.*)?\.md$")
 DERIVED = re.compile(r"^derived from (REQ-\d+)\b")
 NOT_A_FILE = ("P2 accepted", "drift accepted")
+PROBE = re.compile(r"D\d+[a-z]?")
+KB_INDEX = Path(__file__).resolve().parents[2] / "skills" / "pls-kb-pleasanter" / "references" / "probes" / "index.json"
 EARS_WORDS = {"event-driven": ("when",), "state-driven": ("while",), "unwanted behaviour": ("if", "then"),
               "optional": ("where",)}
 
@@ -57,6 +60,48 @@ def _read(path: Path, phase: str, item: str, out: list) -> tuple[dict | None, st
 
 def _as_list(v) -> list:
     return v if isinstance(v, list) else [] if v is None else [v]
+
+
+def kb_probe_ids() -> set[str]:
+    """Entry ids of the framework knowledge base's probe index (empty when it cannot be read: no probe id is then known)."""
+    try:
+        return set(json.loads(KB_INDEX.read_text(encoding="utf-8-sig")).get("entries") or {})
+    except (OSError, ValueError, AttributeError):
+        return set()
+
+
+def unverified_problem(root: Path, u) -> str | None:
+    """Why an `unverified` entry of a DES does not stand for a component without round-trip evidence: it names the key
+    `pls scope` reports and either a probe of the knowledge base or a decision record of this project that names the key."""
+    if not isinstance(u, dict) or not u.get("key"):
+        return f"unverified entry {u!r}: needs key (the component `pls scope` names) and probe or decision"
+    key = str(u["key"])
+    if bool(u.get("probe")) == bool(u.get("decision")):
+        return f"unverified {key}: name exactly one of probe (a KB probe id, e.g. D41) or decision (a record file)"
+    if u.get("probe"):
+        if not PROBE.fullmatch(str(u["probe"])) or str(u["probe"]) not in kb_probe_ids():
+            return f"unverified {key}: probe {u['probe']!r} is not an entry of the knowledge base's probe index"
+        return None
+    ref = str(u["decision"])
+    if not _inside(root, ref):
+        return f"unverified {key}: decision {ref} is not a file of this project"
+    rel = (root / ref).resolve().relative_to(root.resolve()).as_posix()
+    if rel.startswith("config/") or DES_FILE.match(Path(rel).name):
+        return f"unverified {key}: decision {ref} is a design or configuration file, not a decision record"
+    text = (root / ref).read_text(encoding="utf-8", errors="replace")
+    if not re.search(rf"(?<![\w\[]){re.escape(key)}(?![\w\]])", text):      # the key as a whole name
+        return f"unverified {key}: decision {ref} does not name {key} — a decision record says which component it accepts"
+    return None
+
+
+def _inside(root: Path, ref: str) -> bool:
+    """A file of the project, named relative to its root."""
+    p = (root / ref).resolve()
+    try:
+        p.relative_to(root.resolve())
+    except ValueError:
+        return False
+    return p.is_file()
 
 
 def p1(root: Path) -> list[dict]:
@@ -190,6 +235,10 @@ def p2(root: Path) -> list[dict]:
                 f(f"impact row {row!r}: rule must be an id of impact-rules.md")
             elif not row.get("action"):
                 f(f"impact row {row['rule']}: no action")
+        for u in _as_list(fm.get("unverified")):          # components `pls scope` reports (checked against the build at p3)
+            why = unverified_problem(root, u)
+            if why:
+                f(why)
     approved_ids = {i for g in GT.load(root) if g.get("gate") == "G1" for i in g.get("items") or []}
     for rid in sorted((reqs | approved_ids) - covered):     # a REQ approved at G1 counts even if its file is gone
         g = GT.latest(root, "G1", item=rid)

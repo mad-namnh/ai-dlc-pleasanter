@@ -29,7 +29,7 @@ description: Phase P3 of AI-DLC for Pleasanter. Builds the G2-approved design in
    - `pls canon --site <s>`
    - `pls lint` → 0 issues
    - `pls coverage` → every in-scope REQ has config (test gaps are expected until P4)
-   - `pls check p3` → 0 findings (lint, `pls scope` per site — a component without round-trip evidence needs a probe or a decision record before release — and every traceability config path exists)
+   - `pls check p3` → 0 findings (lint, `pls scope` per site — a component without round-trip evidence needs a probe or a decision record before release — and every traceability config path exists); with `--env <target> --des DES-…` it also compares the build with the DES (classification, impact rules, `unverified` entries) — G3 refuses on those findings. A component the DES does not list, a rule it has no row for or a stronger classification means the design changes: update the DES and have it approved again at G2 (an edited DES is not the approved one)
 
    Fix what they report; do not silence a rule.
 5. **Deploy to dev** with the commands in `pls-x-lifecycle` P3 step 3: export → `release-plan` → the person runs `pls apply` (or you run it when the person recorded the standing permission for dev, lifecycle section 2 rule 3). Release ids are `R-YYYYMMDD-NN-dev`.

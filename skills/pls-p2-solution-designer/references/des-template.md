@@ -13,6 +13,9 @@ impact:
   - rule: <rule id of impact-rules.md>
     element: <existing element>
     action: <what the design does, or checked: none>
+unverified:
+  - key: <component `pls scope` lists, e.g. Notifications>
+    probe: <KB probe id such as D48; or a line `decision` with the path of the decision record instead>
 ---
 # DES-NNN — <title>
 

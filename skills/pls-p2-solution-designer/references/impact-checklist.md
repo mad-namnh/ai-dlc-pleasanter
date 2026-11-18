@@ -14,4 +14,5 @@ rule that is missing there is a framework change, not a project note).
    still gets a row ("checked: none").
 5. New impacts become derived requirements → back to P1 / G1; do not absorb them silently.
 6. Run `pls scope --site <s>` for every site whose settings the design changes (rule SE-SCOPE): each key it lists needs
-   a probe before G2 or a decision record.
+   a probe before G2 or a decision record, named in the DES front matter `unverified` (`key`, and `probe` or
+   `decision`); G3 compares them with the built site.

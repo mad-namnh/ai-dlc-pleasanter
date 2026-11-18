@@ -99,7 +99,8 @@ class PlanningRefusalsWriteNoRelease(unittest.TestCase):
     def test_drift_from_the_last_release_is_refused(self):                  # I2, D11
         lives = self.applied_release()
         self.change_live_a(lives["a"], lambda ss: ss["Columns"].append({"ColumnName": "ClassZ", "LabelText": "added in the UI"}))
-        self.assertEqual(run(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved"])[0], 0)
+        self.assertEqual(run(["gate", "G3", "--approver", "Nam", "--release", "R2", "--quote", "G3 approved", "--env", "stg",
+                     "--accept-findings", "fixture: no design to compare"])[0], 0)
         result = self.release_plan(lives["a"], lives["b"], "R2")
         self.assert_refused_and_nothing_written(result, "a: REFUSED — the environment drifted from its last release (I2, D11)", "R2")
         self.assertIn("settings.Columns[ClassZ]", result[1])
