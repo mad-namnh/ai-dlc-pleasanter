@@ -39,3 +39,9 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - ADR-0020 accepted by Nam (verbatim "chap nhan ADR20"): Status, Decision (option C, team rules), ADR-0012 Status pointer, ADR index, architecture §4 gate table (review L-4), TD-35. Suites: Python 771 OK, node 16/16.
 - Follow-up L-1…L-3 (Nam "chon a"): suites Python 3.12 773 OK, 3.10 773 OK (2 skipped), node 16/16; L-1 / L-3 tests fail on parent `cc8a649` (2 failures), the L-2 test passes there (guards R2-5). Review: accept with fixes, N-1…N-3 Low. Reviewer calls on phase 1: 4 + this one = 5 of 6.
 - N-1…N-3: suites Python 3.12 775 OK, 3.10 775 OK (2 skipped), node 16/16. Review: accept. Subagent calls on phase 1: 6 of 6 (Nam allowed the third review round). Phase 1 done.
+
+## Phase 2 — shared project repository (2026-11-18, Nam: "bat dau phase 2")
+
+- Trace (read-only): `pls coverage` reads `tests/results/` (`pls.py` `test_results`); `pls check p1` needs each REQ's source under `requirements/sources/` (`pls_phase_check.py:151`) → N11 as written would refuse G1 / weaken G3 evidence on another machine. `ops/log/` read only by `usage collect` (own actor); `design/probes/`, `ops/xref/`, `ops/adopt/`, `ops/triage/`, `ops/env-compare/` read by no check (skills read xref / adopt; both regenerable).
+- Asked Nam with options; Nam: "chon a" → N21 (plan updated).
+- Phase 2 built: template `.gitignore` (four folders), test `test_project_gitignore_keeps_what_pls_reads.py` (fails before the change: the four folders not ignored), architecture §3.2, setup.md, skills P6 0.4 / lifecycle 0.32 / spec-recovery 0.5, layout patch for the protected template. Suites: Python 3.12 777 OK, 3.10 777 OK (2 skipped), node 16/16; with the patch applied 777 OK. Review: accept with fixes (`review.md` "Phase 2").

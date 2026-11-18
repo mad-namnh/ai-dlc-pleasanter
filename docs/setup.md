@@ -120,6 +120,8 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - **Only the owner** changes Approvers, Operators or an environment's `role` (a dev or a delegate is refused), and only the owner can delegate.
 - **The stg key is the real control.** Only the owner (or the delegate, for the delegation) has a stg key with `allow_write` in their own `.pls/connections.json`; devs have no stg key at all, so `http-check --env stg` on a dev's machine has nothing to connect with. Gate records in git are evidence, not a lock (ADR-0014 TB-3).
 
+- **What the shared repository keeps.** Everything `pls` or a gate reads on someone else's machine is committed — `tests/results/` (coverage for G3), `requirements/sources/` (`pls check p1`), `gates/`, `releases/`, `ops/onboarding/`, `ops/log/`, `ops/usage/`, `design/probes/`. Only `ops/xref/`, `ops/adopt/`, `ops/triage/` and `ops/env-compare/` stay on your machine (gitignored); after a fresh clone run `pls xref --site <site>` when a skill needs it. A project made before this: `pls skills check` reports that the template `.gitignore` changed — copy its last block into the project's `.gitignore`, then `git rm -r --cached --ignore-unmatch ops/xref ops/adopt ops/triage ops/env-compare` and commit.
+
 ## Troubleshooting
 
 | Symptom | Fix |

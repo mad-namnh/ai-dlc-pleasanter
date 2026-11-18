@@ -71,3 +71,14 @@ The reviewed tree is committed unchanged.
 - Reviewer: `pls-x-reviewer`, sonnet, medium (Standard: lint and wording only). Change: working tree against `29ac7e8`. `git status` before/after identical.
 - Verdict: **accept**. Low-1 cosmetic (one blank line before a class) — left as is. N-1 test fails on the parent `29ac7e8`; the N-2 test fails on `cc8a649` (before the L-2 narrowing) — both run by the Orchestrator.
 - Note from the reviewer: the tests order records with `time.sleep(0.05)`; passed on Windows.
+
+## Phase 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium (Standard). Change: working tree against `87cacfb`. `git status` before/after identical.
+- Verdict: **accept with fixes**.
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| P2-1 | Medium | setup.md says `pls skills check` reports a changed template `.gitignore` — unverified | verified by code: `_template_hashes` hashes every file of `templates/project` (`rglob("*")` includes dotfiles) and the check reports `templates/project/<file>: changed` against the lock (`tools/pls/pls.py:2667-2681`); no change |
+| P2-2 | Low | `pls-x-onboarding` step 3 still reads like the adopt report is committed | next Light commit: "(local, gitignored)", version 0.8 |
+| P2-3 | Low | template `CLAUDE.md` layout table contradicts `.gitignore` until Nam applies the patch | pending Nam; `git apply --check` OK and full suite with the patch applied 777 OK (`../_agent-scratch/p2-tpl`) |
