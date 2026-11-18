@@ -492,7 +492,7 @@
           "result": "fail"
         }
       ],
-      "note": "The probe (API create) failed on 1.5.2: the lookup did not copy (NumB 0, expected 1000); cause open (H1 in the entry, not told apart). The screen part of the entry was observed on the screen by a person on 1.5.2 (2026-11-14/15, administrator account (stated by the person, 2026-11-15); not a probe run; not verified in the sense of ADR-0023): with the link typed and saved on the screen and AutoPostBack on the link column the lookup filled the field; the stored value after save was not observed; no screen lookup was observed on settings written through updatesite, and AutoPostBack written through updatesite was not tried. verified_on stays empty: the probed API behaviour fails and the screen part is a person's observation, not a probe run."
+      "note": "The probe (API create) failed on 1.5.2: the lookup did not copy (NumB 0, expected 1000); cause open (H1 in the entry, not told apart; no API create was made after a screen save). The screen parts of the entry were observed on the screen by a person on 1.5.2; not probe runs; not verified in the sense of ADR-0023. (A) 2026-11-14/15, administrator account, probe sites, link typed and saved on the screen: with AutoPostBack on the link column the lookup filled the field. (C) 2026-11-15, account not stated (earlier checks on the probe sites: administrator), an app site deployed by pls apply (updatesite; round trip: stored settings = git, AutoPostBack included): the JSON-link drop-down listed nothing until the site was saved once on the screen (AutoPostBack toggled off/save/on/save); then it listed the master, choosing the master filled the target (stated), and the values were right after save (per the trial's check definition 'value stored after save and reopen'). Whether a later updatesite deploy empties the drop-down again: not known. Source read 2026-11-15: the API and the screen site update reach the same Links-table rewrite; it does not explain why the screen save helped. verified_on stays empty: the probed API behaviour fails and the screen parts are a person's observations, not probe runs."
     },
     "D41": {
       "verified_on": [
@@ -536,7 +536,7 @@
           "result": "fail"
         }
       ],
-      "note": "Failed because the lookup (D40) did not copy (NumB 0, so NumC 0): not established, not shown wrong."
+      "note": "Failed because the lookup (D40) did not copy (NumB 0, so NumC 0): API path not established, not shown wrong. Screen, observed by a person on 1.5.2 (2026-11-15, account not stated (earlier checks on the probe sites: administrator), D40 (C) site after its screen save; not a probe run): choosing the master filled NumB (stated); the formula over the looked-up column showed its result on the form only with AutoPostBack also on the other operand column NumA (数量, set on the screen, not deployed from git); values right after save (per the trial's check definition 'value stored after save and reopen'). verified_on stays empty."
     },
     "D42": {
       "verified_on": [

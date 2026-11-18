@@ -13,3 +13,5 @@
 - Review round 2 started (pls-x-reviewer, opus, high; subagent 4/6).
 - Review round 2: accept with fixes (M1 D47 rule vs L-DEP-01, M2 safety switches config-only, L1–L4).
 - Fixes: six switches held back (75 keys; TD-63 reworded); docstring 'Not here'; checklist columns; curator (opus, high; subagent 5/6) D44 / D46 / D47 rows and SKILL.md Fact 2; README; HANDOFF line. L4 (per-key reading of a failed probe) → for Nam's confirmation in the report.
+- Committed 5554586 (patch from the worktree staged with git apply --cached; working tree merged by hand: HANDOFF, ADR-0023, tech-debt, skills/README with the uncommitted D40 / mail work). Main-tree suites after merge: 3.12 629 OK, node 16/16. Subagents 5/6, review rounds 2/2.
+- REPORT SENT
