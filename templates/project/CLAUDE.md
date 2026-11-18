@@ -61,8 +61,9 @@ Filled in when the project is created; the lifecycle skill reads it.
 | `dist/` | release packages for the customer (`pls package`, gitignored); the manifest stays in `releases/<R>/` |
 | `ops/drift/` | drift baselines and decisions |
 | `ops/log/`, `ops/usage/` | run log of every `pls` command; LLM token usage per session (`pls usage`) |
-| `ops/onboarding/`, `ops/adopt/`, `ops/xref/` | taking over an existing app: onboarding summary, adopt reports, which script uses which column and site |
-| `ops/triage/` | maintenance triage notes (P6) |
+| `ops/onboarding/` | taking over an existing app: onboarding summary (committed; pls requires it before P1) |
+| `ops/adopt/`, `ops/xref/`, `ops/env-compare/` | local, gitignored: adopt reports, which script uses which column and site, environment comparisons — regenerated with `pls adopt`, `pls xref`, `pls env-compare` |
+| `ops/triage/` | local, gitignored: maintenance triage notes of the person answering (P6) |
 | `traceability.json` | REQ → design → config → tests |
 | `.pls/` | gitignored: connection, exports, local files |
 
