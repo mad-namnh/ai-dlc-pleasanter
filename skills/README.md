@@ -18,7 +18,7 @@ Framework skills for AI-DLC for Pleasanter. Naming: `pls-<phase>-<role>` (see `C
 
 ## Installing into a project repository
 
-Copy the skill folders into `<project>/.claude/skills/` and record the framework version in `<project>/.claude/framework.lock`. Projects pin a version; upgrades are explicit commits.
+Copy the skill folders into `<project>/.claude/skills/` and record the framework version in `<project>/.claude/framework.lock` — `pls init` and `pls skills sync` do both. Projects pin a version (ADR-0022: commit, release tag, clean tree; writes outside dev refuse another framework); upgrades are explicit commits.
 
 ## Changing a skill
 

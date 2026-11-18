@@ -2689,8 +2689,8 @@ def _framework_skills(fw: Path) -> dict[str, Path]:
 def _framework_commit(fw: Path) -> str:
     import subprocess
     try:
-        return subprocess.run(["git", "-C", str(fw), "rev-parse", "HEAD"], capture_output=True, text=True,
-                              timeout=10).stdout.strip() or "unknown"
+        p = subprocess.run(["git", "-C", str(fw), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10)
+        return p.stdout.strip() if p.returncode == 0 and FP.valid_commit(p.stdout.strip()) else "unknown"
     except (OSError, subprocess.SubprocessError):
         return "unknown"
 
@@ -2750,6 +2750,7 @@ def sync_skills(proj: Path, fw: Path = FRAMEWORK) -> dict:
     vers, skills = _skill_versions(fw), {}
     lock_p = proj / ".claude" / "framework.lock"
     lock = rj(lock_p) if lock_p.exists() else {}
+    lock = lock if isinstance(lock, dict) else {}               # a damaged lock is rewritten by this sync
     fw_skills = _framework_skills(fw)
     for name in sorted(set(lock.get("skills") or {}) - set(fw_skills)):
         if re.fullmatch(r"[a-z0-9-]+", name) and (dest / name).is_dir():   # a lock name never reaches outside
@@ -2811,6 +2812,8 @@ def edited_skill_warning(r: Path) -> str | None:
 
 def skills_check(proj: Path, fw: Path = FRAMEWORK) -> list[str]:
     lock = rj(proj / ".claude" / "framework.lock")
+    if not isinstance(lock, dict):
+        return [".claude/framework.lock is not a JSON object - restore it from git, or run `pls skills sync` to rewrite it"]
     fw_skills, problems = _framework_skills(fw), []
     for name, entry in sorted((lock.get("skills") or {}).items()):
         d = proj / ".claude" / "skills" / name
@@ -4354,7 +4357,7 @@ def _main(argv=None) -> int:
             lock = sync_skills(r, FRAMEWORK)
             print("synced " + ", ".join(f"{k} {v['version']}" for k, v in lock["skills"].items()) + f" (framework {lock['commit'][:10]}"
                   + (f", {lock['tag']}" if lock.get("tag") else "") + ")")
-            if lock.get("dirty") is not False or lock.get("commit") == "unknown":
+            if lock.get("dirty") is not False or not FP.valid_commit(lock.get("commit")):
                 print("WARNING: the framework had uncommitted changes, or git could not read it — writes outside dev stay "
                       "refused until the project is synced from a clean release tag (ADR-0022)")
             for line in lock["template_notes"]:

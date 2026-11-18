@@ -60,6 +60,73 @@ class ProblemTest(unittest.TestCase):
             lock(self.r, commit=bad)
             self.assertIn("names no framework commit", FP.problem(self.r, self.r, PINNED), bad)
 
+    def test_a_malformed_lock_is_a_refusal_message_never_a_traceback(self):
+        p = self.r / ".claude" / "framework.lock"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        for doc in ([], {"commit": 1234567, "dirty": False}, {"commit": "abc1234", "tag": 5, "dirty": False}, "text"):
+            p.write_text(json.dumps(doc), encoding="utf-8")
+            got = FP.problem(self.r, self.r, dict(PINNED, commit="def5678"))
+            self.assertIsInstance(got, str, doc)                  # a reason the person can act on, never an exception
+
+    def test_a_tag_of_the_wrong_type_is_never_pinned_even_at_the_pinned_commit(self):
+        p = self.r / ".claude" / "framework.lock"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        for tag in (5, ["x"], {"v": 1}):
+            p.write_text(json.dumps({"commit": "abc1234", "tag": tag, "dirty": False}), encoding="utf-8")
+            self.assertIn("names no framework commit", FP.problem(self.r, self.r, PINNED), tag)
+
+    def test_a_failed_rev_parse_is_unknown_never_its_output(self):
+        for code, out in ((128, "HEAD\n"), (0, "HEAD\n"), (0, "")):
+            with mock.patch("subprocess.run", return_value=mock.Mock(returncode=code, stdout=out)):
+                self.assertEqual(pls._framework_commit(self.r), "unknown", (code, out))
+
+    def test_the_dirty_check_sees_untracked_files_whatever_the_git_config_says(self):
+        calls = []
+
+        def fake_git(fw, *args):
+            calls.append(args)
+            return ""
+        with mock.patch.object(FP, "_git", side_effect=fake_git):
+            FP.state(self.r)
+        status = [a for a in calls if a[:1] == ("status",)]
+        self.assertEqual(len(status), 1)
+        self.assertIn("--untracked-files=all", status[0])
+
+    def test_a_lock_that_is_not_an_object_is_rewritten_by_sync_and_reported_by_check(self):
+        (self.r / "environments.json").write_text(json.dumps({"envs": {}}), encoding="utf-8")
+        p = self.r / ".claude" / "framework.lock"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("[]", encoding="utf-8")
+        self.assertIn("not a JSON object", pls.skills_check(self.r, pls.FRAMEWORK)[0])
+        with mock.patch.object(FP, "state", return_value=PINNED):
+            got = pls.sync_skills(self.r, pls.FRAMEWORK)
+        self.assertIsInstance(json.loads(p.read_text(encoding="utf-8")), dict)
+        self.assertIn("skills", got)
+
+    def test_skills_sync_warns_for_an_unknown_commit_even_when_the_tree_is_clean(self):
+        import os
+        (self.r / "environments.json").write_text(json.dumps({"envs": {}}), encoding="utf-8")
+        out, old = io.StringIO(), os.getcwd()
+        os.chdir(self.r)
+        try:
+            with mock.patch.object(FP, "state", return_value=PINNED),                     mock.patch.object(pls, "_framework_commit", return_value="unknown"), contextlib.redirect_stdout(out):
+                pls.main(["skills", "sync"])
+        finally:
+            os.chdir(old)
+        self.assertIn("WARNING: the framework had uncommitted changes, or git could not read it", out.getvalue())
+
+    def test_skills_sync_warns_when_the_result_cannot_pin(self):
+        (self.r / "environments.json").write_text(json.dumps({"envs": {}}), encoding="utf-8")
+        import os
+        out, old = io.StringIO(), os.getcwd()
+        os.chdir(self.r)
+        try:
+            with mock.patch.object(FP, "state", return_value={"commit": None, "tag": None, "dirty": None, "latest_tag": None}),                     contextlib.redirect_stdout(out):
+                pls.main(["skills", "sync"])
+        finally:
+            os.chdir(old)
+        self.assertIn("WARNING: the framework had uncommitted changes, or git could not read it", out.getvalue())
+
     def test_unreadable_git_is_never_recorded_as_clean(self):
         (self.r / "environments.json").write_text(json.dumps({"envs": {}}), encoding="utf-8")
         with mock.patch.object(FP, "state", return_value={"commit": None, "tag": None, "dirty": None, "latest_tag": None}):
@@ -159,6 +226,14 @@ class WriteGuardTest(unittest.TestCase):
             pls.main(["apply", plan["release"], "--yes"])
         self.assertTrue(self.writes(n))
         self.assertEqual(out.getvalue().count("WARNING: the framework checkout is def5678"), 1)
+
+    def test_http_check_names_the_pin_difference(self):
+        lock(self.r)
+        out = io.StringIO()
+        with mock.patch.object(FP, "state", return_value=dict(PINNED, commit="def5678")), contextlib.redirect_stdout(out):
+            pls.main(["http-check", "--env", "dev"])
+        self.assertIn("framework: the framework checkout is def5678", out.getvalue())
+        self.assertIn("a warning on dev", out.getvalue())
 
     def test_dev_writes_only_warn(self):
         lock(self.r)

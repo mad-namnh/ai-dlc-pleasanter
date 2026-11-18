@@ -33,7 +33,7 @@ def _git(fw: Path, *args: str) -> str | None:
 def state(fw: Path) -> dict:
     """The framework checkout: commit (short), release tag on it, uncommitted changes in the shipped parts, latest tag."""
     commit = _git(fw, "rev-parse", "HEAD")
-    porcelain = _git(fw, "status", "--porcelain", "--", *SHIPPED)
+    porcelain = _git(fw, "status", "--porcelain", "--untracked-files=all", "--", *SHIPPED)
     tags = _git(fw, "tag", "--list", "v*", "--sort=-v:refname") or ""
     return {"commit": commit or None,
             "tag": _git(fw, "describe", "--tags", "--exact-match", "--match", "v*", "HEAD") or None,
@@ -44,9 +44,20 @@ def state(fw: Path) -> dict:
 def _lock(project: Path) -> dict:
     p = project / ".claude" / "framework.lock"
     try:
-        return json.loads(p.read_text(encoding="utf-8-sig")) if p.exists() else {}
+        lock = json.loads(p.read_text(encoding="utf-8-sig")) if p.exists() else {}
     except (OSError, ValueError):
         return {}
+    return lock if isinstance(lock, dict) else {}
+
+
+def _tag(lock: dict) -> str | None:
+    t = lock.get("tag")
+    return t if isinstance(t, str) and t else None
+
+
+def valid_commit(c) -> bool:
+    """A commit id the pin can rely on: 7 to 40 lowercase hex digits."""
+    return isinstance(c, str) and re.fullmatch(r"[0-9a-f]{7,40}", c) is not None
 
 
 def _same(a: str | None, b: str | None) -> bool:
@@ -67,14 +78,14 @@ def problem(project: Path, fw: Path, now: dict | None = None) -> str | None:
         return None
     lock = _lock(project)
     pinned = lock.get("commit")
-    if not pinned or pinned == "unknown" or not re.fullmatch(r"[0-9a-f]{7,40}", str(pinned)):
+    if not valid_commit(pinned) or not (lock.get("tag") is None or isinstance(lock.get("tag"), str)):
         return ("the project's framework.lock names no framework commit (git could not read the framework when it was "
                 "synced, or the lock was edited) — run pls skills sync from a release tag")
     if lock.get("dirty") is not False:
         return ("the project's framework.lock does not record a clean framework (synced by an older pls, or git could not "
                 "read the framework, or it had uncommitted changes) — run pls skills sync from a release tag")
     now = now or state(fw)
-    pin = f"{_short(pinned)}{' (' + lock['tag'] + ')' if lock.get('tag') else ''}"
+    pin = f"{_short(pinned)}{' (' + _tag(lock) + ')' if _tag(lock) else ''}"
     if not now.get("commit") or now.get("dirty") is None:
         return f"the framework at {fw} cannot be read with git — its version cannot be confirmed against the pin {pin}"
     if now["dirty"]:
@@ -91,7 +102,7 @@ def newer_release(project: Path, now: dict, fw: Path | None = None) -> str | Non
     """A note when the framework has a release tag that comes after the commit the project pinned (a pin ahead of
     the latest tag — a framework developer's project — is not told to go back)."""
     lock, latest = _lock(project), now.get("latest_tag")
-    if not latest or not lock.get("commit") or lock.get("tag") == latest:
+    if not latest or not valid_commit(lock.get("commit")) or _tag(lock) == latest:
         return None
     if fw is not None:
         tagged = _git(fw, "rev-list", "-n", "1", latest)
@@ -105,7 +116,7 @@ def newer_release(project: Path, now: dict, fw: Path | None = None) -> str | Non
         if not ahead:
             return None
     return (f"framework release {latest} is available (this project pinned "
-            f"{lock.get('tag') or 'commit ' + _short(lock.get('commit'))}) — read CHANGELOG.md before upgrading")
+            f"{_tag(lock) or 'commit ' + _short(lock.get('commit'))}) — read CHANGELOG.md before upgrading")
 
 
 def session_notes(project: Path, fw: Path) -> list[str]:
