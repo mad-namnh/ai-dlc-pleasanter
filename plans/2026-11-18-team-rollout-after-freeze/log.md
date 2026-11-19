@@ -135,3 +135,13 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Batch graded (results: `evals/results/<skill>/2026-11-19*.md`): P1 003 runs 2–3 PASS (3/3); config-builder 001 PASS; P5 001 FAIL (Must 4: G4 binds the plan, not said), P5 002 PASS (note); onboarding 001 FAIL (summary not written), 002 PASS; script-engineer 001 FAIL (case input / rubric predate L-REF-04). No void run (every list of opened files checked). Person-role replies all checked against interviewee.md, none corrected. Held folders moved back after grading. `pls check p1` run by the Orchestrator on the P1 folders after grading: run 2 0 findings, run 3 8 findings (TD-75).
 - Decisions left to Nam (skill text → new version + eval, protected rubrics): P1 0.9 text (case 002), onboarding step 10 wording, P5 G4-binds-plan sentence, script-engineer case input / rubric (L-REF-04, `sandbox sync`). Not changed in this batch (a skill change needs its own eval batch).
 - Eval runner calls this batch: 8 runs (9 calls incl. resumes counted per run), person-role 2.
+
+## Phase 8 follow-up (2026-11-19, Nam chose the recommended option of each question — asked after his remark "can toi quyet nhung khong dua ra dang cau hoi ma chi neu van de")
+- P1 0.9 (impact row alone protects nothing) + eval k = 3 on cases 001–003.
+- Onboarding 0.9 (step 10: write the summary now, undecided findings as open) + eval k = 1 on 001, 002.
+- P5 0.13 (G4 binds this plan; a later change needs a new G4) + eval k = 1 on 001, 002.
+- Script-engineer case 001: patch of input.md + expected.md (protected) for Nam; one run after he applies it.
+- Follow-up batch graded (results `evals/results/<skill>/2026-11-20*.md`): P1 0.9 001 3/3, 002 3/3 (REQ-015 protects 対応回数 in every run), 003 3/3; onboarding 0.9 001 PASS, 002 PASS; P5 0.13 001 PASS, 002 PASS; script-engineer 0.7 on the rebuilt case FAIL (Must 1: xref after the edit, again) — graded against the proposed rubric patch, not applied yet.
+- Script-engineer case rebuilt: `project/` fixture (orders / customers, calc-total.js, check-discount.js, DES-002, DES-004 with `${env:TAX_RATE_STMT}` holding the whole statement), input.md and setup.md rewritten (not protected); rubric as `proposed-script-engineer-case-001-rubric.patch` (`git apply --check` OK).
+- Found: `pls refs` does not list a literal site id in an id context while lint reports it as L-REF-01 (framework defect, to ask Nam).
+- Two 5-hour usage limits during the batch; cut runs resumed. No void run. Held folders moved back after grading.

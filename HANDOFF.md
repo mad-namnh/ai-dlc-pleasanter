@@ -17,7 +17,7 @@
 | 5 one model per project | done (N24, ADR-0031) |
 | 6 CI | done (`bb94661`): `.github/workflows/framework-ci.yml`; runs first on Nam's next push |
 | 7 `pls status`, golden path, docs | done (`a3cd70d`): `pls status`, `docs/golden-path.md`, lifecycle 0.33 |
-| 8 evals | done (`65301a7`, 2026-11-19 later): lifecycle 0.33 k/k on 001–009; P2 0.14 3/3 on both cases; P1 0.8 001 3/3, **002 2/3**, 003 3/3; config-builder 0.12 PASS; P5 0.12 001 **FAIL** (G4-binds-the-plan sentence missing), 002 PASS; onboarding 0.8 001 **FAIL** (summary held back), 002 PASS; script-engineer 0.7 001 **FAIL** (case predates L-REF-04 — case/rubric fix proposed). Skill / rubric changes are Nam's (results files, findings) |
+| 8 evals | done: lifecycle 0.33 k/k on 001–009; P2 0.14 3/3; **P1 0.9 3/3 on all three cases**; config-builder 0.12 PASS; **P5 0.13 2/2**; **onboarding 0.9 2/2**; script-engineer 0.7 FAIL on the rebuilt case (xref after the edit) — rubric patch for Nam: `plans/2026-11-18-team-rollout-after-freeze/proposed-script-engineer-case-001-rubric.patch` |
 | 9 drift job | done (2026-11-19, N25): `pls drift-watch run\|show\|install\|remove`, session-start lines; Task Scheduler registration and the balloon not verified — Nam in phase 10 |
 | 10 trial | Nam (two accounts), then one dev |
 

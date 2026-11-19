@@ -1,0 +1,1 @@
+{"ReferenceType": "Issues", "Version": 1.017, "Columns": [{"ColumnName": "Title", "LabelText": "件名"}, {"ColumnName": "ClassA", "LabelText": "顧客コード"}, {"ColumnName": "NumA", "LabelText": "小計"}, {"ColumnName": "NumB", "LabelText": "合計"}, {"ColumnName": "NumC", "LabelText": "値引"}]}

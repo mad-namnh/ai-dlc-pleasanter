@@ -1,0 +1,16 @@
+{
+  "managed_sites": ["orders", "customers"],
+  "envs": {
+    "dev": {"role": "dev", "parent_id": 1200, "principals": {}, "side_effects": {"mail": "disabled", "jobs": "disabled"},
+            "sites": {"orders": {"id": 1201, "title": "dev_受注一覧"}, "customers": {"id": 1202, "title": "dev_顧客マスタ"}},
+            "values": {"TAX_RATE_STMT": "var taxRate = 1.1;"}},
+    "dev-taro": {"role": "dev", "connection": "dev", "sandbox_of": "dev", "parent_id": 2200, "principals": {},
+                 "side_effects": {"mail": "disabled", "jobs": "disabled"},
+                 "sites": {"orders": {"id": 2201, "title": "taro_受注一覧", "sandbox": true},
+                           "customers": {"id": 1202, "title": "dev_顧客マスタ", "shared_from": "dev"}},
+                 "values": {"TAX_RATE_STMT": "var taxRate = 1.1;"}},
+    "stg": {"role": "stg", "parent_id": 3200, "principals": {},
+            "sites": {"orders": {"id": 3201, "title": "stg_受注一覧"}, "customers": {"id": 3202, "title": "stg_顧客マスタ"}},
+            "values": {"TAX_RATE_STMT": "var taxRate = 1.1;"}}
+  }
+}
