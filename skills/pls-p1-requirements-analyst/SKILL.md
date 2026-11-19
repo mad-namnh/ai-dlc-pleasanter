@@ -39,6 +39,7 @@ In interview mode you ask in at most 3 rounds, keep the questions and answers ve
    Mark them `(derived)` and state the source of the derivation.
    **New app (nothing runs yet):** there is no existing behaviour to protect, so derived requirements come only from the impact of one requested behaviour on another requested one (e.g. a new status that a requested view must still show). Everything else the app "obviously needs" is a question with an `[assumed]` default.
    Derived requirements **protect existing behaviour** from the impact of the change (views, notifications, reminders, aggregations, scripts). Behaviour the customer did not ask for and that no existing element needs (a new validation, an extra export, a new message) is **not** a requirement: raise it as a question with an `[assumed]` default, so G1 decides whether it enters scope.
+   An existing element your impact analysis says must keep working (e.g. an aggregation, view or notification marked "unchanged") gets a derived requirement or an acceptance criterion that a test can check; a row in an impact table alone protects nothing.
 5. **Write acceptance criteria** for each requirement: observable, numbered, testable through the API or the edit screen. If a criterion cannot be tested automatically (e.g. mail delivery), say so explicitly.
 6. **List open questions** for the customer in **Japanese** (お客様への確認事項), each with the assumption you will use if unanswered, marked `[assumed]`.
 7. **Update `requirements/index.md`** (ID, title, EARS type, status `awaiting G1`) and the questions table.
@@ -59,7 +60,7 @@ IDs are sequential across the project (`REQ-001`, `REQ-002`, …) and never reus
 
 - [ ] Every requirement is a single EARS statement with a named trigger/state and a system response — count the `shall`s in each `## Requirement` section: exactly one.
 - [ ] Every requirement has ≥ 1 acceptance criterion; untestable ones are flagged.
-- [ ] Impact on existing statuses, views, notifications, reminders, scripts and permissions was checked — each element by its condition (watched columns, condition view), not only by its recipient; derived requirements recorded.
+- [ ] Impact on existing statuses, views, notifications, reminders, scripts and permissions was checked — each element by its condition (watched columns, condition view), not only by its recipient; derived requirements recorded; every element the analysis says must keep working has a derived requirement or a testable acceptance criterion.
 - [ ] No requirement asks for a new element where an existing column or feature already covers it (overlaps are questions).
 - [ ] Ambiguities are questions with explicit assumptions, not silent choices. Every `[assumed]` in a REQ file points to a question number in `index.md`.
 - [ ] No derived requirement adds behaviour beyond the request that no existing element needs (those are questions).
