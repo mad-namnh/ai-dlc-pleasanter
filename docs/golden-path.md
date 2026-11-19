@@ -20,6 +20,7 @@ write key, runs the commands that need a tenant administrator.
 | 6 | `python pls.py merge-install` (once per clone) | dev | `.git/config` has the merge driver |
 | 7 | `python pls.py http-check --env dev` | dev | HTTP 200, `writes: allowed`, the framework pin line without a warning |
 | 8 | Your sandbox: `python pls.py sandbox create --name <you> --sites <a,b> --parent <folder id>`, then `python pls.py bootstrap <B-…>` (you type the id), then `python pls.py sandbox sync --name <you>` ([setup.md, Several developers](setup.md#every-demo-or-new-app)) | dev | `pls status` shows the sandbox line |
+| 9 | The drift job on your machine (Windows): `python pls.py drift-watch install --env dev --env dev-<you>` — read only, Mon–Fri every 2 hours; a balloon and the next Claude session tell you when a site was edited on the screen ([setup.md, Drift job](setup.md#drift-job)) | dev | `python pls.py drift-watch run` prints a report |
 
 What you never get: a stg key (not even read only), a tenant administrator key, the right to change Approvers,
 Operators or an environment's `role`.
@@ -37,6 +38,7 @@ Operators or an environment's `role`.
 | Groups and test users | after G2, if the design adds groups or role tests need users: ask the owner (N15) | owner runs `pls principals --env dev --create`, then `pls test-users --env dev`; you run `pls principals --env dev` (read only) | owner |
 | P3 | build in `config/`, release to **your sandbox**, round trip to 0 differences | `pls release-plan --env dev-<you> …`, `pls apply …` | agent, you type the id (or the sandbox's standing permission) |
 | UI edits in the sandbox | anything you clicked in Pleasanter goes back to git before the merge | `pls harvest --env dev-<you> --site <s>`, commit | dev |
+| A UI edit the drift job reports | the session start or a balloon says a site differs from its last release; read `pls drift-watch show`, then keep it (harvest → change request) or revert it (next release with `--accept-drift`) | your decision in `ops/drift/<date>-<env>-<site>.md` | dev (stg: owner) |
 | Merge | merge your branch into the shared branch; pull a teammate's work first | git; then `pls sandbox sync --name <you>` | dev |
 | Release to shared dev | one person at a time, from merged git; a plan made before pulling a teammate's release is refused as drift | `pls release-plan --env dev …`, `pls apply …` | dev |
 | P4 | tests on dev, coverage, the build against its DES | `pls test …`, `pls coverage`, `pls check p3 --env stg --des DES-…` | agent |

@@ -18,7 +18,7 @@
 | 6 CI | done (`bb94661`): `.github/workflows/framework-ci.yml`; runs first on Nam's next push |
 | 7 `pls status`, golden path, docs | done (`a3cd70d`): `pls status`, `docs/golden-path.md`, lifecycle 0.33 |
 | 8 evals | partly done (`65301a7`): lifecycle 0.33 k/k on 001–009; P2 0.14 3/3 on both cases; P1 0.8 001 3/3, **002 2/3**, 003 one run. Not run: P1 003 runs 2–3, k = 1 of onboarding, P3 ×2, P5 (two usage limits in the night) |
-| 9 drift job | not started |
+| 9 drift job | done (2026-11-19, N25): `pls drift-watch run\|show\|install\|remove`, session-start lines; Task Scheduler registration and the balloon not verified — Nam in phase 10 |
 | 10 trial | Nam (two accounts), then one dev |
 
 **Nam (2026-11-18, mid phase 6):** "làm tuần tự cho đến hết các phase, khi gặp vấn đề cần confirm thì bạn phân tích và đưa ra quyết định hợp lý và làm tiếp, sáng mai tôi review report" — the Orchestrator decides and logs each decision with its reasoning; hard stop points (push, protected paths, ADR acceptance, Pleasanter writes) stay open for Nam.

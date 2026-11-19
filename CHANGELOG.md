@@ -7,6 +7,11 @@ Each entry: what changes for a project, and what a project must do after `pls sk
 
 ## Unreleased
 
+- **`pls drift-watch`** (read only): a scheduled check on the person's own machine that exports the project's dev /
+  sandbox / stg sites and reports UI edits against the last release, with the two ways on; Windows balloon and the
+  session-start hook. After upgrading: `pls skills sync`, then once per clone `python pls.py drift-watch install
+  --env dev --env dev-<you>` (the owner adds `--env stg`); `docs/setup.md`, "Drift job".
+
 - **`pls status`** (read only): the open items of the project and the next command, from the profile, REQ / DES,
   gate records and releases. The lifecycle skill (0.33) starts from it. After upgrading: `pls skills sync`. A one-page
   team guide: `docs/golden-path.md` in the framework.

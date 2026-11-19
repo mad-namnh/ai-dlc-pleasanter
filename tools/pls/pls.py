@@ -105,6 +105,8 @@ import pls_status as ST                                     # noqa: E402 — whe
 import pls_report as RP                                     # noqa: E402 — operator part of the release report
 import pls_address_principals as AP                         # noqa: E402 — principals inside mail addresses
 import pls_secret_fields as SF                              # noqa: E402 — credential fields of notifications (I7)
+import pls_drift_watch as DW                                # noqa: E402 — scheduled drift check (team rollout A1)
+import pls_drift_watch_schedule as DS                       # noqa: E402 — its job, notification, session start
 
 SITE_VOLATILE = {"ApiKey", "SiteId", "ParentId", "InheritPermission", "TenantId", "Ver", "Creator", "Updator",
                  "CreatedTime", "UpdatedTime", "Timestamp", "ApiCountDate", "ApiCount", "LockedTime", "LockedUser",
@@ -4076,10 +4078,19 @@ def http_cmd(r: Path, a) -> int:
 
 def main(argv=None) -> int:
     """Every command is logged (ops/log/, ADR-0013); the work is done by _main. `pls hook pre|post|stop` runs on every
-    tool call of Claude Code and is not logged (the run log would hold every edit)."""
+    tool call of Claude Code and is not logged (the run log would hold every edit). `pls drift-watch run|show` is not
+    logged either: the job runs every two hours and reads only, and its result stays in .pls/ — a log line in git each
+    time would leave every machine's working tree changed (install / remove are logged)."""
     args = list(sys.argv[1:] if argv is None else argv)
     if args[:1] == ["hook"] and args[1:2] in (["pre"], ["post"], ["stop"], ["start"], ["model"]):
         return hook(args[1])
+    if args[:1] == ["drift-watch"] and args[1:2] in (["run"], ["show"]):
+        try:
+            return _main(args)
+        except (Fail, BadFile) as ex:
+            if "--quiet" not in args:
+                print(f"pls: {ex}", file=sys.stderr)
+            return 2
     return LG.run(root, args, lambda: _main(args))
 
 
@@ -4094,9 +4105,18 @@ def hook(event_name: str, stdin=None, stdout=None) -> int:
         if not (proj / "environments.json").exists():
             return 0                                   # not a pls project: nothing to say
         if event_name == "start":                      # SessionStart: plain text goes to Claude's context
-            notes = FP.session_notes(proj, FRAMEWORK)
-            if notes:
-                text = "pls framework version:\n" + "\n".join(f"- {n}" for n in notes) + "\n"
+            text = ""
+            try:
+                notes = FP.session_notes(proj, FRAMEWORK)
+                text += ("pls framework version:\n" + "\n".join(f"- {n}" for n in notes) + "\n") if notes else ""
+            except Exception:                          # noqa: BLE001 — each part is advisory on its own
+                pass
+            try:                                       # the drift job's last result; a stale one is refreshed (A1)
+                notes = DS.session_notes(proj, DW.scope(proj, envs(proj)["envs"]))
+                text += ("pls " + "\n".join(notes) + "\n") if notes else ""
+            except Exception:                          # noqa: BLE001
+                pass
+            if text:
                 stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
                 stdout.flush()
             return 0
@@ -4116,6 +4136,83 @@ def hook(event_name: str, stdin=None, stdout=None) -> int:
         stdout.write(text if isinstance(stdout, io.TextIOBase) else text.encode("utf-8"))
         stdout.flush()
     return 0
+
+
+def _git_in(r: Path):
+    import subprocess
+
+    def git(args: list[str]) -> tuple[int, str]:
+        try:
+            p = subprocess.run(["git", *args], cwd=str(r), capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+        except (OSError, subprocess.SubprocessError):
+            return 1, ""
+        return p.returncode, p.stdout or ""
+    return git
+
+
+def drift_watch(r: Path, a, *, notify=None, schtasks=None) -> int:
+    """`pls drift-watch` (team rollout A1, N19, N20, N25): read only against Pleasanter; results in .pls/drift-watch/,
+    never committed. `notify` / `schtasks` replace the balloon and Task Scheduler in tests."""
+    import pls_http as H
+    try:
+        if a.action == "show":
+            last = DW.load(r)
+            if not last:
+                raise DW.WatchError("no drift check has run on this machine yet — pls drift-watch run")
+            print(DW.report(last), end="")
+            return 1 if DW.problems(last) else 0
+        if a.action == "remove":
+            print(f"removed the scheduled task '{DS.remove(r, run=schtasks or DS.run_command)}'")
+            return 0
+        try:
+            ev = envs(r)["envs"]
+            targets = DW.scope(r, ev, a.env)
+            if not targets:
+                raise DW.WatchError("nothing to check on this machine: .pls/connections.json names no dev or stg "
+                                    "environment — name one with --env")
+            for env in targets:
+                env_conf(r, env)                         # a hand-edited role is refused before anything is read
+        except (DW.WatchError, Fail) as ex:
+            if a.action == "run":                        # recorded, so the session start shows it instead of
+                DW.save(r, DW.failed(str(ex)))           # starting the same failing run again and again
+            raise
+        if a.action == "install":
+            name = DS.install(r, a.env or list(targets), a.shared_branch, run=schtasks or DS.run_command)
+            print(f"registered '{name}': Mon–Fri from 09:00, every 2 hours, while you are logged on; checks "
+                  f"{', '.join(targets)}; results: pls drift-watch show; remove: pls drift-watch remove")
+            return 0
+        if not DW.take_lock(r):
+            if not a.quiet:
+                print("another drift check is running on this machine — its result: pls drift-watch show")
+            return 0
+        try:
+            clients: dict = {}
+
+            def export(env: str, site_id: int) -> dict:
+                if env not in clients:
+                    clients[env] = _client(r, env)[2]
+                return clients[env].export_site(site_id)
+
+            def compare(env: str, e: dict, site: str, live: dict) -> dict:
+                diffs, text = drift_report(r, e, env, site, live, None)
+                rev = classify(diffs) if diffs else {"classification": "none", "rules": []}
+                return {"differences": len(diffs), "classification": rev["classification"], "rules": rev["rules"],
+                        "text": text}
+            result = DW.run(r, ev, targets, export=export, compare=compare, git=_git_in(r))
+            tell, _ = DW.save(r, result)
+        finally:
+            DW.drop_lock(r)
+        found = DW.problems(result)
+        if tell:
+            (notify or DS.notify)(f"{len(found)} item(s): " + "; ".join(found)[:200] + " — pls drift-watch show")
+        if not a.quiet:
+            print(DW.report(result), end="")
+        return 1 if found else 0
+    except (DW.WatchError, H.TransportError) as ex:
+        if not a.quiet:
+            print(f"pls: {ex}", file=sys.stderr)
+        return 2
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -4289,6 +4386,13 @@ def build_parser() -> argparse.ArgumentParser:
     s = sp.add_parser("hook", help="Claude Code hooks of this project (ADR-0029): pre / post / stop read the event on "
                       "stdin (run by Claude Code, not by hand); install adds them to .claude/settings.json")
     s.add_argument("action", choices=["pre", "post", "stop", "start", "model", "install"])
+    s = sp.add_parser("drift-watch", help="read only: export + drift of the environments this machine checks (team rollout "
+                      "A1); install / remove register the job with Windows Task Scheduler")
+    s.add_argument("action", choices=["run", "show", "install", "remove"])
+    s.add_argument("--env", action="append", default=[], help="run / install: environment to check (repeat; default: "
+                   "the dev and stg environments of .pls/connections.json, or those install recorded) — name your sandbox here")
+    s.add_argument("--shared-branch", help="install: the branch the shared releases/ live on (default origin/HEAD)")
+    s.add_argument("--quiet", action="store_true", help="run: print nothing (the job; the result is in .pls/drift-watch/)")
     sp.add_parser("status", help="read only: open items of the project (profile, REQ / DES, gates, releases) and the next command")
     s = sp.add_parser("check", help="phase outputs complete: p1 REQ, p2 DES (front matter), p3 lint + scope + traceability")
     s.add_argument("phase", choices=["p1", "p2", "p3"])
@@ -4388,6 +4492,9 @@ def _main(argv=None) -> int:
             print(f"pls: {ex}", file=sys.stderr)
             return 2
         return 1 if missing else 0
+
+    if a.cmd == "drift-watch":
+        return drift_watch(r, a)
 
     if a.cmd == "canon":
         p = r / "config" / a.site / "site.json"

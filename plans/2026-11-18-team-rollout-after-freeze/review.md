@@ -176,3 +176,17 @@ The reviewed tree is committed unchanged.
 - Reviewer: `pls-x-reviewer`, sonnet, medium. Change: working tree against `bb94661` (focus `pls_status.py` and its test). `git status` identical before and after.
 - Verdict: **accept**, no Critical / High / Medium. H1, M1, L1 confirmed fixed (recovery map equals `pls.OPEN_STATES`, unknown states open, stg after G4 covered). Full Python suite exit 0, node exit 0 (reviewer's own unpiped run).
 - Low, no fix: (1) a rolled-back stg release named by an approved G3 still shows as a P5 item after a newer release replaces it — kept: the replacement needs its own G3, so the prompt to rework is right; (2) a rolled-back release that is still open is listed twice (release and P5 line) — cosmetic, kept.
+
+## Phase 9 — drift job (2026-11-19, pls-x-reviewer, sonnet, medium, working tree against 0a008ae)
+
+Verdict: **accept with fixes**; no Critical / High. Criteria 1–9 met (reviewer's own check).
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | full suite result not captured by the reviewer | Orchestrator ran it without a pipe before and after the fixes: 3.12 848 OK (exit 0), 3.10 848 OK (2 skipped), node 16/16 |
+| 2 | Low | a run failing before `save` (e.g. refused role) leaves no `last.json` → every session start respawns it | fixed: `DW.failed` recorded as the last result; test `test_a_run_that_stops_early_is_shown_and_not_restarted_at_every_session` |
+| 3 | Low | `git fetch` writes remote refs into `.git` | documented (setup.md "What a run changes on your machine") |
+| 4 | Low | a teammate's release applied but not pushed still shows as drift | documented (setup.md); not detectable without server-side knowledge |
+| 5 | Low | `install --env dev-<you>` alone drops `dev` | kept: docs always show `--env dev --env dev-<you>`; the install message names the environments checked |
+
+Not verified (Nam, phase 10): real `schtasks /create` with the XML (Command path with spaces unquoted), the balloon, pythonw behaviour, a real Pleasanter / GitHub fetch.

@@ -26,6 +26,7 @@ Source: readiness review in the session of 2026-11-17/18 (criteria: stable, team
 | N17 | Automation group A accepted: scheduled drift check (A1), version check at session start (A2), one sandbox sync command (A3), one command for `principals --create` + `test-users` (A4) |
 | N18 | Group B stays manual for now: 同期 on the サマリ tab (ADR-0028 not built), screen save after a JSON-link deploy (D40), app version from `/versions` |
 | N19 | The drift check runs on the **personal machine of the person doing the task**; its purpose is to tell them the UI was edited and help decide whether to bring the UI change into git |
+| N25 | Phase 9 (2026-11-19, Nam chose the recommended option of each question): phase 9 before the rest of phase 8; the job runs every 2 hours Mon–Fri 9:00–19:00; the session-start hook shows the last result and starts a background check when it is older than 2 hours; the agent never registers the job — Nam runs the install in phase 10 |
 | N24 | Phase 5 (Nam: "1a, 3a", then "a"): one model per project in `.claude/settings.json`, a PreModelSwitch hook denies any other (stronger ones too); `opus` for every phase, effort default; a cheaper model per phase is decided after phase 10 from `pls usage` (ADR-0031) |
 | N23 | Phase 4 (Nam: "1a 2a 3a"): first tag `v0.3.0` on the commit that ends phase 4, then `v0.3.x`; the Orchestrator tags locally, Nam pushes; uncommitted changes in the framework's shipped parts count as not pinned (refused outside dev) |
 | N22 | Phase 3 (Nam: "1a 2a 3a 4a"): ADR-0011 accepted, element ids not allocated (TD-72); `pls sandbox sync` = refresh + apply, git stays with the person; a sandbox's releases and bootstraps gitignored. A4 (`principals --create --test-users`) **dropped** after review (Nam: "a"): its one confirmation could not list every change before the test-users plan exists — the two commands stay separate, each with its own listing confirmation |
@@ -50,7 +51,7 @@ Source: readiness review in the session of 2026-11-17/18 (criteria: stable, team
 | 6 | CI for both suites | Standard | proposed |
 | 7 | `pls status` (next step) + golden path + docs clean-up (D6) | Standard | proposed |
 | 8 | Evals of the skills in use (k = 3 for P1, P2, lifecycle) | Standard | proposed |
-| 9 | Scheduled drift check on the task owner's machine (A1) | Standard | proposed |
+| 9 | Scheduled drift check on the task owner's machine (A1) | Standard | done (2026-11-19) |
 | 10 | Trial: Nam with two accounts, then one real dev (D8) | — | proposed |
 
 ### 1. Gate model and stg control

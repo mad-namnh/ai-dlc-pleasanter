@@ -116,3 +116,16 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Not run in phase 8: P1 case 003 runs 2–3; k = 1 evals of onboarding, P3 config-builder, P3 script-engineer, P5 — stopped for the usage limits and the morning review.
 - Eval results committed `65301a7`; HANDOFF and runner-list patch `9e0cd04`. Phase 9 not started (stopped for the morning review and the usage limits). Subagent calls: reviewers 3 (phase 6: 1, phase 7: 2), eval runners 46 incl. resumes, person-role 1.
 - REPORT SENT (2026-11-19 overnight report).
+
+## Phase 9 — scheduled drift check (2026-11-19, Nam: "tiep thuc lam task")
+
+- Model: claude-opus-5-5 (main session).
+- Decisions asked upfront (options with a recommendation); Nam chose the recommended one each time → N25:
+  1. Order: phase 9 first; the rest of phase 8 (P1 003 runs 2–3, k = 1 of onboarding, P3 ×2, P5) after it, before phase 10.
+  2. Schedule: every 2 hours, Mon–Fri 9:00–19:00.
+  3. Session start: the hook shows the last result with its time; when that result is older than 2 hours it starts a check in the background (does not block the session).
+  4. Registering the job (`schtasks /create`): the agent writes code and tests only (tests check the command text, nothing registered); Nam runs the install in phase 10 with paste-ready commands.
+- Built: `pls drift-watch run|show|install|remove` (`pls_drift_watch.py`, `pls_drift_watch_schedule.py`), hook start shows the last result / starts a stale one in the background; `run` / `show` not in the run log (ADR-0013 amendment line). Decisions D1–D7 in `phase-09-drift-watch.md`.
+- New test file fails on parent `0a008ae` (module missing; worktree, removed).
+- Review round 1 (pls-x-reviewer, sonnet, medium): accept with fixes, no Critical/High; L2 fixed with a test, L3/L4 documented, L5 kept (review.md). Round 2 not run (Low fixes only).
+- Suites after fixes: Python 3.12 848 OK (exit 0), 3.10.21 848 OK (2 skipped, exit 0), node 16/16. Subagent calls phase 9: 1/6.

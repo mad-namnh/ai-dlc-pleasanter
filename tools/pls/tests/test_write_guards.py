@@ -24,7 +24,7 @@ import test_http as TH  # noqa: E402
 WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals",       # principals: only with --create (ADR-0017)
           "test-users",                                                        # ADR-0018, ADR-0019
           "sandbox"}                                                           # sandbox sync runs apply (ADR-0011)
-NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest"}
+NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest", "drift-watch"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
          "skills", "gate", "step", "usage", "spec-skeleton", "jobs-verified", "profile", "review", "package", "scope",
