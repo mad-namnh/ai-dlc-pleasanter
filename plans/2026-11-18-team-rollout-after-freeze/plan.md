@@ -50,7 +50,7 @@ Source: readiness review in the session of 2026-11-17/18 (criteria: stable, team
 | 5 | Model per phase / skill | Standard | proposed |
 | 6 | CI for both suites | Standard | proposed |
 | 7 | `pls status` (next step) + golden path + docs clean-up (D6) | Standard | proposed |
-| 8 | Evals of the skills in use (k = 3 for P1, P2, lifecycle) | Standard | proposed |
+| 8 | Evals of the skills in use (k = 3 for P1, P2, lifecycle) | Standard | done (2026-11-19): every planned run made; FAILs open (see HANDOFF) |
 | 9 | Scheduled drift check on the task owner's machine (A1) | Standard | done (2026-11-19) |
 | 10 | Trial: Nam with two accounts, then one real dev (D8) | — | proposed |
 

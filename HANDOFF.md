@@ -17,7 +17,7 @@
 | 5 one model per project | done (N24, ADR-0031) |
 | 6 CI | done (`bb94661`): `.github/workflows/framework-ci.yml`; runs first on Nam's next push |
 | 7 `pls status`, golden path, docs | done (`a3cd70d`): `pls status`, `docs/golden-path.md`, lifecycle 0.33 |
-| 8 evals | partly done (`65301a7`): lifecycle 0.33 k/k on 001–009; P2 0.14 3/3 on both cases; P1 0.8 001 3/3, **002 2/3**, 003 one run. Not run: P1 003 runs 2–3, k = 1 of onboarding, P3 ×2, P5 (two usage limits in the night) |
+| 8 evals | done (`65301a7`, 2026-11-19 later): lifecycle 0.33 k/k on 001–009; P2 0.14 3/3 on both cases; P1 0.8 001 3/3, **002 2/3**, 003 3/3; config-builder 0.12 PASS; P5 0.12 001 **FAIL** (G4-binds-the-plan sentence missing), 002 PASS; onboarding 0.8 001 **FAIL** (summary held back), 002 PASS; script-engineer 0.7 001 **FAIL** (case predates L-REF-04 — case/rubric fix proposed). Skill / rubric changes are Nam's (results files, findings) |
 | 9 drift job | done (2026-11-19, N25): `pls drift-watch run\|show\|install\|remove`, session-start lines; Task Scheduler registration and the balloon not verified — Nam in phase 10 |
 | 10 trial | Nam (two accounts), then one dev |
 
