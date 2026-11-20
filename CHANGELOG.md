@@ -7,6 +7,13 @@ Each entry: what changes for a project, and what a project must do after `pls sk
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.3.1 — 2026-11-20
+
+Team rollout phases 7–9 and the phase 8 eval fixes (`plans/2026-11-18-team-rollout-after-freeze/`). CI green on
+GitHub Actions (Ubuntu 3.10 / 3.12, Windows 3.12, node, impact rules).
+
 - **Fixes:** `pls check p1` accepts interview sources written as the REQ template shows (`sources/<interview>.md — A3, A7`; TD-75), so G1 no longer refuses them; `pls refs` lists site ids still written as numbers (RAW, the same as lint L-REF-01). Skills: P1 0.9, onboarding 0.9, P5 0.13, script-engineer 0.8 (evals 2026-11-20). After upgrading: `pls skills sync`.
 
 - **`pls drift-watch`** (read only): a scheduled check on the person's own machine that exports the project's dev /
