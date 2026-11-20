@@ -178,6 +178,36 @@ class CliTest(unittest.TestCase):
     def script_file(self):
         return next((self.r / "config/anken/scripts").glob("*.js"))
 
+    def test_refs_lists_a_site_id_lint_reports_as_still_a_number(self):
+        # a site id written by hand into git in an id context: lint L-REF-01 reports it, refs must show it too
+        f = self.script_file()
+        f.write_bytes(f.read_bytes().replace(b"${site:anken};\r\nvar w", b"797;\r\nvar w", 1))
+        self.assertIn("L-REF-01", {i["rule"] for i in pls.lint(self.r)})
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(pls.main(["refs", "--site", "anken"]), 0)
+        lines = out.getvalue().splitlines()
+        raw = [x for x in lines if x.startswith("RAW ")]
+        self.assertEqual(len(raw), 1, lines)
+        self.assertIn("line 1: 797 (= anken) written as a site id (lint L-REF-01)", raw[0])
+        self.assertIn("1 site id(s) written as a number (RAW, lint L-REF-01)", lines[-1])
+        f.write_bytes(f.read_bytes().replace(b"797;\r\nvar w", b"${site:anken};\r\nvar w", 1))    # the reference again
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            pls.main(["refs", "--site", "anken"])
+        self.assertFalse([x for x in out.getvalue().splitlines() if x.startswith("RAW ")])
+        self.assertIn("0 site id(s) written as a number", out.getvalue())
+        self.assertNotIn("L-REF-01", {i["rule"] for i in pls.lint(self.r)})
+        # a person keeps it as a number: the literal decision is respected, as by lint (review L3)
+        self.assertEqual(pls.main(["refs", "--site", "anken", "--keep", "var siteId = 797;", "--reason", "fixed id",
+                                   "--by", "Nam", "--quote", "keep the number"]), 0)
+        self.assertIn(b"var siteId = 797;", f.read_bytes())
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            pls.main(["refs", "--site", "anken"])
+        self.assertFalse([x for x in out.getvalue().splitlines() if x.startswith("RAW ")])
+        self.assertNotIn("L-REF-01", {i["rule"] for i in pls.lint(self.r)})
+
     def test_refs_summary_keeps_the_lines_to_read_and_the_counts(self):
         body = "var s = 797;\r\nsetTimeout(f, 797);\r\n// keep 797\r\nconsole.log('x', 797);\r\n"
         self.exp.write_text(json.dumps(export([{"Id": 1, "Title": "lib", "All": True, "Body": body}]), ensure_ascii=False),

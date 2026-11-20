@@ -2201,10 +2201,20 @@ def refs_cmd(r: Path, a) -> int:
         uses = SX.site_refs(model["scripts"], resolve)
         for u in uses:
             print(f"{u['kind']}/{u['script']} line {u['line']}: ${{site:{u['site']}}} = {u['number']} … `{u['context']}`")
-        possible, groups = 0, Counter()
+        possible, groups, raw = 0, Counter(), 0
+        literal = SX.for_site(a.site)
         for kind, items in model["scripts"].items():
             for it in items or []:
                 body = it.get("Body") or ""
+                for name, num in resolve.items():              # lint L-REF-01: written as a site id, still a number
+                    for pos in SX.literal_left(body, num, literal):
+                        raw += 1
+                        ls, le = body.rfind("\n", 0, pos) + 1, body.find("\n", pos)
+                        ctx = body[max(ls, pos - 30):(le if le != -1 else len(body))][:70].replace("\r", "")
+                        print(f"RAW {kind}/{it.get('Name') or it.get('Title')} line {body.count(chr(10), 0, pos) + 1}: "
+                              f"{num} (= {name}) written as a site id (lint L-REF-01) … `{ctx}` — write ${{site:{name}}}; "
+                              "to keep the number instead, write the reference first, then a person records "
+                              "--keep \"<context>\" --reason … --by <name> --quote \"<their words>\"")
                 for name, num in resolve.items():
                     for pos in SX.possible_ids(body, num):
                         possible += 1
@@ -2216,11 +2226,12 @@ def refs_cmd(r: Path, a) -> int:
                         ctx = body[max(ls, pos - 30):(le if le != -1 else len(body))][:70].replace("\r", "")
                         print(f"POSSIBLE [{group}] {kind}/{it.get('Name') or it.get('Title')} line "
                               f"{body.count(chr(10), 0, pos) + 1}: {num} (= {name}?) … `{ctx}`")
-        LG.record_metric(references=len(uses), possible=possible, possible_groups=dict(groups))
+        LG.record_metric(references=len(uses), raw=raw, possible=possible, possible_groups=dict(groups))
         if a.summary:
             print("POSSIBLE by group: " + ", ".join(f"{g} {n}" for g, n in groups.most_common()))
-        print(f"{a.site}: {len(uses)} site reference(s) in scripts; {possible} number(s) equal to a site id kept as "
-              "written — mark a real one with --ref \"<context>\" --reason … --by <name> --quote \"<their words>\"")
+        print(f"{a.site}: {len(uses)} site reference(s) in scripts; {raw} site id(s) written as a number (RAW, lint "
+              f"L-REF-01); {possible} number(s) equal to a site id kept as written — mark a real one with --ref "
+              "\"<context>\" --reason … --by <name> --quote \"<their words>\"")
         return 0
     if not (a.reason and a.by and (a.quote or "").strip()):
         raise Fail("--keep needs --reason, --by (the person who decided) and --quote (their own words)")
