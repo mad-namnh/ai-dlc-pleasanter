@@ -317,7 +317,8 @@ More: [`docs/setup.md` → Troubleshooting](docs/setup.md#troubleshooting).
 Release **v0.3.1** (2026-11-20). Feature freeze; team rollout plan:
 [`plans/2026-11-18-team-rollout-after-freeze/plan.md`](plans/2026-11-18-team-rollout-after-freeze/plan.md).
 `main` holds the last release; work happens on `brownfield-adr`; CI runs both suites on every push
-([`.github/workflows/framework-ci.yml`](.github/workflows/framework-ci.yml)).
+([`.github/workflows/framework-ci.yml`](.github/workflows/framework-ci.yml)). `main` is protected: changes arrive by
+pull request, and the five CI jobs must pass.
 
 | Item | State |
 |---|---|

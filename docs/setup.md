@@ -142,7 +142,7 @@ Every phase of a project runs on the model its skills were evaluated on (ADR-003
 - **The team uses release tags only.** Clone the framework once and check out a tag: `git -C ai-dlc-pleasanter fetch --tags` then `git -C ai-dlc-pleasanter checkout v0.3.0`. Never work from a branch of the framework in a project.
 - **A project pins the framework** in `.claude/framework.lock` (commit and tag), written by `pls init` and `pls skills sync`. When the framework running is another commit or has uncommitted changes, `pls` refuses writes to stg (and `apply` / `bootstrap` / `migrate` warn on dev); `http-check` and the session-start hook say so.
 - **Upgrading a project:** read the new version's entry in `CHANGELOG.md`, check out that tag in the framework, then in the project `python pls.py skills sync` and `python pls.py hook install`, do what the entry says, and commit `.claude/` with the rest.
-- **A fix during the freeze (the framework owner):** branch `fix/<slug>` from the tag, fix with its regression test, both suites green, add the `CHANGELOG.md` entry, merge into `main`, tag that commit `v0.3.<n+1>` (annotated), push `main` and the tag; the team then upgrades as above. Developers report framework bugs to the owner instead of editing the framework.
+- **A fix during the freeze (the framework owner):** branch `fix/<slug>` from the tag, fix with its regression test, both suites green, add the `CHANGELOG.md` entry, open a pull request into `main` (required checks: the five CI jobs must pass; set 2026-11-20), merge it, tag the merge commit `v0.3.<n+1>` (annotated) and push the tag; the team then upgrades as above. Developers report framework bugs to the owner instead of editing the framework.
 
 ## Troubleshooting
 
