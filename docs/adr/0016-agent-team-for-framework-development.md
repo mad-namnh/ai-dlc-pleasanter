@@ -59,7 +59,7 @@ Details and quotations: `plans/2026-11-11-agent-team-setup/log.md`.
 - **Interception is not yet shown.** The checks in `plans/2026-11-11-agent-team-setup/permission-checks.md` run in a new session before the trial.
 - **No hook.** A PreToolUse hook needs its failure behaviour checked against the documentation first (what blocks, what happens when the hook cannot start or times out), and an implementation that survives this machine's path with a space and non-ASCII folder names — `docs/tech-debt.md` TD-21.
 - **Platform:** verified on Windows only. Nothing is claimed for macOS or Linux (`python` vs `python3` in the skill's commands, path forms in the rules).
-- **Python 3.10** for the suite currently lives in a temporary folder; when it is gone, a task reports "3.10 not verified".
+- **Python 3.10** for the suite currently lives in a temporary folder; when it is gone, a task reports "3.10 not verified". Since 2026-11-18 the framework CI runs the suite on 3.10 for every push (`.github/workflows/framework-ci.yml`).
 
 ## Open questions (for Nam)
 

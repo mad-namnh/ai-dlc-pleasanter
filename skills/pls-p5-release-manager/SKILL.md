@@ -48,7 +48,7 @@ The app is already on dev from P3/P4. The release makes that state official.
    - **Refused for drift:** explain it and ask the person. Planning over drift needs a decision record (`ops/drift/…`) passed as `--accept-drift`.
    - **Refused for slots:** go back to P2.
    - **Data-impacting without a migration:** go back to P2/G2. With a migration, the person runs `pls migrate R-…` (or tells you to use `--yes`; on dev also under the standing permission, `pls-x-lifecycle` section 2 rule 3) **before** `pls apply`; `apply` refuses until it has run. If it ends `uncertain`, stop: a person compares the records with `backup/`.
-2. **Write `diff-report.md`** — the Japanese summary only — from `raw-diff-<site>.md`; the operator part (order, classification, checks, rollback) is `diff-report.operator.md`, written by `release-plan`. Write `approvals.md`. **Stop at G4.**
+2. **Write `diff-report.md`** — the Japanese summary only — from `raw-diff-<site>.md`; the operator part (order, classification, checks, rollback) is `diff-report.operator.md`, written by `release-plan`. Write `approvals.md`. **Stop at G4**, and tell the person what the approval covers: the G4 record is taken after this plan and binds it — any later change to the plan or its files needs a new G4.
 3. After G4 — recorded with `pls gate G4 --release R-… [--release B-…]` **after** `release-plan` (the record binds the plan and its files; any later change to them needs a new G4); `apply` and `bootstrap` on stg refuse without it — the person runs `pls apply R-…`, or tells you to use `--yes` for that target.
    - It runs a preflight on `UpdatedTime`, reads each site again right before its own write, applies in order and restores every touched site on failure. A site that someone else changed in between is not written: the release ends `rolled-back` ("changed by someone else since the preflight") — tell the person who may be editing, then make a new plan. Then it exports and runs `mark-applied`.
    - The release folder then records who applied and how it was confirmed (`apply-log.json`) and what was read back (`plan.json` `readback_evidence`). There is no undo command: taking an applied release back is a new release (ADR-0015 is only a proposal) — never restore `rollback-<site>.json` yourself.
@@ -65,6 +65,7 @@ The app is already on dev from P3/P4. The release makes that state official.
 
 ## Checklist before G4
 
+- [ ] The hand-over says that G4 binds this plan and its files (a later change needs a new G4).
 - [ ] Target and release id are stated; drift is 0 (dev), or the plan was accepted by `pls` (stg).
 - [ ] The diff report states, in Japanese and business words:
   - what changes for users;

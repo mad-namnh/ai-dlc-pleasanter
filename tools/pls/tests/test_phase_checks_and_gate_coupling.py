@@ -117,6 +117,20 @@ class ProjectTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(pls.main(["check", "p1"]), 0)
 
+    def test_interview_answers_after_a_source_are_not_files(self):
+        # the template's form `sources/<interview>.md — A3, A7`: the list splits at the comma (TD-75)
+        (self.r / "requirements/sources/2026-11-11-interview-x.md").write_text("record\n", encoding="utf-8")
+        self.req(REQ.replace("[sources/2026-11-16-mail.md]",
+                             "[sources/2026-11-11-interview-x.md — A3, A7, P2 accepted, sources/2026-11-16-mail.md]"))
+        self.assertEqual(self.msgs("p1"), [])
+        self.req(REQ.replace("[sources/2026-11-16-mail.md]", "[A3, sources/2026-11-16-mail.md]"))
+        self.assertEqual(self.msgs("p1"), ["REQ-001: source A3 is not a file under requirements/sources/"])
+        self.req(REQ.replace("[sources/2026-11-16-mail.md]", "[sources/2026-11-16-mail.md, A3]"))
+        self.assertEqual(self.msgs("p1"), ["REQ-001: source A3 is not a file under requirements/sources/"])
+        # a dash that is not followed by answer numbers does not take the next item (review L2)
+        self.req(REQ.replace("[sources/2026-11-16-mail.md]", "[sources/2026-11-16-mail.md — client mail, A7]"))
+        self.assertEqual(self.msgs("p1"), ["REQ-001: source A7 is not a file under requirements/sources/"])
+
     def test_p1_findings(self):
         for change, want in (
                 (lambda t: t.replace("---\nid: REQ-001", "---\nid: REQ-009"), "is not the file's id"),

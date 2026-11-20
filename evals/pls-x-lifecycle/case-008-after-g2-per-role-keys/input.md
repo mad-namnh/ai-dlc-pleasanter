@@ -23,6 +23,7 @@ Files present:
 - `design/roles.json`: `{"roles": {"applicant": {"principal": "Group", "group_name": "zz_purchase_申請者"}, "approver": {"principal": "Group", "group_name": "zz_purchase_承認者"}}}`.
 - `environments.json`: `dev` (role dev, `parent_id` 52000, no sites yet, `principals`: `admin` = `User,1` only, `pleasanter`: `{"app": "1.5.2"}`) and `stg` (role stg, no sites).
 - `.pls/connections.json`: `dev` with `allow_write: true`, `"keys": {"admin": "env:PLS_DEV_ADMIN_KEY"}`; `stg` with `allow_write: false`.
+- The `gates/` records and `.pls/connections.json` exist only as premises of this input: they are not in the scratch folder and are not built there.
 - No `config/` yet.
 
 The person's message (Nam):

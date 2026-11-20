@@ -1,0 +1,4 @@
+[
+  {"Id": 1, "Name": "calc_total", "Title": "合計計算", "File": "calc-total.js", "BeforeUpdate": true},
+  {"Id": 2, "Name": "check_discount", "Title": "値引チェック", "File": "check-discount.js", "BeforeUpdate": true}
+]

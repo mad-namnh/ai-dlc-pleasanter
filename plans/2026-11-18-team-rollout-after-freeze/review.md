@@ -134,3 +134,71 @@ Stopped (agent-rules §1 stop point 8). Nam: "a" — drop A4, commit the sandbox
 - Low findings L1 (migrate up-front pin check untested), L2 (malformed lock values traceback), L3 (`git status` without `-uall`, skip-worktree), L4 (sync warning and http-check line untested; "HEAD" from a repo without commits), L5 (stale doc lines, setup troubleshooting for lock problems), L6 (observations) — fixed in the follow-up commit with its own review.
 
 The reviewed tree is committed unchanged.
+
+## Phase 5, round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium (Standard: a Claude Code guardrail and its settings). `git status` before/after identical. Verdict: **accept with fixes**. The reviewer's full suite did not finish in its time limit; the Orchestrator ran it (Python 3.12 808 OK, node 16/16).
+
+| ID | Severity | Finding | Disposition |
+|---|---|---|---|
+| M1 | Medium | `opusplan`, `best` or `opus[1m]` as the setting denied every model (lockout) | fixed: context suffix stripped on both sides; only family aliases and model IDs are checked, any other form is not checked (no lockout); tests |
+| L1 | Low | a model ID allowed longer IDs with the same prefix (`claude-opus-5` → `claude-opus-5-5`) | fixed: a model ID allows only itself, its context suffix and a date suffix; test |
+| L2 | Low | an empty / non-string `model` was kept and switched the check off | fixed: install writes `opus` then; test |
+| L3 | Low | install reports the pseudo-event "model" | docstring says so; kept |
+
+
+## Phase 5, round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium. `git status` before/after identical. Verdict: **accept**, no findings; M1, L1, L2 fixed, L3 kept.
+
+# Review — phase 6 (CI)
+
+## Round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, model sonnet, effort medium (Standard). Change: working tree against `2e869bb`. `git status` identical before and after the call.
+- Verdict: **accept**. Acceptance criteria 1–7 met; docs consistent.
+- L1 (Low) — the workflow test matched command text anywhere, so a commented-out command or one moved to another job passed. **Fixed:** comments dropped, each command / OS / Python version / node / fetch-depth checked inside its own job; mutations (node command commented out, `fetch-depth: 1`, Windows row removed) each fail the test; 5 of 5 fail on the parent `2e869bb`.
+- L2 (Low) — the workflow has not run on GitHub (Windows job, node 22, matrix unproven). **Disposition:** needs Nam's push (stop point 4); stated in HANDOFF and the report.
+
+# Review — phase 7 (`pls status`, golden path, docs)
+
+## Round 1 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, model sonnet, effort medium (Standard). Change: working tree against `bb94661`. `git status` identical before and after.
+- Verdict: **accept with fixes**. Criteria 1, 2, 4, 5, 6 met; 3 met except the unfinished apply (H1). Every golden-path command checked with `-h`.
+- H1 (High) — `pls status` knew only `applying`; `uncertain`, `applied-unverified`, `recovery-required`, `rolled-back` gave "Nothing open" (reproduced by the reviewer in a scratch project); on stg `_release_step` took them as done after G4. **Fixed:** `RECOVERY` per state from `pls.OPEN_STATES` (a test keeps them equal) with the step of setup.md "When a release does not end applied"; `rolled-back` → new plan, open until a newer release of that environment exists; any unknown state is open, never "nothing open"; `_release_step` names recovery before G4 / apply. Tests per state for dev and stg.
+- M1 (Medium) — no test for `applied-differs`, `migrated`, `rolled-back`. **Fixed:** tests added.
+- L1 (Low) — "built on dev" counts any dev release after G2. **Disposition:** limit documented in the module docstring; `pls check p3 --des` reports the mismatch.
+- Not verified by the reviewer: the full suites (its piped run was unreadable) — run by the Orchestrator, see log.
+
+## Round 2 — 2026-11-18
+
+- Reviewer: `pls-x-reviewer`, sonnet, medium. Change: working tree against `bb94661` (focus `pls_status.py` and its test). `git status` identical before and after.
+- Verdict: **accept**, no Critical / High / Medium. H1, M1, L1 confirmed fixed (recovery map equals `pls.OPEN_STATES`, unknown states open, stg after G4 covered). Full Python suite exit 0, node exit 0 (reviewer's own unpiped run).
+- Low, no fix: (1) a rolled-back stg release named by an approved G3 still shows as a P5 item after a newer release replaces it — kept: the replacement needs its own G3, so the prompt to rework is right; (2) a rolled-back release that is still open is listed twice (release and P5 line) — cosmetic, kept.
+
+## Phase 9 — drift job (2026-11-19, pls-x-reviewer, sonnet, medium, working tree against 0a008ae)
+
+Verdict: **accept with fixes**; no Critical / High. Criteria 1–9 met (reviewer's own check).
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | full suite result not captured by the reviewer | Orchestrator ran it without a pipe before and after the fixes: 3.12 848 OK (exit 0), 3.10 848 OK (2 skipped), node 16/16 |
+| 2 | Low | a run failing before `save` (e.g. refused role) leaves no `last.json` → every session start respawns it | fixed: `DW.failed` recorded as the last result; test `test_a_run_that_stops_early_is_shown_and_not_restarted_at_every_session` |
+| 3 | Low | `git fetch` writes remote refs into `.git` | documented (setup.md "What a run changes on your machine") |
+| 4 | Low | a teammate's release applied but not pushed still shows as drift | documented (setup.md); not detectable without server-side knowledge |
+| 5 | Low | `install --env dev-<you>` alone drops `dev` | kept: docs always show `--env dev --env dev-<you>`; the install message names the environments checked |
+
+Not verified (Nam, phase 10): real `schtasks /create` with the XML (Command path with spaces unquoted), the balloon, pythonw behaviour, a real Pleasanter / GitHub fetch.
+
+## TD-75 parser + `pls refs` RAW (2026-11-20, pls-x-reviewer, sonnet, medium, working tree against f6ce348)
+
+Verdict: **accept with fixes**; no Critical / High; no code defect.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | README says script-engineer 0.8 "evaluated with this change" with no result yet | resolved: the 0.8 run r-a29b finished after the review started (PASS, appended to `evals/results/pls-p3-script-engineer/2026-11-20.md`) |
+| 2 | Low | `_sources` joined an answer number after any ` — ` (e.g. `— client mail, A7`) | fixed: the previous item must end in answer numbers; test case added |
+| 3 | Low | no test that a `--keep` decision suppresses a RAW line | fixed: test records `--keep` and expects no RAW line and no L-REF-01 |
+
+Suites after the fixes: Python 3.12 852 OK, 3.10.21 852 OK (2 skipped), node 16/16. New tests fail on the parent `f6ce348` (worktree): TD-75 test 1 failure, refs test 1 failure. The reviewer could not start 3.10 in its shell; the Orchestrator ran it.

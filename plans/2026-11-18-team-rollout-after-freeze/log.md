@@ -67,3 +67,87 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - The question Nam answered "a" (2026-11-18, asked in Vietnamese; options as asked, translated): the Decision of ADR-0022 still says option A (tool not pinned) and ADR-0014 TB-6 says "tool code is not hashed"; (a) recommended: accept ADR-0022 with Decision "option B: pin by commit, writes to stg refused on a difference" (as N23) and update TB-6 to "handled by the framework pin (ADR-0022)"; (b) leave both, decide later. Nam: "a".
 - Follow-up review: accept with fixes, Low only (R2-1…R2-6), all fixed in the same commit: a non-string tag refuses (test with the running commit equal to the pin); tests for `_framework_commit` (exit 128 / "HEAD"), the sync warning for an unknown commit, and `--untracked-files=all`; ADR-0022 Consequences and the `skills/README.md` pointer; TB-6 "Not covered"; a non-object lock is rewritten by sync and reported by check; this question recorded.
 - Final suites of the follow-up: Python 3.12 803 OK, node 16/16; **Python 3.10 not verified** — its interpreter was installed in another session's scratchpad, which was removed (`py -0` lists it, it does not start); new tests fail on the parent 41d5852 (5 of the new cases). Phase 4 done; tag v0.3.0 on this commit.
+
+## Phase 5 — model per phase/skill (2026-11-18, Nam: "bat dau phase 5")
+
+- Docs checked by two `claude-code-guide` lookups (haiku): skill `model:` lasts one turn; project settings `model` is the session default; `PreModelSwitch` (v2.1.251+) can deny a switch (`permissionDecision: "deny"`, reason shown to the person; timeout blocks; fallbacks and resume do not fire it; `to_model` is a model ID).
+- Asked Nam with options; Nam: "1a, 3a"; on "is Opus for every phase overkill" — answered with the price table (claude-api skill: Opus 5.5 $4/$20, Sonnet 5.5 $2/$10 per MTok), the per-phase view, and that every eval ran on Opus; Nam: "a" → N24, ADR-0031.
+- Built: `HK.model_switch`, `HK.project_model`, `DEFAULT_MODEL = "opus"`, PreModelSwitch entry, `pls hook model`; install writes `model` when absent. Tests `test_project_model.py`; `test_project_hooks.py` expectations extended with the new event and the `model` entry.
+- Phase 5 round 1: accept with fixes (M1 lockout on `opusplan` / `opus[1m]`, L1, L2 fixed; L3 kept). Python 3.10 not verified (interpreter removed, as in phase 4).
+- Phase 5 round 2: accept, no findings. Committed. Phase 5 done.
+- 2026-11-18: Nam continues phase 6 from another account; HANDOFF "Next" line written.
+
+## Phase 6 — CI (2026-11-18, Nam: "làm phase 6", new account)
+
+- Plan: `phase-06-ci.md` (Standard). Parent `2e869bb`. No `.github/` before.
+- Linux check before building: WSL Ubuntu 24.04, Python 3.12, clone of `2e869bb`: 810 OK (3 skipped — all "node not installed"). Hence node in every Python job.
+- OS choice (decided, reported): Ubuntu 3.10 + 3.12, Windows 3.12 (team machines; Git Bash hook tests). Actions pinned by major tag, not SHA (SHAs not verifiable offline) — limit in the report.
+- Built: `.github/workflows/framework-ci.yml`, `tools/pls/tests/test_framework_ci_workflow.py`; docs: architecture §7 portability, ADR-0016 Limits (3.10 bullet, not Decision/Status), HANDOFF.
+- Suites: Windows Python 3.12 815 OK; Python 3.10.21 (uv, `../_agent-scratch/py310`) 815 OK (2 skipped); node pass, 0 fail. New test: 5 of 5 fail on parent `2e869bb` (worktree, removed).
+- Freshness step on Linux: passes on the commit; fails (`git diff --exit-code`) when the committed impact-rules.md is stale.
+- Not verifiable here: the workflow on GitHub runners (needs Nam's push, stop point 4).
+- Review round 1 (pls-x-reviewer, sonnet, medium): accept; L1 fixed (job-scoped, comment-free checks; three mutations fail), L2 disposition (first GitHub run on Nam's push). Subagent calls 1/6, rounds 1/2.
+- Final suites: Windows 3.12 815 OK, 3.10 815 OK (2 skipped), node 16/16.
+- 2026-11-18 Nam (mid-task): "làm tuần tự cho đến hết các phase, khi gặp vấn đề cần confirm thì bạn phân tích và đưa ra quyết định hợp lý và làm tiếp, sáng mai tôi review report". Decisions from here are made by the Orchestrator and logged with their reasoning; hard stop points (push, protected paths, ADR acceptance, Pleasanter writes) stay open for Nam.
+- Phase 6 committed `bb94661`. REPORT for phase 6 goes into the overnight report.
+
+## Phase 7 — `pls status`, golden path, docs (2026-11-18, under Nam's "decide and continue")
+
+- Plan: `phase-07-status-golden-path.md` (Standard), decisions recorded there.
+- Built `pls_status.py` + `pls status`; tried on copies of `pls-demo-contracts` / `-equipment` / `-inquiry` (git-tracked files only, no `.pls/`): contracts → applied-differs dev release, then DES-001 awaiting G3; equipment / inquiry → Origin not recorded, then REQ / DES front-matter findings (TD-68). Two fixes from that run: traceability links count as design (17 REQs wrongly "no DES" on contracts), equal neighbouring states share one line.
+- Found while writing the golden path: a cloned project has no command that writes `.pls/connections.json` → TD-74, manual step in the golden path (no feature during the freeze).
+- HANDOFF: old file kept verbatim in `plans/handoff-history/2026-11-18-handoff-before-cleanup.md`; new HANDOFF = phases table, open items, recent changes, How we work, Rules that hold, What this is, Repositories.
+- Suites before review round 1: 3.12 and 3.10 failed only `test_every_subcommand_is_classified` (new command not classified) → `status` added to LOCAL in `test_write_guards.py`. New status test fails on parent `bb94661` (module missing).
+- Review round 1 (sonnet, medium): accept with fixes — H1 recovery states, M1 tests, L1 limit; fixed. Suites after the fix: 3.12 826 OK, 3.10 826 OK (2 skipped), node 16/16.
+- Review round 2 (sonnet, medium): accept, two Lows kept (review.md). Subagent calls on phase 7: 2/6, rounds 2/2.
+- Phase 7 committed `a3cd70d`.
+
+## Phase 8 — evals (2026-11-18/19, under Nam's "decide and continue")
+
+- Decision (Orchestrator, Nam delegated decisions): run the with-skill arm only, as phase 8 lists — k = 3 for lifecycle 0.33 (cases 001–009; 010/011 are selection cases, a separate batch kind, not run), P1 0.8 (001, 002; 003 interview last), P2 0.14 (001, 002); k = 1 for onboarding, P3 config-builder, script-engineer, P5. No baseline / selection batch (ADR-0030 requires Nam per batch; not needed by the plan).
+- Runner model: inherited, claude-opus-5-5 (ADR-0031 project model).
+- Relay rule applied: `pls status`, `check p1`, `step` refused — they are not on the runner's local-only list (finding: the list predates `pls status`; proposal for Nam).
+- Lifecycle 0.33 rounds 1–3 graded (scratchpad notes → result file): 001–007, 009 3/3 PASS; 008 2/3 — run 3 (r-2577) wrote `gates/` records with invented quotes to build the premise (Must-not). Case 008 input clarified (gate records and `.pls/connections.json` stay premises; setup.md note); 008 rerun ×3 started (r-bc1a, …).
+- P1 / P2 round 1 started (r-99e8, r-03c4, r-1693, r-1e30) from templates built under `../_agent-scratch/tpl/` from `pls-demo-inquiry` commits per each case's setup.md (`539b61f`, `b70c810`, `3cf2c45`, `021a0d0`, rollback payloads of R-20261105-01 / -05 unpacked).
+- 2026-11-19 ~03:00: usage limit hit (5-hour); runs resumed after reset.
+- Lifecycle 0.33 batch done (k = 3 on 001–009, 008 rerun ×3 on the clarified input): `evals/results/pls-x-lifecycle/2026-11-19-v033.md`.
+- P2 0.14: 001 3/3, 002 3/3 (rubric item 4 predates ADR-0028, graded met; proposal). Orchestrator relay error on r-80e5 (xref relayed before running it there) — corrected, noted in the result.
+- P1 0.8: 001 3/3, 002 2/3 (r-cffb FAIL: 対応回数 not protected by an AC/derived REQ), 003 1 run PASS (note), runs 2–3 not run. Found TD-75 (interview source list split at the comma → `check p1` findings). Second usage limit ~08:00.
+- Not run in phase 8: P1 case 003 runs 2–3; k = 1 evals of onboarding, P3 config-builder, P3 script-engineer, P5 — stopped for the usage limits and the morning review.
+- Eval results committed `65301a7`; HANDOFF and runner-list patch `9e0cd04`. Phase 9 not started (stopped for the morning review and the usage limits). Subagent calls: reviewers 3 (phase 6: 1, phase 7: 2), eval runners 46 incl. resumes, person-role 1.
+- REPORT SENT (2026-11-19 overnight report).
+
+## Phase 9 — scheduled drift check (2026-11-19, Nam: "tiep thuc lam task")
+
+- Model: claude-opus-5-5 (main session).
+- Decisions asked upfront (options with a recommendation); Nam chose the recommended one each time → N25:
+  1. Order: phase 9 first; the rest of phase 8 (P1 003 runs 2–3, k = 1 of onboarding, P3 ×2, P5) after it, before phase 10.
+  2. Schedule: every 2 hours, Mon–Fri 9:00–19:00.
+  3. Session start: the hook shows the last result with its time; when that result is older than 2 hours it starts a check in the background (does not block the session).
+  4. Registering the job (`schtasks /create`): the agent writes code and tests only (tests check the command text, nothing registered); Nam runs the install in phase 10 with paste-ready commands.
+- Built: `pls drift-watch run|show|install|remove` (`pls_drift_watch.py`, `pls_drift_watch_schedule.py`), hook start shows the last result / starts a stale one in the background; `run` / `show` not in the run log (ADR-0013 amendment line). Decisions D1–D7 in `phase-09-drift-watch.md`.
+- New test file fails on parent `0a008ae` (module missing; worktree, removed).
+- Review round 1 (pls-x-reviewer, sonnet, medium): accept with fixes, no Critical/High; L2 fixed with a test, L3/L4 documented, L5 kept (review.md). Round 2 not run (Low fixes only).
+- Suites after fixes: Python 3.12 848 OK (exit 0), 3.10.21 848 OK (2 skipped, exit 0), node 16/16. Subagent calls phase 9: 1/6.
+- 2026-11-19 Nam (verbatim): "đồng ý, chạy batch eval phase 8" — P1 003 runs 2–3; k = 1 of onboarding, P3 config-builder, P3 script-engineer, P5.
+- Batch (with skill, runner model opus = claude-opus-5-5): r-a802 onboarding 001, r-33bd onboarding 002, r-171c script-engineer 001, r-7607 P5 001, r-fd1e P5 002 (after r-7607: its diff-report.md / approvals.md copied in, setup.md), r-2fc9 config-builder 001 (built by a script from the pls-demo-equipment working tree — git on that repository is not allowed in this session, so the tree was not checked against `547f549`; `pls init` without a machine profile, REQ T-102 notes removed, skeleton = rollback payloads of R-20261105-E01-dev unpacked), r-c94c / r-b9c2 P1 003 runs 2 / 3 (sequential; person-role per run). Earlier run folders of these cases moved to `../_agent-scratch-held/`.
+- Incident during setup: the first build of r-2fc9 ran `pls init` with the machine profile `dev`, which wrote `.pls/connections.json` (URL and a key-file reference, no key value) into the scratch copy; the folder was deleted before any run and rebuilt with an empty `PLS_PROFILE_DIR`.
+- Batch graded (results: `evals/results/<skill>/2026-11-19*.md`): P1 003 runs 2–3 PASS (3/3); config-builder 001 PASS; P5 001 FAIL (Must 4: G4 binds the plan, not said), P5 002 PASS (note); onboarding 001 FAIL (summary not written), 002 PASS; script-engineer 001 FAIL (case input / rubric predate L-REF-04). No void run (every list of opened files checked). Person-role replies all checked against interviewee.md, none corrected. Held folders moved back after grading. `pls check p1` run by the Orchestrator on the P1 folders after grading: run 2 0 findings, run 3 8 findings (TD-75).
+- Decisions left to Nam (skill text → new version + eval, protected rubrics): P1 0.9 text (case 002), onboarding step 10 wording, P5 G4-binds-plan sentence, script-engineer case input / rubric (L-REF-04, `sandbox sync`). Not changed in this batch (a skill change needs its own eval batch).
+- Eval runner calls this batch: 8 runs (9 calls incl. resumes counted per run), person-role 2.
+
+## Phase 8 follow-up (2026-11-19, Nam chose the recommended option of each question — asked after his remark "can toi quyet nhung khong dua ra dang cau hoi ma chi neu van de")
+- P1 0.9 (impact row alone protects nothing) + eval k = 3 on cases 001–003.
+- Onboarding 0.9 (step 10: write the summary now, undecided findings as open) + eval k = 1 on 001, 002.
+- P5 0.13 (G4 binds this plan; a later change needs a new G4) + eval k = 1 on 001, 002.
+- Script-engineer case 001: patch of input.md + expected.md (protected) for Nam; one run after he applies it.
+- Follow-up batch graded (results `evals/results/<skill>/2026-11-20*.md`): P1 0.9 001 3/3, 002 3/3 (REQ-015 protects 対応回数 in every run), 003 3/3; onboarding 0.9 001 PASS, 002 PASS; P5 0.13 001 PASS, 002 PASS; script-engineer 0.7 on the rebuilt case FAIL (Must 1: xref after the edit, again) — graded against the proposed rubric patch, not applied yet.
+- Script-engineer case rebuilt: `project/` fixture (orders / customers, calc-total.js, check-discount.js, DES-002, DES-004 with `${env:TAX_RATE_STMT}` holding the whole statement), input.md and setup.md rewritten (not protected); rubric as `proposed-script-engineer-case-001-rubric.patch` (`git apply --check` OK).
+- Found: `pls refs` does not list a literal site id in an id context while lint reports it as L-REF-01 (framework defect, to ask Nam).
+- Two 5-hour usage limits during the batch; cut runs resumed. No void run. Held folders moved back after grading.
+- 2026-11-20 Nam (choices, recommended each): apply the rubric patch himself; script-engineer 0.8 (xref before the first edit) + eval k = 1; fix `pls refs` now (fix(pls) + test); TD-75: fix the parser.
+- script-engineer 0.8 run r-a29b: PASS against the proposed rubric (xref and impact list before the edit). Result appended to `evals/results/pls-p3-script-engineer/2026-11-20.md`.
+- Review of the two pls fixes: accept with fixes (M1 resolved by the finished eval, L2 / L3 fixed); suites 3.12 852 OK, 3.10 852 OK (2 skipped), node 16/16. Subagent calls this follow-up: reviewer 1.
+- 2026-11-20 first CI run (44655218746) after Nam's push: Windows, node, impact rules green; Ubuntu 3.10 / 3.12 red on one test — `test_install_through_the_command_names_the_task` patched `os.name`, which makes pathlib build WindowsPath on Linux. Fixed with a module constant `OS_NAME` (patched instead); the drift-watch tests pass on WSL Ubuntu 24.04; Windows suites 3.12 852 OK, 3.10 852 OK (2 skipped), node 16/16. Light (test-only seam), no review.
+- 2026-11-20 Nam: "tag v0.3.1 đi" — CHANGELOG v0.3.1 entry, annotated tag v0.3.1 on that commit (local; Nam pushes, N23).
+- 2026-11-20 Nam: "viet giup guide su dung day du chi tiet de team su dung, … hien thi tren main page" — README.md rewritten as the team guide (setup, roles, daily path, Claude Code, stg release, drift, upgrade, cheat sheet, troubleshooting). Shows on the GitHub main page only once it is on `main` (default branch) — Nam's step.

@@ -62,6 +62,24 @@ def _as_list(v) -> list:
     return v if isinstance(v, list) else [] if v is None else [v]
 
 
+ANSWER_REF = re.compile(r"(?:A\d+|P\d+(?:\s+accepted)?)")
+CITES_ANSWERS = re.compile(r"\s[—-]\s(?:A\d+|P\d+(?:\s+accepted)?)(?:\s*,\s*(?:A\d+|P\d+(?:\s+accepted)?))*\s*$")
+
+
+def _sources(v) -> list:
+    """The `sources` list, with interview answer numbers put back on their file: the template writes
+    `sources/<interview>.md — A3, A7`, which the flow list splits at the comma into `… — A3` and `A7` (TD-75).
+    An answer number is joined to the item before it only when that item already cites answers."""
+    out: list = []
+    for s in _as_list(v):
+        t = str(s).strip()
+        if out and ANSWER_REF.fullmatch(t) and CITES_ANSWERS.search(str(out[-1])):
+            out[-1] = f"{out[-1]}, {t}"
+            continue
+        out.append(s)
+    return out
+
+
 def kb_probe_ids() -> set[str]:
     """Entry ids of the framework knowledge base's probe index (empty when it cannot be read: no probe id is then known)."""
     try:
@@ -128,7 +146,7 @@ def p1(root: Path) -> list[dict]:
             f("no status")
         if fm.get("type") not in EARS_TYPES:
             f(f"type {fm.get('type')!r} is not an EARS type ({', '.join(EARS_TYPES)})")
-        sources = _as_list(fm.get("sources"))
+        sources = _sources(fm.get("sources"))
         if not sources:
             f("no source: name the request, interview answer or REQ it comes from")
         for s in sources:

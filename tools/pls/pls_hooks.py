@@ -1,7 +1,7 @@
 """Claude Code hooks of a project repository (ADR-0029 C1): rules applied by the machine, not remembered by the model.
 
 `pls init` writes them into `<project>/.claude/settings.json`; `pls hook install` adds them to an existing one. Each
-hook runs `python "$CLAUDE_PROJECT_DIR/pls.py" hook <pre|post|stop|start>` with the event's JSON on stdin (contract read in
+hook runs `python "$CLAUDE_PROJECT_DIR/pls.py" hook <pre|post|stop|start|model>` with the event's JSON on stdin (contract read in
 the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-16 — see the plan folder of ADR-0029):
 
 - pre (PreToolUse, Read|Edit|Write|NotebookEdit|MultiEdit|Bash): denies a file edit under the paths only `pls` writes
@@ -13,6 +13,10 @@ the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-16 — see
   site next to the tool result (`decision: "block"` + `reason`; the edit itself stays);
 - stop (Stop): runs `pls check p1` and `p2` and shows the findings to the person (`systemMessage`); it never keeps the
   agent going (advisory, ADR-0029; the gates decide);
+- model (PreModelSwitch): denies a switch to a model other than the project's `model` setting (ADR-0031; contract read
+  in the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-18: `to_model` is the target model ID, a
+  `permissionDecision: "deny"` cancels the switch and its reason is shown to the person; a timeout blocks the switch;
+  automatic fallbacks and a session resume do not fire it);
 - start (SessionStart, startup|resume): prints, as plain text that Claude Code adds to the session's context, when the
   framework running is not the version the project pinned or a newer release tag exists (ADR-0022; contract read in
   the Claude Code documentation, code.claude.com/docs/en/hooks, 2026-11-18). Advisory: writes outside dev are refused
@@ -46,7 +50,9 @@ SETTINGS = {
     "Stop": [{"hooks": [{"type": "command", "command": HOOK_CMD + "stop || true", "timeout": 120}]}],
     "SessionStart": [{"matcher": "startup|resume",
                       "hooks": [{"type": "command", "command": HOOK_CMD + "start || true", "timeout": 60}]}],
+    "PreModelSwitch": [{"hooks": [{"type": "command", "command": HOOK_CMD + "model || true", "timeout": 30}]}],
 }
+DEFAULT_MODEL = "opus"          # every phase of a project runs on the model its skills were evaluated on (ADR-0031)
 
 
 def _rel(root: Path, file_path: str) -> str | None:
@@ -114,8 +120,52 @@ def stop(event: dict, findings: list[dict]) -> dict | None:
                              "(the gates refuse on findings)"}
 
 
+def project_model(root: Path) -> str | None:
+    """The model the project's committed settings name (`.claude/settings.json` → `model`), or None."""
+    try:
+        data = json.loads((root / ".claude" / "settings.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    m = data.get("model") if isinstance(data, dict) else None
+    return m.strip() if isinstance(m, str) and m.strip() else None
+
+
+FAMILIES = ("opus", "sonnet", "haiku", "fable")       # aliases the check understands (ADR-0031)
+_SUFFIX = re.compile(r"\[[^\]]*\]$")                   # a context-window suffix such as [1m]
+_MODEL_ID = re.compile(r"claude-[a-z]+(?:-[0-9]+)+")
+
+
+def _same_model(configured: str, to_model: str) -> bool | None:
+    """Whether `to_model` is the configured model: a family alias (`opus`, also `opus[1m]`) matches every model ID of
+    that family; a model ID (`claude-opus-5-5`, also with `[1m]` or a date suffix) matches only itself. None when the
+    setting has another form (e.g. `opusplan`, a gateway name): the check does not apply, it never locks a project."""
+    c, t = _SUFFIX.sub("", configured.strip().casefold()), _SUFFIX.sub("", to_model.strip().casefold())
+    if c in FAMILIES:
+        return re.search(rf"(^|[-_.]){re.escape(c)}([-_.]|$)", t) is not None
+    if _MODEL_ID.fullmatch(c):
+        return t == c or re.fullmatch(rf"{re.escape(c)}-\d{{8}}", t) is not None
+    return None
+
+
+def model_switch(root: Path, event: dict) -> dict | None:
+    """PreModelSwitch (ADR-0031): a switch to a model other than the project's is denied — the model is the project's
+    decision, made by a commit to `.claude/settings.json`, not the developer's. Nothing configured, or an event
+    without a target model: no answer (the switch goes ahead)."""
+    configured, to_model = project_model(root), event.get("to_model")
+    if not configured or not isinstance(to_model, str) or not to_model.strip():
+        return None
+    if _same_model(configured, to_model) is not False:          # the same model, or a setting the check cannot read
+        return None
+    return {"hookSpecificOutput": {"hookEventName": "PreModelSwitch", "permissionDecision": "deny",
+                                   "permissionDecisionReason":
+                                       f"This project runs every phase on '{configured}' (.claude/settings.json `model`; "
+                                       f"its skills are evaluated on it, ADR-0031). '{to_model}' is not used here; the "
+                                       "model is changed by a commit to the project settings, decided by the G4 owner."}}
+
+
 def install(settings_file: Path) -> list[str]:
-    """Add or update the hooks of this module in a settings file; returns the events written. Entries of other hooks
+    """Add or update the hooks of this module in a settings file, and the project's model when it names none; returns
+    the events written (and "model" when the model was set). Entries of other hooks
     are kept as they are; this module's own entries (a command that runs `pls.py" hook`) are replaced by the current
     ones when they differ, so a later change of the hook command reaches projects that already have hooks."""
     try:
@@ -145,6 +195,10 @@ def install(settings_file: Path) -> list[str]:
             continue                                 # already current
         have[:] = new
         added.append(event)
+    m = data.get("model")
+    if not (isinstance(m, str) and m.strip()):        # the project's model; a value the person set is kept (ADR-0031)
+        data["model"] = DEFAULT_MODEL
+        added.append("model")
     if added:                                        # nothing to add: the person's file is left as it is
         settings_file.parent.mkdir(parents=True, exist_ok=True)
         settings_file.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")

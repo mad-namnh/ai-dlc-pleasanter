@@ -5,6 +5,29 @@ never a branch. How to upgrade a project and how a hotfix is made: `docs/setup.m
 
 Each entry: what changes for a project, and what a project must do after `pls skills sync`.
 
+## Unreleased
+
+Nothing yet.
+
+## v0.3.1 — 2026-11-20
+
+Team rollout phases 7–9 and the phase 8 eval fixes (`plans/2026-11-18-team-rollout-after-freeze/`). CI green on
+GitHub Actions (Ubuntu 3.10 / 3.12, Windows 3.12, node, impact rules).
+
+- **Fixes:** `pls check p1` accepts interview sources written as the REQ template shows (`sources/<interview>.md — A3, A7`; TD-75), so G1 no longer refuses them; `pls refs` lists site ids still written as numbers (RAW, the same as lint L-REF-01). Skills: P1 0.9, onboarding 0.9, P5 0.13, script-engineer 0.8 (evals 2026-11-20). After upgrading: `pls skills sync`.
+
+- **`pls drift-watch`** (read only): a scheduled check on the person's own machine that exports the project's dev /
+  sandbox / stg sites and reports UI edits against the last release, with the two ways on; Windows balloon and the
+  session-start hook. After upgrading: `pls skills sync`, then once per clone `python pls.py drift-watch install
+  --env dev --env dev-<you>` (the owner adds `--env stg`); `docs/setup.md`, "Drift job".
+
+- **`pls status`** (read only): the open items of the project and the next command, from the profile, REQ / DES,
+  gate records and releases. The lifecycle skill (0.33) starts from it. After upgrading: `pls skills sync`. A one-page
+  team guide: `docs/golden-path.md` in the framework.
+- **One model per project (ADR-0031):** `pls init` / `pls hook install` write `"model": "opus"` into the project's
+  `.claude/settings.json` when it names none, and a PreModelSwitch hook denies a switch to any other model. After
+  upgrading: `pls hook install` in each project (needs Claude Code v2.1.251 or later for the switch check).
+
 ## v0.3.0 — 2026-11-18
 
 First release for the team (team rollout, `plans/2026-11-18-team-rollout-after-freeze/`).

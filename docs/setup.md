@@ -6,6 +6,8 @@ There are two parts:
 
 Nothing secret goes into git or into the chat.
 
+A developer joining a shared project follows the one-page [golden path](golden-path.md); this guide holds the details it links to.
+
 ## What you need
 
 | Item | Notes |
@@ -121,6 +123,19 @@ For an app that **already runs** in Pleasanter (takeover, 運用保守), add `--
 - **The stg key is the real control.** Only the owner (or the delegate, for the delegation) has a stg key with `allow_write` in their own `.pls/connections.json`; devs have no stg key at all, so `http-check --env stg` on a dev's machine has nothing to connect with. Gate records in git are evidence, not a lock (ADR-0014 TB-3).
 
 - **What the shared repository keeps.** Everything `pls` or a gate reads on someone else's machine is committed — `tests/results/` (coverage for G3), `requirements/sources/` (`pls check p1`), `gates/`, `releases/`, `ops/onboarding/`, `ops/log/`, `ops/usage/`, `design/probes/`. Only `ops/xref/`, `ops/adopt/`, `ops/triage/` and `ops/env-compare/` stay on your machine (gitignored); after a fresh clone run `pls xref --site <site>` when a skill needs it. A project made before this: `pls skills check` reports that the template `.gitignore` changed — copy its last block into the project's `.gitignore`, then `git rm -r --cached --ignore-unmatch ops/xref ops/adopt ops/triage ops/env-compare` and commit.
+
+## Drift job
+
+A UI edit on a project site is reported to the person working on the project without them asking (team rollout A1). Read only; the results stay on your machine in `.pls/drift-watch/`.
+
+- **Install once per project clone (Windows):** `python pls.py drift-watch install --env dev --env dev-<you>` — a dev names the shared dev environment and their own sandbox; the owner adds `--env stg` (only the owner's machine has the stg key). Without `--env` the job checks the dev and stg environments your `.pls/connections.json` names. If `origin/HEAD` is not set in the clone, add `--shared-branch origin/<branch>`. The job is a Task Scheduler task under your account: Monday to Friday from 09:00, every 2 hours, only while you are logged on. Remove it with `python pls.py drift-watch remove`. Other systems: run `python pls.py drift-watch run --quiet` from cron.
+- **What you see:** a Windows balloon when the findings change, and at the start of each Claude Code session the last result (a result older than 2 hours starts a new check in the background). `python pls.py drift-watch show` prints the report: per drifted site the differences, how reverting them is classified, and the two ways on — keep the change (`pls harvest`, then a change request through the gates) or revert it in the next release (`--accept-drift`). Write your decision into `ops/drift/<date>-<env>-<site>.md` and commit it.
+- **Not reported** while your folder lacks a release of that environment that the shared branch has (`git pull` first — another person's release would look like a UI edit), or when `git fetch` fails. prod is never checked by the job. A teammate's release that is applied but not pushed yet still shows as drift until its record reaches the shared branch — ask before you act on it.
+- **What a run changes on your machine:** `.pls/drift-watch/` and, through `git fetch`, the clone's remote-tracking branches; never a tracked file, the run log or a commit.
+
+## The project's model
+
+Every phase of a project runs on the model its skills were evaluated on (ADR-0031): `.claude/settings.json` names it (`"model": "opus"`, written by `pls init` and `pls hook install`), and switching to another model in a session (`/model`, the picker, `/config`) is denied with the reason. The project changes its model by a commit to that file, decided by the G4 owner. Requires Claude Code v2.1.251 or later for the switch check.
 
 ## Framework versions
 

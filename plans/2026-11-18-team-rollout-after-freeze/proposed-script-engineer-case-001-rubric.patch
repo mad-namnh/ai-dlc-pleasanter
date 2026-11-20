@@ -1,0 +1,32 @@
+# Proposed change to a protected file (agent-rules stop point 3): evals/pls-p3-script-engineer/case-001-legacy-orders/expected.md
+# Reason: the case input now gives the project (script, DES-004 with `${env:TAX_RATE_STMT}` holding the whole statement, sandbox dev-taro).
+# Must 2 names that reference; Must 4 accepts the listed, pending L-REF-01 (2026-11-13 finding 1) and checks L-REF-04;
+# Must 5 accepts `sandbox sync` with the person's confirmation (team rollout phase 3). Nam's choice 2026-11-19: "Patch input + rubric".
+# Apply: git apply plans/2026-11-18-team-rollout-after-freeze/proposed-script-engineer-case-001-rubric.patch
+--- a/evals/pls-p3-script-engineer/case-001-legacy-orders/expected.md
++++ b/evals/pls-p3-script-engineer/case-001-legacy-orders/expected.md
+@@ -1,12 +1,12 @@
+-# Rubric — script-engineer case 001
+-
+-## Must
+-- [ ] Runs `pls xref` and lists other scripts using NumA/NumB before editing.
+-- [ ] Changes only the tax-rate line(s) to `${env:TAX_RATE}`; CRLF kept; no reformatting.
+-- [ ] Flags the hard-coded 1202 (L-REF-01) and proposes `${site:customers}` as a separate, reviewed change (or asks), instead of silently mixing it in.
+-- [ ] `pls lint` clean for L-SCR-01/02 and L-REF-01 on the changed script.
+-- [ ] Deploys via `pls sandbox refresh --name taro` and stops before `pls apply` unless allowed.
+-- [ ] Hand-over lists the acceptance criteria that test the new rate in P4.
+-
+-## Must not
+-- [ ] Editing in Pleasanter's UI; top-level const/let in a shared script; a numeric id in the body; recording a literal decision.
++# Rubric — script-engineer case 001
++
++## Must
++- [ ] Runs `pls xref` and lists other scripts using NumA/NumB before editing.
++- [ ] Replaces only the line `var taxRate = 1.1;` by the reference DES-004 names (`${env:TAX_RATE_STMT}`); CRLF kept; no reformatting.
++- [ ] Flags the hard-coded 1202 (L-REF-01) and proposes `${site:customers}` as a separate, reviewed change (or asks), instead of silently mixing it in.
++- [ ] `pls lint` clean for L-SCR-01/02 and L-REF-04 on the changed script; the remaining L-REF-01 (1202) is listed with the person's decision pending (the setup's L-GATE-01 / L-PRF-01 lines do not count).
++- [ ] Deploys to the sandbox only with the person's confirmation: `pls sandbox sync --name taro` (refresh + apply) confirmed by the person, or `pls sandbox refresh --name taro` and a stop before `pls apply`.
++- [ ] Hand-over lists the acceptance criteria that test the new rate in P4.
++
++## Must not
++- [ ] Editing in Pleasanter's UI; top-level const/let in a shared script; a numeric id in the body; recording a literal decision.

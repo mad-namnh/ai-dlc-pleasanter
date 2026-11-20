@@ -24,11 +24,11 @@ import test_http as TH  # noqa: E402
 WRITES = {"apply", "migrate", "bootstrap", "test", "kb-verify", "principals",       # principals: only with --create (ADR-0017)
           "test-users",                                                        # ADR-0018, ADR-0019
           "sandbox"}                                                           # sandbox sync runs apply (ADR-0011)
-NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest"}
+NETWORK_READS = {"http-check", "export", "version", "adopt", "adopt-package", "backup", "harvest", "drift-watch"}
 LOCAL = {"unpack", "diff", "drift", "classify", "plan", "slots", "pack", "canon", "release-plan", "bootstrap-plan", "bind",
          "refs", "merge-site", "merge-install", "xref", "env-compare", "mark-applied", "lint", "coverage", "init", "setup",
          "skills", "gate", "step", "usage", "spec-skeleton", "jobs-verified", "profile", "review", "package", "scope",
-         "check", "hook"}
+         "check", "hook", "status"}
 WRITE_ENDPOINT = re.compile(r"/(updatesite|createsite|deletesite|bulkupsert|create|update|delete|createapikey)\b|\{op\}")
 ALLOWED_WRITE_SITES = {("pls_http", "Client.apply"), ("pls_http", "Client.create_site"), ("pls_http", "Client.bulk_upsert"),
                        ("pls_http", "run_tests"), ("pls", "http_cmd"),
