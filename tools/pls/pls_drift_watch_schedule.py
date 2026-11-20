@@ -29,6 +29,7 @@ from xml.sax.saxutils import escape
 import pls_drift_watch as DW
 
 TASK_NS = "http://schemas.microsoft.com/windows/2004/02/mit/task"
+OS_NAME = os.name          # the system the job is registered on; tests replace it (patching os.name breaks pathlib)
 NOTIFY_PS = ("Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; "
              "$n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; "
              "$n.BalloonTipTitle = 'pls drift check'; $n.BalloonTipText = $env:PLS_DRIFT_MESSAGE; $n.Visible = $true; "
@@ -82,7 +83,7 @@ def task_xml(r: Path, python: str, launcher: Path, start_date: str) -> str:
 def install(r: Path, envs: list[str], shared: str | None, *, run: Callable[[list[str]], tuple[int, str]],
             python: str | None = None, today: str | None = None, os_name: str | None = None) -> str:
     """Record the scope and register the task. `run(argv)` runs schtasks and returns (exit code, output)."""
-    if (os_name or os.name) != "nt":
+    if (os_name or OS_NAME) != "nt":
         raise DW.WatchError("the job is registered with Windows Task Scheduler; on this system run "
                             "`python pls.py drift-watch run --quiet` from cron (every 2 hours, Mon–Fri 9:00–19:00)")
     launcher = r / "pls.py"

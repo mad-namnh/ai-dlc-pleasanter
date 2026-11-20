@@ -328,7 +328,7 @@ class DriftWatchTest(unittest.TestCase):
     def test_install_through_the_command_names_the_task(self):
         calls = []
         out = io.StringIO()
-        with contextlib.redirect_stdout(out), mock.patch.object(DS.os, "name", "nt"):
+        with contextlib.redirect_stdout(out), mock.patch.object(DS, "OS_NAME", "nt"):
             code = pls.drift_watch(self.r, watch("install"), schtasks=lambda a: calls.append(a) or (0, "OK"))
         self.assertEqual(code, 0)
         self.assertIn("every 2 hours", out.getvalue())
