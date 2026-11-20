@@ -152,3 +152,4 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - 2026-11-20 Nam: "tag v0.3.1 đi" — CHANGELOG v0.3.1 entry, annotated tag v0.3.1 on that commit (local; Nam pushes, N23).
 - 2026-11-20 Nam: "viet giup guide su dung day du chi tiet de team su dung, … hien thi tren main page" — README.md rewritten as the team guide (setup, roles, daily path, Claude Code, stg release, drift, upgrade, cheat sheet, troubleshooting). Shows on the GitHub main page only once it is on `main` (default branch) — Nam's step.
 - 2026-11-20 Nam: "ban chay lenh gh di" — branch protection on main via gh api: 5 required checks (CI jobs), pull request required (0 approvals), enforce_admins false. setup.md hotfix flow and README status updated.
+- 2026-11-20 Nam: phases shown as text on GitHub — README gets three Mermaid diagrams (lifecycle, one change request, stg release).
