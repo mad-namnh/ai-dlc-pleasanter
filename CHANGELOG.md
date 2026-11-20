@@ -7,6 +7,8 @@ Each entry: what changes for a project, and what a project must do after `pls sk
 
 ## Unreleased
 
+- **Fixes:** `pls check p1` accepts interview sources written as the REQ template shows (`sources/<interview>.md — A3, A7`; TD-75), so G1 no longer refuses them; `pls refs` lists site ids still written as numbers (RAW, the same as lint L-REF-01). Skills: P1 0.9, onboarding 0.9, P5 0.13, script-engineer 0.8 (evals 2026-11-20). After upgrading: `pls skills sync`.
+
 - **`pls drift-watch`** (read only): a scheduled check on the person's own machine that exports the project's dev /
   sandbox / stg sites and reports UI edits against the last release, with the two ways on; Windows balloon and the
   session-start hook. After upgrading: `pls skills sync`, then once per clone `python pls.py drift-watch install
