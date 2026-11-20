@@ -17,7 +17,7 @@
 | 5 one model per project | done (N24, ADR-0031) |
 | 6 CI | done (`bb94661`): `.github/workflows/framework-ci.yml`; runs first on Nam's next push |
 | 7 `pls status`, golden path, docs | done (`a3cd70d`): `pls status`, `docs/golden-path.md`, lifecycle 0.33 |
-| 8 evals | done: lifecycle 0.33 k/k on 001–009; P2 0.14 3/3; P1 0.9 3/3 on all cases; config-builder 0.12 PASS; P5 0.13 2/2; onboarding 0.9 2/2; script-engineer 0.8 PASS on the rebuilt case (graded against the proposed rubric patch — Nam applies `plans/2026-11-18-team-rollout-after-freeze/proposed-script-engineer-case-001-rubric.patch`). Fixed on the way: TD-75 (`check p1` answer numbers), `pls refs` RAW ids |
+| 8 evals | done: lifecycle 0.33 k/k on 001–009; P2 0.14 3/3; P1 0.9 3/3 on all cases; config-builder 0.12 PASS; P5 0.13 2/2; onboarding 0.9 2/2; script-engineer 0.8 PASS on the rebuilt case (rubric applied by Nam, `3a1cfe0`). Fixed on the way: TD-75 (`check p1` answer numbers), `pls refs` RAW ids |
 | 9 drift job | done (2026-11-19, N25): `pls drift-watch run\|show\|install\|remove`, session-start lines; Task Scheduler registration and the balloon not verified — Nam in phase 10 |
 | 10 trial | Nam (two accounts), then one dev |
 
