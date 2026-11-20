@@ -10,7 +10,7 @@ description: Phase P3 for changes that touch Pleasanter server scripts or client
 ## Before you edit
 
 1. The design (DES) names the script and the rung-3 reason (I5). An adopted script's purpose is in `design/as-is/<site>.md` / DES-000. No reason → back to P2.
-2. Impact: `pls xref --site <s>` → which other scripts use the columns and sites you touch. List them in your hand-over; changes in their behaviour are P2's business.
+2. Impact: `pls xref --site <s>` → which other scripts use the columns and sites you touch. **Run it and write the impact list before your first edit, not after**: the list is what tells you whether the change stays a script change or goes back to P2. List them in your hand-over; changes in their behaviour are P2's business.
 
 ## Rules
 

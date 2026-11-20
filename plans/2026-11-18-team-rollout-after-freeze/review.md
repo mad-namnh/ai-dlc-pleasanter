@@ -190,3 +190,15 @@ Verdict: **accept with fixes**; no Critical / High. Criteria 1–9 met (reviewer
 | 5 | Low | `install --env dev-<you>` alone drops `dev` | kept: docs always show `--env dev --env dev-<you>`; the install message names the environments checked |
 
 Not verified (Nam, phase 10): real `schtasks /create` with the XML (Command path with spaces unquoted), the balloon, pythonw behaviour, a real Pleasanter / GitHub fetch.
+
+## TD-75 parser + `pls refs` RAW (2026-11-20, pls-x-reviewer, sonnet, medium, working tree against f6ce348)
+
+Verdict: **accept with fixes**; no Critical / High; no code defect.
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| 1 | Medium | README says script-engineer 0.8 "evaluated with this change" with no result yet | resolved: the 0.8 run r-a29b finished after the review started (PASS, appended to `evals/results/pls-p3-script-engineer/2026-11-20.md`) |
+| 2 | Low | `_sources` joined an answer number after any ` — ` (e.g. `— client mail, A7`) | fixed: the previous item must end in answer numbers; test case added |
+| 3 | Low | no test that a `--keep` decision suppresses a RAW line | fixed: test records `--keep` and expects no RAW line and no L-REF-01 |
+
+Suites after the fixes: Python 3.12 852 OK, 3.10.21 852 OK (2 skipped), node 16/16. New tests fail on the parent `f6ce348` (worktree): TD-75 test 1 failure, refs test 1 failure. The reviewer could not start 3.10 in its shell; the Orchestrator ran it.

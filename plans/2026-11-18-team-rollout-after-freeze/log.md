@@ -145,3 +145,6 @@ Scope note: Operators added to the owner-only fields (not named in the plan) —
 - Script-engineer case rebuilt: `project/` fixture (orders / customers, calc-total.js, check-discount.js, DES-002, DES-004 with `${env:TAX_RATE_STMT}` holding the whole statement), input.md and setup.md rewritten (not protected); rubric as `proposed-script-engineer-case-001-rubric.patch` (`git apply --check` OK).
 - Found: `pls refs` does not list a literal site id in an id context while lint reports it as L-REF-01 (framework defect, to ask Nam).
 - Two 5-hour usage limits during the batch; cut runs resumed. No void run. Held folders moved back after grading.
+- 2026-11-20 Nam (choices, recommended each): apply the rubric patch himself; script-engineer 0.8 (xref before the first edit) + eval k = 1; fix `pls refs` now (fix(pls) + test); TD-75: fix the parser.
+- script-engineer 0.8 run r-a29b: PASS against the proposed rubric (xref and impact list before the edit). Result appended to `evals/results/pls-p3-script-engineer/2026-11-20.md`.
+- Review of the two pls fixes: accept with fixes (M1 resolved by the finished eval, L2 / L3 fixed); suites 3.12 852 OK, 3.10 852 OK (2 skipped), node 16/16. Subagent calls this follow-up: reviewer 1.
