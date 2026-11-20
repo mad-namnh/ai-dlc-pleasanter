@@ -6,10 +6,31 @@ The source of truth of a Pleasanter app is its **configuration** (SiteSettings, 
 framework keeps that configuration in git, lets Claude Code do the work through skills and a deterministic tool
 (`pls`), and stops at four human gates. Nothing reaches stg without a recorded approval.
 
+```mermaid
+flowchart LR
+    REQ(["Customer request<br/>mail · meeting · idea"]) --> P1
+    P1["<b>P1 Requirements</b><br/>REQ files (EARS)<br/>open questions (日本語)"] --> G1{{"G1<br/>dev approves"}}
+    G1 --> P2["<b>P2 Design</b><br/>DES files<br/>standard features first"]
+    P2 --> G2{{"G2<br/>dev approves"}}
+    G2 --> P3["<b>P3 Build</b><br/>config/ in git<br/>sandbox round trip"]
+    P3 --> P4["<b>P4 Verify</b><br/>API tests · coverage<br/>build vs design"]
+    P4 --> G3{{"G3<br/>dev approves"}}
+    G3 --> P5["<b>P5 Release</b><br/>release plan · rollback<br/>diff report (日本語)"]
+    P5 --> G4{{"G4<br/>owner approves"}}
+    G4 --> STG[("stg")]
+    STG --> P6["<b>P6 Operate</b><br/>drift job · triage"]
+    P6 -. "UI edit kept<br/>= new request" .-> P1
+
+    classDef gate fill:#fff3cd,stroke:#d39e00,color:#000
+    classDef phase fill:#e7f1ff,stroke:#0b5ed7,color:#000
+    classDef env fill:#e8f5e9,stroke:#2e7d32,color:#000
+    class G1,G2,G3,G4 gate
+    class P1,P2,P3,P4,P5,P6 phase
+    class STG env
 ```
-P1 requirements ─G1─▶ P2 design ─G2─▶ P3 build ─▶ P4 verify ─G3─▶ P5 release ─G4─▶ P6 operate
-      REQ files          DES files      config/ in git   tests, coverage   release plan      drift, triage
-```
+
+Every phase ends with a deterministic check (`pls check`, `lint`, `coverage`, `release-plan`); every gate is a record
+made only from a person's own words (`pls gate … --quote`).
 
 **Current release: [`v0.3.1`](CHANGELOG.md)** — use tags only, never a branch, in a project.
 
@@ -141,6 +162,31 @@ Open Claude Code in the project folder and describe the request in your own word
 **One Claude Code session per change request.** The lifecycle skill starts with `pls skills check` and `pls status`,
 then leads you phase by phase. At any time, `python pls.py status` prints the open items and the next command.
 
+```mermaid
+flowchart TD
+    START(["You: describe the request<br/>in Claude Code"]) --> EXIST{"Existing app,<br/>first change?"}
+    EXIST -- yes --> ONB["Onboarding (read only)<br/>+ as-is spec"] --> P1
+    EXIST -- no --> P1
+    P1["P1 · agent writes REQ files<br/><i>pls check p1</i>"] --> G1{{"G1 · you approve<br/><i>pls gate G1 --quote</i>"}}
+    G1 --> P2["P2 · agent writes DES<br/><i>pls check p2 · pls scope</i>"] --> G2{{"G2 · you approve<br/><i>pls gate G2 --quote</i>"}}
+    G2 --> GRP{"New groups or<br/>test users?"}
+    GRP -- yes --> OWN1["Owner runs<br/><i>principals --create · test-users</i>"] --> P3
+    GRP -- no --> P3
+    P3["P3 · agent builds config/<br/>release to <b>your sandbox</b><br/><i>release-plan · apply</i>"] --> UI{"Clicked in the<br/>Pleasanter UI?"}
+    UI -- yes --> HARV["<i>pls harvest</i> → commit"] --> MERGE
+    UI -- no --> MERGE
+    MERGE["Merge into the shared branch<br/>(pull teammates first)"] --> DEV["Release to shared dev<br/>one person at a time"]
+    DEV --> P4["P4 · tests · coverage<br/><i>pls check p3 --env stg --des</i>"] --> G3{{"G3 · you approve<br/><i>pls gate G3 --quote</i>"}}
+    G3 --> OWN2[["Owner: stg release (§8)<br/>G4 · apply · smoke tests"]]
+
+    classDef gate fill:#fff3cd,stroke:#d39e00,color:#000
+    classDef owner fill:#fde2e1,stroke:#c62828,color:#000
+    classDef you fill:#e7f1ff,stroke:#0b5ed7,color:#000
+    class G1,G2,G3 gate
+    class OWN1,OWN2 owner
+    class START,HARV,MERGE you
+```
+
 | Phase | What happens | You do | Recorded by |
 |---|---|---|---|
 | **Existing app, first time** | onboarding (read only), as-is spec of the sites the change touches | answer its questions | `ops/onboarding/<date>-summary.md`, `pls review as-is` |
@@ -184,6 +230,23 @@ stg always asks.
 ## 8. Release to stg (owner)
 
 Only the owner (or a G4 delegate with an end date) has a stg key with `allow_write`.
+
+```mermaid
+flowchart LR
+    A["Export stg sites<br/><i>pls export</i>"] --> B["Release plan<br/><i>pls release-plan</i><br/>drift · classify · rollback"]
+    B --> C["Diff report (日本語)<br/>+ approvals.md"]
+    C --> D{{"G4<br/><i>pls gate G4 --quote</i><br/>binds this plan"}}
+    D --> E["Apply<br/><i>pls apply R-…</i><br/>read-back = 0 diff"]
+    E --> F["Manual steps<br/>scheduled scripts · 同期"]
+    F --> G["Smoke tests<br/><i>pls test --release</i>"]
+    G --> H[("Drift baseline<br/>ops/drift/")]
+    E -. "not applied" .-> X["Never re-apply:<br/>export → mark-applied"]
+
+    classDef gate fill:#fff3cd,stroke:#d39e00,color:#000
+    classDef warn fill:#fde2e1,stroke:#c62828,color:#000
+    class D gate
+    class X warn
+```
 
 | Step | Command |
 |---|---|
@@ -317,7 +380,8 @@ More: [`docs/setup.md` → Troubleshooting](docs/setup.md#troubleshooting).
 Release **v0.3.1** (2026-11-20). Feature freeze; team rollout plan:
 [`plans/2026-11-18-team-rollout-after-freeze/plan.md`](plans/2026-11-18-team-rollout-after-freeze/plan.md).
 `main` holds the last release; work happens on `brownfield-adr`; CI runs both suites on every push
-([`.github/workflows/framework-ci.yml`](.github/workflows/framework-ci.yml)).
+([`.github/workflows/framework-ci.yml`](.github/workflows/framework-ci.yml)). `main` is protected: changes arrive by
+pull request, and the five CI jobs must pass.
 
 | Item | State |
 |---|---|
